@@ -1,0 +1,240 @@
+import re
+from collections import Counter
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
+
+from app.ai.engine import TriageRequest, get_engine
+from app.api.deps import OfficePrincipal, StaffPrincipal, parse_id, require_admin, require_staff, resolve_principal
+from app.core.config import get_settings
+from app.core.timeutil import aware, utcnow
+from app.models import Equipment, Office, StaffUser, Ticket
+from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority, TicketStatus
+from app.models.ticket import AIAnalysis
+from app.schemas.admin import StaffOut
+from app.schemas.common import Message, Page
+from app.schemas.ticket import AssignIn, KpiOut, NoteIn, ResolveIn, TicketOut, TicketPatch, TriagePreviewIn
+from app.services import audit
+from app.services import tickets as ticket_service
+from app.services.serializers import staff_out, ticket_out
+from app.services.storage import attachment_path
+
+router = APIRouter(prefix="/tickets", tags=["incidencias"])
+tech_router = APIRouter(prefix="/technicians", tags=["incidencias"])
+lookup_router = APIRouter(prefix="/lookup", tags=["incidencias"])
+
+
+@lookup_router.get("/offices")
+async def office_lookup(_: StaffUser = Depends(require_staff)):
+    offices = await Office.find({"active": True}).sort("name").to_list()
+    return [{"id": str(o.id), "code": o.code, "name": o.name, "location": o.location} for o in offices]
+
+
+async def _get(ticket_id: str) -> Ticket:
+    tid = parse_id(ticket_id)
+    ticket = await Ticket.get(tid) if tid else None
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Incidencia no encontrada.")
+    return ticket
+
+
+async def _office(office_id: str) -> Office:
+    oid = parse_id(office_id)
+    office = await Office.get(oid) if oid else None
+    if not office:
+        raise HTTPException(status_code=422, detail="Oficina no válida.")
+    return office
+
+
+async def _equipment_for(office: Office, equipment_id: str | None) -> Equipment | None:
+    if not equipment_id:
+        return None
+    eid = parse_id(equipment_id)
+    eq = await Equipment.get(eid) if eid else None
+    if not eq or (eq.office_id and eq.office_id != office.id):
+        raise HTTPException(status_code=422, detail="El equipo no pertenece a la oficina seleccionada.")
+    return eq
+
+
+@tech_router.get("", response_model=list[StaffOut])
+async def technicians(_: StaffUser = Depends(require_staff)):
+    staff = await StaffUser.find({"active": True}).sort("full_name").to_list()
+    cursor = Ticket.get_pymongo_collection().find(
+        {"status": {"$ne": TicketStatus.RESUELTO.value}, "deleted_at": None, "assigned_to_id": {"$ne": None}}, {"assigned_to_id": 1}
+    )
+    counts = Counter(str(d["assigned_to_id"]) for d in await cursor.to_list(None))
+    return [staff_out(s, counts.get(str(s.id), 0)) for s in staff]
+
+
+@router.get("/kpis", response_model=KpiOut)
+async def kpis(_: StaffUser = Depends(require_staff)):
+    base = {"deleted_at": None}
+    open_q = base | {"status": {"$ne": TicketStatus.RESUELTO.value}}
+    tz = ZoneInfo(get_settings().timezone)
+    midnight = datetime.combine(datetime.now(tz).date(), time.min, tzinfo=tz)
+    since = utcnow() - timedelta(days=30)
+    responded = await Ticket.get_pymongo_collection().find(
+        base | {"created_at": {"$gte": since}, "first_response_at": {"$ne": None}}, {"created_at": 1, "first_response_at": 1}
+    ).to_list(None)
+    hours = [(aware(d["first_response_at"]) - aware(d["created_at"])).total_seconds() / 3600 for d in responded]
+    return KpiOut(
+        total=await Ticket.find(base).count(),
+        pendientes=await Ticket.find(base | {"status": TicketStatus.PENDIENTE.value}).count(),
+        en_proceso=await Ticket.find(base | {"status": TicketStatus.EN_PROCESO.value}).count(),
+        resueltos=await Ticket.find(base | {"status": TicketStatus.RESUELTO.value}).count(),
+        urgentes_abiertos=await Ticket.find(open_q | {"priority": TicketPriority.ALTA.value}).count(),
+        nuevos_hoy=await Ticket.find(base | {"created_at": {"$gte": midnight}}).count(),
+        sin_asignar=await Ticket.find(open_q | {"assigned_to_id": None}).count(),
+        horas_primera_respuesta_30d=round(sum(hours) / len(hours), 2) if hours else None,
+    )
+
+
+@router.get("", response_model=Page[TicketOut])
+async def list_tickets(
+    status: TicketStatus | None = None,
+    priority: TicketPriority | None = None,
+    category: TicketCategory | None = None,
+    office_id: str | None = None,
+    equipment_id: str | None = None,
+    assigned: str | None = Query(None, description="me | none | <id>"),
+    q: str | None = Query(None, max_length=80),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    user: StaffUser = Depends(require_staff),
+):
+    query: dict = {"deleted_at": None}
+    if status:
+        query["status"] = status.value
+    if priority:
+        query["priority"] = priority.value
+    if category:
+        query["category"] = category.value
+    if office_id and (oid := parse_id(office_id)):
+        query["office_id"] = oid
+    if equipment_id and (eid := parse_id(equipment_id)):
+        query["equipment_id"] = eid
+    if assigned == "me":
+        query["assigned_to_id"] = user.id
+    elif assigned == "none":
+        query["assigned_to_id"] = None
+    elif assigned and (aid := parse_id(assigned)):
+        query["assigned_to_id"] = aid
+    if q and q.strip():
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        query["$or"] = [{"number": rx}, {"subject": rx}, {"description": rx}, {"office_name": rx}, {"equipment.patrimonial_code": rx}]
+    finder = Ticket.find(query)
+    total = await finder.count()
+    items = await Ticket.find(query).sort(-Ticket.created_at).skip((page - 1) * page_size).limit(page_size).to_list()
+    return Page[TicketOut](items=[ticket_out(t) for t in items], total=total, page=page, page_size=page_size)
+
+
+@router.post("", response_model=TicketOut, status_code=201)
+async def create_by_staff(
+    request: Request,
+    office_id: str = Form(...),
+    description: str = Form(..., min_length=3, max_length=2000),
+    subject: str | None = Form(None, max_length=160),
+    quick_issue: QuickIssue | None = Form(None),
+    equipment_id: str | None = Form(None),
+    reporter_name: str | None = Form(None, max_length=80),
+    contact_phone: str | None = Form(None, max_length=20),
+    category: TicketCategory | None = Form(None),
+    priority: TicketPriority | None = Form(None),
+    technician_id: str | None = Form(None),
+    photo: UploadFile | None = File(None),
+    user: StaffUser = Depends(require_staff),
+):
+    office = await _office(office_id)
+    equipment = await _equipment_for(office, equipment_id)
+    ticket, _ = await ticket_service.create_ticket(ticket_service.NewTicket(
+        office=office, channel=TicketChannel.TELEFONO, description=description, quick_issue=quick_issue, subject=subject,
+        equipment=equipment, reporter_name=reporter_name, contact_phone=contact_phone,
+        photo=photo if photo and photo.filename else None, staff=user, category=category, priority=priority,
+    ))
+    if technician_id and (tid := parse_id(technician_id)):
+        ticket = await ticket_service.assign(ticket, user, tid)
+    await audit.record(request, "staff", "ticket.created", actor_id=str(user.id), actor_name=user.full_name, target_type="ticket", target_id=str(ticket.id))
+    return ticket_out(ticket)
+
+
+@router.post("/triage-preview", response_model=AIAnalysis)
+async def triage_preview(body: TriagePreviewIn, _: StaffUser = Depends(require_staff)):
+    office = await _office(body.office_id)
+    equipment = await _equipment_for(office, body.equipment_id)
+    return await get_engine().analyze(TriageRequest(
+        subject=body.subject or "", description=body.description, quick_issue=body.quick_issue, office=office, equipment=equipment
+    ))
+
+
+@router.get("/{ticket_id}", response_model=TicketOut)
+async def get_ticket(ticket_id: str, _: StaffUser = Depends(require_staff)):
+    return ticket_out(await _get(ticket_id))
+
+
+@router.patch("/{ticket_id}", response_model=TicketOut)
+async def patch_ticket(ticket_id: str, body: TicketPatch, user: StaffUser = Depends(require_staff)):
+    return ticket_out(await ticket_service.update_classification(await _get(ticket_id), user, body.category, body.priority))
+
+
+@router.post("/{ticket_id}/assign", response_model=TicketOut)
+async def assign(ticket_id: str, body: AssignIn, user: StaffUser = Depends(require_staff)):
+    tech_id = parse_id(body.technician_id) if body.technician_id else None
+    if body.technician_id and not tech_id:
+        raise HTTPException(status_code=422, detail="Técnico no válido.")
+    return ticket_out(await ticket_service.assign(await _get(ticket_id), user, tech_id))
+
+
+@router.post("/{ticket_id}/notes", response_model=TicketOut)
+async def add_note(ticket_id: str, body: NoteIn, user: StaffUser = Depends(require_staff)):
+    return ticket_out(await ticket_service.add_note(await _get(ticket_id), user, body.text, body.visible_to_office))
+
+
+@router.post("/{ticket_id}/resolve", response_model=TicketOut)
+async def resolve(ticket_id: str, body: ResolveIn, user: StaffUser = Depends(require_staff)):
+    return ticket_out(await ticket_service.resolve(await _get(ticket_id), user, body.notes))
+
+
+@router.post("/{ticket_id}/reopen", response_model=TicketOut)
+async def reopen(ticket_id: str, user: StaffUser = Depends(require_staff)):
+    return ticket_out(await ticket_service.reopen(await _get(ticket_id), user.full_name, by_user=False))
+
+
+@router.post("/{ticket_id}/reanalyze", response_model=TicketOut)
+async def reanalyze(ticket_id: str, _: StaffUser = Depends(require_staff)):
+    ticket = await _get(ticket_id)
+    office = await Office.get(ticket.office_id)
+    equipment = await Equipment.get(ticket.equipment_id) if ticket.equipment_id else None
+    ticket.ai = await get_engine().analyze(TriageRequest(
+        subject=ticket.subject, description=ticket.description, quick_issue=ticket.quick_issue, office=office,
+        equipment=equipment, exclude_ticket_id=str(ticket.id),
+    ))
+    ticket.updated_at = utcnow()
+    await ticket.save()
+    return ticket_out(ticket)
+
+
+@router.delete("/{ticket_id}", response_model=Message)
+async def delete_ticket(request: Request, ticket_id: str, user: StaffUser = Depends(require_admin)):
+    ticket = await _get(ticket_id)
+    ticket.deleted_at = utcnow()
+    await ticket.save()
+    await audit.record(request, "staff", "ticket.deleted", actor_id=str(user.id), actor_name=user.full_name, target_type="ticket", target_id=str(ticket.id), number=ticket.number)
+    return Message(message="Incidencia eliminada.")
+
+
+@router.get("/{ticket_id}/attachments/{attachment_id}")
+async def attachment(request: Request, ticket_id: str, attachment_id: str):
+    principal = await resolve_principal(request)
+    ticket = await _get(ticket_id)
+    allowed = isinstance(principal, StaffPrincipal) or (
+        isinstance(principal, OfficePrincipal) and principal.approved and principal.office.id == ticket.office_id
+    )
+    meta = next((a for a in ticket.attachments if a.id == attachment_id), None)
+    if not allowed or not meta:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+    path = attachment_path(meta)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})

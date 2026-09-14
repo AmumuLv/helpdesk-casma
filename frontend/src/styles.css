@@ -1,0 +1,57 @@
+@import "tailwindcss";
+@import "@fontsource/atkinson-hyperlegible-next/400.css";
+@import "@fontsource/atkinson-hyperlegible-next/700.css";
+
+@theme {
+  --font-sans: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --color-tinta: #13233b;
+  --color-tinta-2: #1e3352;
+  --color-papel: #f5f7fa;
+  --color-casma: #0b6e8a;
+  --color-casma-oscuro: #08546a;
+  --color-casma-claro: #e3f1f5;
+  --color-sol: #e8a317;
+  --color-sol-claro: #fdf3dc;
+  --color-alerta: #c2362f;
+  --color-alerta-claro: #fbe7e5;
+  --color-hecho: #2f855a;
+  --color-hecho-claro: #e3f3ea;
+  --color-linea: #d5dce4;
+  --color-tenue: #5b6b7f;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-papel text-tinta font-sans antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-sol);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .tecla {
+    @apply relative flex w-full items-center gap-5 rounded-2xl border-2 border-linea bg-white px-5 py-5 text-left text-tinta;
+    box-shadow: 0 5px 0 0 var(--color-linea);
+    transition: transform 80ms ease, box-shadow 80ms ease;
+  }
+  .tecla:hover {
+    border-color: var(--color-casma);
+    box-shadow: 0 5px 0 0 var(--color-casma);
+  }
+  .tecla:active {
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 0 var(--color-casma);
+  }
+}

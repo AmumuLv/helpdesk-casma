@@ -1,0 +1,10 @@
+{
+  "name": "Soporte TI - Municipalidad Provincial de Casma",
+  "short_name": "Soporte TI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#13233B",
+  "lang": "es-PE",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
