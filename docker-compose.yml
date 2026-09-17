@@ -1,52 +1,39 @@
-services:
-  mongo:
-    image: mongo:8
-    restart: unless-stopped
-    command: ["--wiredTigerCacheSizeGB", "1"]
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-helpdesk}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?defina MONGO_PASSWORD en .env}
-    volumes:
-      - mongo-data:/data/db
-    # Descomente para inspeccionar la base con Compass desde el propio servidor
-    # ports:
-    #   - "127.0.0.1:27017:27017"
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+version: '3.8'
 
+services:
+  # 🗄️ BASE DE DATOS
+  mongo:
+    image: mongo:latest
+    container_name: helpdesk_mongo
+    restart: always
+    ports:
+      - "27018:27017" # ¡OJO! Lo sacamos por el 27018 para que no pelee con otras bases de datos
+    volumes:
+      - mongo_data:/data/db
+
+  # ⚙️ BACKEND (Python)
   backend:
     build: ./backend
-    restart: unless-stopped
+    container_name: helpdesk_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
     depends_on:
-      mongo:
-        condition: service_healthy
-    environment:
-      ENVIRONMENT: production
-      # Por defecto usa el contenedor `mongo`. Para apuntar a MongoDB Atlas u otro servidor,
-      # defina MONGO_URI en el archivo .env y esa cadena tendrá prioridad.
-      MONGO_URI: ${MONGO_URI:-mongodb://${MONGO_USER:-helpdesk}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin}
-      MONGO_DB: ${MONGO_DB:-helpdesk_casma}
-      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET en .env}
-      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?defina FIELD_ENCRYPTION_KEY en .env}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      OFFICE_ALLOWED_NETWORKS: ${OFFICE_ALLOWED_NETWORKS:-}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
-      AI_EMBEDDINGS: ${AI_EMBEDDINGS:-tfidf}
-      RUN_SCHEDULER: "true"
+      - mongo
     volumes:
-      - backend-data:/data
+      - ./backend/storage:/app/storage
 
-  web:
+  # 🌐 FRONTEND (React/Vite)
+  frontend:
     build: ./frontend
-    restart: unless-stopped
+    container_name: helpdesk_frontend
+    restart: always
+    ports:
+      - "8080:80" # ¡OJO! Tu página ahora vivirá en el puerto 8080
     depends_on:
       - backend
-    ports:
-      - "${WEB_PORT:-8080}:80"
 
 volumes:
-  mongo-data:
-  backend-data:
+  mongo_data:
