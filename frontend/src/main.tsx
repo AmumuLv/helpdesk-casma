@@ -33,7 +33,10 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
       await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       const registration = await navigator.serviceWorker.ready;
       registration.active?.postMessage({ type: "GET_OFFLINE_QUEUE_COUNT" });
-      if (navigator.onLine) registration.active?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
+      if (navigator.onLine) {
+        registration.active?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
+        registration.active?.postMessage({ type: "WARM_OFFLINE_DATA" });
+      }
     } catch (err) {
       console.error("No se pudo registrar el Service Worker", err);
     }
@@ -41,6 +44,7 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 
   window.addEventListener("online", () => {
     navigator.serviceWorker.controller?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
+    navigator.serviceWorker.controller?.postMessage({ type: "WARM_OFFLINE_DATA", force: true });
   });
 
   navigator.serviceWorker.addEventListener("message", (event) => {
