@@ -69,14 +69,15 @@ _LOCAL_PRIORITY_KEYWORDS = {
 }
 
 _HIERARCHY_BOOST = {
-    "USUARIO": 0,
-    "TECNICO": 0,
-    "COORDINADOR": 0,
-    "JEFE": 1,
-    "GERENTE": 1,
-    "DIRECTOR": 1,
-    "ADMIN": 1,
-    "ALCALDE": 1,
+    # Niveles adaptados a la estructura de la Municipalidad Provincial de Casma.
+    # La jerarquía solo complementa la gravedad técnica: nunca reemplaza las
+    # palabras clave ni convierte automáticamente todo reporte en urgente.
+    "PERSONAL": 0,
+    "UNIDAD_ORGANIZACION": 0,
+    "SUBGERENCIA": 0,
+    "GERENCIA": 1,
+    "GERENCIA_MUNICIPAL": 1,
+    "ALCALDIA": 1,
 }
 
 
@@ -88,7 +89,7 @@ def _normalize_local_text(value: str) -> str:
 def calculate_local_priority(
     subject: str,
     description: str,
-    hierarchy_level: str = "USUARIO",
+    hierarchy_level: str = "PERSONAL",
     equipment: Equipment | None = None,
 ) -> tuple[TicketPriority, list[str]]:
     """Triaje inicial determinista y local, antes de consultar a la IA."""
@@ -106,7 +107,7 @@ def calculate_local_priority(
             reasons = [f'Palabra clave local detectada: "{keyword}".']
             break
 
-    level = (hierarchy_level or "USUARIO").strip().upper()
+    level = (hierarchy_level or "PERSONAL").strip().upper()
     boost = _HIERARCHY_BOOST.get(level, 0)
     if boost:
         original = priority
@@ -116,7 +117,7 @@ def calculate_local_priority(
         else:
             reasons.append(f"Nivel jerárquico {level}: se mantiene prioridad ALTA.")
     elif level not in _HIERARCHY_BOOST:
-        reasons.append(f"Nivel jerárquico desconocido ({level}); se trató como USUARIO.")
+        reasons.append(f"Nivel jerárquico desconocido ({level}); se trató como PERSONAL.")
 
     if matched is None and equipment and equipment.type.value == "SERVIDOR":
         priority = _PRIORITY_UP[priority]
