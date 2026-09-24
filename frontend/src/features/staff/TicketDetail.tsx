@@ -260,6 +260,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
 
 const AUDIT_ACTION_LABEL: Record<string, string> = {
   "ticket.created": "Ticket registrado",
+  "ticket.viewed": "Ticket abierto por el técnico",
   "ticket.classification_updated": "Clasificación actualizada",
   "ticket.assigned": "Asignación de técnico actualizada",
   "ticket.note_added": "Nota registrada",
