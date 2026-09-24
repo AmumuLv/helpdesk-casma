@@ -7,7 +7,7 @@ import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Input, Modal, Pri
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORY_LABEL, EQUIPMENT_LABEL, EQUIPMENT_STATUS_LABEL, EQUIPMENT_TYPES, fmtDate, fmtDateTime, pct } from "../../lib/labels";
 import type { Equipment, EquipmentImportOfficeRef, EquipmentImportResult, EquipmentStatus, EquipmentType, Ticket } from "../../lib/types";
-import { useIsAdmin, useOfficeLookup } from "./hooks";
+import { useIsAdmin, useMunicipalUsers, useOfficeLookup } from "./hooks";
 import { PageHeader } from "./PageHeader";
 
 type Detail = { equipment: Equipment; risk: number | null; risk_factors: string[]; tickets: Ticket[] };
@@ -396,7 +396,7 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
 type Form = {
   patrimonial_code: string; type: EquipmentType; area: string; device_label: string; brand: string; model: string;
   screen_size_inches: string; hostname: string; ip_address: string; mac_address: string; office_id: string;
-  responsible_name: string; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string;
+  responsable_id: string; responsible_name: string; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string;
   cpu: string; ram_gb: string; storage_gb: string; os: string; acquired_on: string; warranty_until: string;
   status: EquipmentStatus; criticality: string; notes: string;
 };
@@ -411,13 +411,15 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
     area: e?.area ?? "", device_label: e?.device_label ?? "", brand: e?.brand ?? "", model: e?.model ?? "",
     screen_size_inches: e?.specs.screen_size_inches?.toString() ?? "", hostname: e?.hostname ?? "",
     ip_address: e?.ip_address ?? "", mac_address: e?.mac_address ?? "", office_id: e?.office_id ?? "",
-    responsible_name: e?.responsible_name ?? "", responsible_type: e?.responsible_type ?? "USUARIO",
+    responsable_id: e?.responsable_id ?? "", responsible_name: e?.responsible_name ?? "", responsible_type: e?.responsible_type ?? "USUARIO",
     property_type: e?.property_type ?? "MUNICIPALIDAD PROVINCIAL DE CASMA",
     cpu: e?.specs.cpu ?? "", ram_gb: e?.specs.ram_gb?.toString() ?? "", storage_gb: e?.specs.storage_gb?.toString() ?? "", os: e?.specs.os ?? "",
     acquired_on: e?.acquired_on?.slice(0, 10) ?? "", warranty_until: e?.warranty_until?.slice(0, 10) ?? "", status: e?.status ?? "OPERATIVO",
     criticality: String(e?.criticality ?? 1), notes: e?.notes ?? "",
   });
   const selectedOffice = offices.data?.find((office) => office.id === f.office_id);
+  const municipalUsers = useMunicipalUsers(f.office_id);
+  const selectedMunicipalUser = municipalUsers.data?.find((user) => user.id === f.responsable_id);
   const bind = (k: keyof Form) => ({ value: f[k], onChange: (ev: { target: { value: string } }) => setF((s) => ({ ...s, [k]: ev.target.value })) });
   const nul = (v: string) => v.trim() || null;
   const num = (v: string) => (v.trim() ? Number(v) : null);
@@ -427,7 +429,10 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
       const body = {
         patrimonial_code: f.patrimonial_code, type: f.type, area: nul(f.area), device_label: nul(f.device_label),
         brand: nul(f.brand), model: nul(f.model), hostname: nul(f.hostname), ip_address: nul(f.ip_address), mac_address: nul(f.mac_address),
-        office_id: nul(f.office_id), responsible_name: nul(f.responsible_name), responsible_type: f.responsible_type,
+        office_id: nul(f.office_id),
+        responsable_id: f.responsible_type === "USUARIO" ? nul(f.responsable_id) : null,
+        responsible_name: f.responsible_type === "USUARIO" ? (selectedMunicipalUser?.full_name ?? nul(f.responsible_name)) : null,
+        responsible_type: f.responsible_type,
         property_type: nul(f.property_type),
         specs: { cpu: nul(f.cpu), ram_gb: num(f.ram_gb), storage_gb: num(f.storage_gb), screen_size_inches: num(f.screen_size_inches), os: nul(f.os) },
         acquired_on: f.acquired_on ? `${f.acquired_on}T00:00:00Z` : null, warranty_until: f.warranty_until ? `${f.warranty_until}T00:00:00Z` : null,
@@ -456,7 +461,17 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
           <Field label="Tipo">{(id) => <Select id={id} {...bind("type")}>{EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{EQUIPMENT_LABEL[t]}</option>)}</Select>}</Field>
           <Field label="Zona">{(id) => <Input id={id} value={selectedOffice?.zone_name ?? ""} readOnly placeholder="Se completa según la oficina" />}</Field>
           <Field label="Oficina">
-            {(id) => <Select id={id} {...bind("office_id")} required><option value="">Seleccione oficina</option>{offices.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>}
+            {(id) => (
+              <Select
+                id={id}
+                value={f.office_id}
+                onChange={(ev) => setF((s) => ({ ...s, office_id: ev.target.value, responsable_id: "", responsible_name: "" }))}
+                required
+              >
+                <option value="">Seleccione oficina</option>
+                {offices.data?.map((o) => <option key={o.id} value={o.id}>{o.zone_name ? `${o.zone_name} › ${o.name}` : o.name}</option>)}
+              </Select>
+            )}
           </Field>
           <Field label="Área">{(id) => <Input id={id} {...bind("area")} placeholder={selectedOffice?.name ?? "Área / dependencia"} maxLength={120} />}</Field>
           <Field label="Dispositivo">{(id) => <Input id={id} {...bind("device_label")} placeholder="Ej. CPU principal, monitor 1" maxLength={120} />}</Field>
@@ -472,11 +487,32 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
           <Field label="Sistema operativo">{(id) => <Input id={id} {...bind("os")} maxLength={60} />}</Field>
           <Field label="Propiedad">{(id) => <Input id={id} {...bind("property_type")} maxLength={80} placeholder="Municipalidad Provincial de Casma" />}</Field>
           <Field label="Tipo de responsable">
-            {(id) => <Select id={id} {...bind("responsible_type")}><option value="USUARIO">Usuario</option><option value="JEFE">Jefe de oficina</option><option value="OFICINA">Oficina</option></Select>}
+            {(id) => (
+              <Select
+                id={id}
+                value={f.responsible_type}
+                onChange={(ev) => setF((s) => ({ ...s, responsible_type: ev.target.value as Form["responsible_type"], responsable_id: "", responsible_name: "" }))}
+              >
+                <option value="USUARIO">Usuario municipal</option>
+                <option value="JEFE">Jefe de oficina</option>
+                <option value="OFICINA">Oficina</option>
+              </Select>
+            )}
           </Field>
-          <Field label="Responsable" hint={f.responsible_type === "OFICINA" ? "Puede dejarse vacío: se usará el nombre de la oficina." : f.responsible_type === "JEFE" ? "Puede dejarse vacío: se usará el jefe registrado en la oficina." : "Nombre de la persona que utiliza el equipo."}>
-            {(id) => <Input id={id} {...bind("responsible_name")} maxLength={120} required={f.responsible_type === "USUARIO"} placeholder={f.responsible_type === "JEFE" ? selectedOffice?.head_name ?? "Jefe de oficina" : f.responsible_type === "OFICINA" ? selectedOffice?.name ?? "Oficina" : "Nombre y apellidos"} />}
-          </Field>
+          {f.responsible_type === "USUARIO" ? (
+            <Field label="Responsable" hint="Solo aparecen usuarios municipales activos de la oficina seleccionada.">
+              {(id) => (
+                <Select id={id} value={f.responsable_id} onChange={(ev) => setF((s) => ({ ...s, responsable_id: ev.target.value }))} required disabled={!f.office_id}>
+                  <option value="">{f.office_id ? "Seleccione usuario" : "Seleccione primero una oficina"}</option>
+                  {municipalUsers.data?.map((user) => <option key={user.id} value={user.id}>{user.full_name}{user.job_title ? ` — ${user.job_title}` : ""}</option>)}
+                </Select>
+              )}
+            </Field>
+          ) : (
+            <Field label="Responsable asignado">
+              {(id) => <Input id={id} value={f.responsible_type === "JEFE" ? selectedOffice?.head_name ?? selectedOffice?.name ?? "" : selectedOffice?.name ?? ""} readOnly />}
+            </Field>
+          )}
           <Field label="Fecha de adquisición">{(id) => <Input id={id} type="date" {...bind("acquired_on")} />}</Field>
           <Field label="Garantía hasta">{(id) => <Input id={id} type="date" {...bind("warranty_until")} />}</Field>
           <Field label="Estado">{(id) => <Select id={id} {...bind("status")}>{Object.entries(EQUIPMENT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}</Field>
