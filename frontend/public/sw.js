@@ -115,11 +115,13 @@ async function serializeRequest(request) {
 
 async function queueRequest(request, scope, operationId) {
   const serialized = await serializeRequest(request);
+  const actorId = scope === "staff" ? await currentStaffIdFromCache() : null;
   const item = {
     id: operationId,
     url: request.url,
     method: request.method,
     scope,
+    actorId,
     createdAt: Date.now(),
     ...serialized,
   };
@@ -199,8 +201,45 @@ function restoreRequestBody(item) {
 async function flushTicketQueue() {
   const queued = await getQueuedRequests();
   let sentStaffMutation = false;
+  let onlineStaffResolved = false;
+  let onlineStaffId = null;
 
   for (const item of queued) {
+    if (item.scope === "staff") {
+      if (!onlineStaffResolved) {
+        onlineStaffResolved = true;
+        try {
+          const response = await fetch(absoluteUrl("/api/auth/me"), {
+            credentials: "include",
+            headers: { "X-Requested-With": "HelpDeskCasma" },
+          });
+          if (response.ok) {
+            const me = await response.json().catch(() => null);
+            onlineStaffId = me?.kind === "staff" ? me.staff?.id ?? null : null;
+          }
+        } catch {
+          onlineStaffId = null;
+        }
+      }
+
+      if (!onlineStaffId) {
+        await notifyClients({
+          type: "OFFLINE_REQUEST_AUTH_REQUIRED",
+          queueId: item.id,
+          scope: item.scope,
+        });
+        break;
+      }
+
+      if (!item.actorId || item.actorId !== onlineStaffId) {
+        await notifyClients({
+          type: "OFFLINE_REQUEST_USER_MISMATCH",
+          queueId: item.id,
+          scope: item.scope,
+        });
+        break;
+      }
+    }
     const { body, headers } = restoreRequestBody(item);
 
     try {
