@@ -36,9 +36,12 @@ def _write_database_dump(target: Path) -> dict[str, int]:
                     count += 1
             counts[collection_name] = count
 
-            indexes = list(collection.list_indexes())
-            (target / f"{collection_name}.indexes.json").write_text(
-                json_util.dumps(indexes, indent=2),
+            metadata = {
+                "options": collection.options(),
+                "indexes": list(collection.list_indexes()),
+            }
+            (target / f"{collection_name}.metadata.json").write_text(
+                json_util.dumps(metadata, indent=2),
                 encoding="utf-8",
             )
     finally:
@@ -102,7 +105,7 @@ def create_backup() -> Path:
             "database": settings.mongo_db,
             "collections": counts,
             "attachments_files": attachment_count,
-            "database_format": "concatenated BSON documents per collection",
+            "database_format": "mongodump-compatible BSON files with collection metadata",
             "attachments_format": "tar.gz",
         }
         (temp_dir / "manifest.json").write_text(
