@@ -36,6 +36,11 @@ class TicketAuditOut(BaseModel):
     details: dict
 
 
+class ApplyAiPriorityIn(BaseModel):
+    priority: TicketPriority
+    model_version: str
+
+
 @lookup_router.get("/offices")
 async def office_lookup(_: StaffUser = Depends(require_staff)):
     offices = await Office.find({"active": True}).sort("name").to_list()
@@ -281,6 +286,7 @@ async def patch_ticket(request: Request, ticket_id: str, body: TicketPatch, user
 async def apply_ai_priority(
     request: Request,
     ticket_id: str,
+    body: ApplyAiPriorityIn,
     user: StaffUser = Depends(require_staff),
 ):
     if replayed := await _replayed_ticket(request):
@@ -289,6 +295,11 @@ async def apply_ai_priority(
     ticket = await _get(ticket_id)
     if not ticket.ai:
         raise HTTPException(status_code=409, detail="El ticket todavía no tiene análisis de IA.")
+    if ticket.ai.priority != body.priority or ticket.ai.model_version != body.model_version:
+        raise HTTPException(
+            status_code=409,
+            detail="La recomendación de IA cambió desde que fue revisada. Actualice el ticket antes de aplicarla.",
+        )
 
     previous_priority = ticket.priority
     ai_priority = ticket.ai.priority
