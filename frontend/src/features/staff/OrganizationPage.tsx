@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Building2, Pencil, Plus, UserRound, Users } from "lucide-react";
+import { ArrowRight, Building2, Pencil, Plus, UserRound, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, ErrorBox, Field, Input, Modal, Select, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import type { MunicipalUser, Zone } from "../../lib/types";
 import { PageHeader } from "./PageHeader";
-import { useMunicipalUsers, useOfficeLookup, useZones } from "./hooks";
+import { useIsAdmin, useMunicipalUsers, useOfficeLookup, useZones } from "./hooks";
 
 type ZoneForm = { code: string; name: string; description: string; active: boolean };
 type UserForm = {
@@ -23,6 +24,8 @@ export function OrganizationPage() {
   const zones = useZones();
   const users = useMunicipalUsers(undefined, true);
   const offices = useOfficeLookup();
+  const isAdmin = useIsAdmin();
+  const navigate = useNavigate();
   const [zoneEdit, setZoneEdit] = useState<Zone | "new" | null>(null);
   const [userEdit, setUserEdit] = useState<MunicipalUser | "new" | null>(null);
   const [zoneFilter, setZoneFilter] = useState("");
@@ -50,12 +53,12 @@ export function OrganizationPage() {
       <PageHeader
         title="Organización municipal"
         description="Jerarquía formal Zona → Oficina → Usuario para inventario y soporte TI."
-        actions={
+        actions={isAdmin ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => setZoneEdit("new")}><Building2 className="size-4" /> Nueva zona</Button>
             <Button onClick={() => setUserEdit("new")}><UserRound className="size-4" /> Nuevo usuario municipal</Button>
           </div>
-        }
+        ) : undefined}
       />
 
       <section className="mb-6">
@@ -72,9 +75,11 @@ export function OrganizationPage() {
                     </div>
                     <p className="text-sm text-tenue">{zone.code}</p>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => setZoneEdit(zone)} aria-label={`Editar ${zone.name}`}>
-                    <Pencil className="size-4" />
-                  </Button>
+                  {isAdmin && (
+                    <Button size="sm" variant="ghost" onClick={() => setZoneEdit(zone)} aria-label={`Editar ${zone.name}`}>
+                      <Pencil className="size-4" />
+                    </Button>
+                  )}
                 </div>
                 {zone.description && <p className="mt-2 text-sm">{zone.description}</p>}
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm">
@@ -82,6 +87,9 @@ export function OrganizationPage() {
                   <div className="rounded-lg bg-papel p-2"><strong className="block text-lg">{zone.user_count}</strong>Usuarios</div>
                   <div className="rounded-lg bg-papel p-2"><strong className="block text-lg">{zone.equipment_count}</strong>Equipos</div>
                 </div>
+                <Button className="mt-3 w-full" variant="secondary" onClick={() => navigate(`/soporte/organizacion/zona/${zone.id}`)}>
+                  Ver perfil <ArrowRight className="size-4" />
+                </Button>
               </Card>
             ))}
             {!zones.data?.length && <Card className="p-6 text-center text-tenue">Aún no hay zonas formales registradas.</Card>}
@@ -132,8 +140,19 @@ export function OrganizationPage() {
                   {filteredUsers.map((user) => (
                     <tr key={user.id} className={user.active ? "" : "opacity-55"}>
                       <td className="p-3">
-                        <p className="font-bold">{user.full_name}</p>
-                        <p className="text-tenue">{user.employee_code ?? "Sin código interno"}</p>
+                        <div className="flex items-center gap-3">
+                          {user.photo_url ? (
+                            <img src={user.photo_url} alt="" className="size-10 rounded-xl border border-linea object-cover" />
+                          ) : (
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-casma-claro font-bold text-casma">
+                              {user.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-bold">{user.full_name}</p>
+                            <p className="text-tenue">{user.employee_code ?? "Sin código interno"}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-3">{user.job_title ?? "–"}</td>
                       <td className="p-3">
@@ -147,9 +166,16 @@ export function OrganizationPage() {
                       <td className="p-3 font-bold">{user.equipment_count}</td>
                       <td className="p-3">{user.active ? <Badge className="border-hecho/30 bg-hecho-claro text-hecho">Activo</Badge> : <Badge className="border-linea bg-papel text-tenue">Inactivo</Badge>}</td>
                       <td className="p-3 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => setUserEdit(user)} aria-label={`Editar ${user.full_name}`}>
-                          <Pencil className="size-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="secondary" onClick={() => navigate(`/soporte/organizacion/usuario/${user.id}`)}>
+                            Ver <ArrowRight className="size-4" />
+                          </Button>
+                          {isAdmin && (
+                            <Button size="sm" variant="ghost" onClick={() => setUserEdit(user)} aria-label={`Editar ${user.full_name}`}>
+                              <Pencil className="size-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
