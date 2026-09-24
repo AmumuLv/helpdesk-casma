@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Monitor, Plus, Printer, QrCode } from "lucide-react";
+import { Monitor, Plus, Printer, QrCode, Upload } from "lucide-react";
 import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Input, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORY_LABEL, EQUIPMENT_LABEL, EQUIPMENT_STATUS_LABEL, EQUIPMENT_TYPES, fmtDate, fmtDateTime, pct } from "../../lib/labels";
-import type { Equipment, EquipmentStatus, EquipmentType, Ticket } from "../../lib/types";
+import type { Equipment, EquipmentImportOfficeRef, EquipmentImportResult, EquipmentStatus, EquipmentType, Ticket } from "../../lib/types";
 import { useIsAdmin, useOfficeLookup } from "./hooks";
 import { PageHeader } from "./PageHeader";
 
@@ -13,12 +13,14 @@ type Detail = { equipment: Equipment; risk: number | null; risk_factors: string[
 
 export function EquipmentPage() {
   const offices = useOfficeLookup();
+  const isAdmin = useIsAdmin();
   const [officeId, setOfficeId] = useState("");
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim());
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<Equipment | "new" | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const list = useQuery({
     queryKey: ["equipment", "search", officeId, type, query],
@@ -34,7 +36,10 @@ export function EquipmentPage() {
   return (
     <div>
       <PageHeader title="Inventario de equipos" description="Código patrimonial, IP, especificaciones, historial de incidencias y riesgo de falla."
-        actions={<Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo equipo</Button>} />
+        actions={<>
+          {isAdmin && <Button variant="secondary" onClick={() => setImportOpen(true)}><Upload className="size-4" /> Importar Margesí</Button>}
+          <Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo equipo</Button>
+        </>} />
       <Card className="mb-4 grid gap-3 p-3 sm:grid-cols-3">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Código, IP, marca, hostname o serie" aria-label="Buscar equipos" />
         <Select value={officeId} onChange={(e) => setOfficeId(e.target.value)} aria-label="Oficina">
@@ -71,6 +76,7 @@ export function EquipmentPage() {
       )}
       <EquipmentDetail id={selected} onClose={() => setSelected(null)} onEdit={(e) => { setSelected(null); setEditing(e); }} />
       {editing && <EquipmentForm equipment={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      <EquipmentImportModal open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }
