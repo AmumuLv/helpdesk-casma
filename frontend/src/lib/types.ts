@@ -101,6 +101,32 @@ export interface MunicipalUser {
   photo_url: string | null; active: boolean; equipment_count: number; created_at: string; updated_at: string;
 }
 
+export interface OrganizationOfficeSummary {
+  id: string; code: string; name: string; location: string | null; head_name: string | null; active: boolean;
+  user_count: number; equipment_count: number; ticket_count: number;
+}
+
+export interface ZoneProfile {
+  zone: Zone;
+  offices: OrganizationOfficeSummary[];
+  recent_tickets: Ticket[];
+}
+
+export interface OfficeProfile {
+  office: Office;
+  users: MunicipalUser[];
+  equipment: Equipment[];
+  recent_tickets: Ticket[];
+  ticket_count: number;
+}
+
+export interface MunicipalUserProfile {
+  user: MunicipalUser;
+  equipment: Equipment[];
+  recent_tickets: Ticket[];
+  ticket_count: number;
+}
+
 export interface Device {
   id: string; office_id: string; office_name: string; status: DeviceStatus; pair_code: string; kind: DeviceKind; label: string | null;
   user_agent: string | null; first_ip: string | null; last_ip: string | null; equipment_id: string | null; equipment_code: string | null;
