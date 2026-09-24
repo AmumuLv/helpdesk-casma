@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/Toasts";
 import { api, errorMessage, isOfflineQueued, type OfflineQueuedResponse } from "../../lib/api";
 import { useMe } from "../../lib/session";
-import type { Device, Equipment, Insights, Kpis, MunicipalUser, Office, StaffMember, Ticket, Zone } from "../../lib/types";
+import type { Device, Equipment, Insights, Kpis, MunicipalUser, Office, OfficeServiceLevel, StaffMember, Ticket, Zone } from "../../lib/types";
 
 export type OfficeLookup = {
   id: string; code: string; name: string; zone_id: string | null; zone_name: string | null;
-  location: string | null; head_name: string | null;
+  location: string | null; head_name: string | null; head_phone: string | null;
+  service_level: OfficeServiceLevel; service_reason: string | null; priority_weight: number; active: boolean;
 };
 
 export const useIsAdmin = () => useMe().data?.staff?.role === "ADMIN";
