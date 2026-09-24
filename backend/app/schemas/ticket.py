@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority, TicketStatus
-from app.models.ticket import AIAnalysis, EquipmentSnapshot, Resolution, TimelineEntry
+from app.models.ticket import AIAnalysis, EquipmentSnapshot, Resolution, ResolutionType, TimelineEntry
 
 
 class AttachmentOut(BaseModel):
@@ -87,6 +87,7 @@ class NoteIn(BaseModel):
 
 class ResolveIn(BaseModel):
     notes: str = Field(min_length=5, max_length=2000)
+    tipo_resolucion: ResolutionType = ResolutionType.SOLUCIONADO
 
 
 class ConfirmIn(BaseModel):
