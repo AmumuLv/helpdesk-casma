@@ -8,6 +8,7 @@ export type QuickIssue = "NO_ENCIENDE" | "SIN_INTERNET" | "IMPRESORA" | "LENTA" 
 export type DeviceStatus = "PENDIENTE" | "APROBADO" | "RECHAZADO" | "REVOCADO";
 export type DeviceKind = "PC" | "LAPTOP" | "CELULAR" | "TABLET" | "OTRO";
 export type StaffRole = "ADMIN" | "TECNICO";
+export type OfficeServiceLevel = "NORMAL" | "ATENCION_PUBLICO" | "SERVICIO_CRITICO";
 export type EquipmentType =
   | "CPU" | "MONITOR" | "MOUSE" | "TECLADO" | "IMPRESORA" | "LAPTOP"
   | "PC" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
@@ -90,7 +91,8 @@ export interface StaffMember {
 
 export interface Office {
   id: string; code: string; name: string; username: string; zone_id: string | null; zone_name: string | null;
-  location: string | null; head_name: string | null; head_phone: string | null; priority_weight: number;
+  location: string | null; head_name: string | null; head_phone: string | null;
+  service_level: OfficeServiceLevel; service_reason: string | null; priority_weight: number;
   active: boolean; devices_approved: number; devices_pending: number; created_at: string;
 }
 
