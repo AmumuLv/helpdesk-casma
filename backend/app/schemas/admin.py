@@ -27,6 +27,7 @@ class OfficeIn(BaseModel):
     code: str = Field(min_length=2, max_length=20)
     name: str = Field(min_length=3, max_length=120)
     username: str
+    zone_name: str | None = Field(default=None, max_length=120)
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
     head_phone: str | None = Field(default=None, max_length=20)
@@ -43,6 +44,7 @@ class OfficeIn(BaseModel):
 class OfficePatch(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=120)
     username: str | None = None
+    zone_name: str | None = Field(default=None, max_length=120)
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
     head_phone: str | None = Field(default=None, max_length=20)
@@ -60,6 +62,8 @@ class OfficeOut(BaseModel):
     code: str
     name: str
     username: str
+    zone_id: str | None = None
+    zone_name: str | None = None
     location: str | None
     head_name: str | None
     head_phone: str | None
@@ -140,12 +144,17 @@ class StaffCreatedOut(BaseModel):
 class EquipmentIn(BaseModel):
     patrimonial_code: str = Field(min_length=3, max_length=40)
     type: EquipmentType
+    area: str | None = Field(default=None, max_length=120)
+    device_label: str | None = Field(default=None, max_length=120)
     brand: str | None = Field(default=None, max_length=60)
     model: str | None = Field(default=None, max_length=80)
     hostname: str | None = Field(default=None, max_length=80)
     ip_address: str | None = Field(default=None, max_length=45)
     mac_address: str | None = Field(default=None, max_length=17)
     office_id: str | None = None
+    responsible_name: str | None = Field(default=None, max_length=120)
+    responsible_type: str = Field(default="USUARIO", pattern="^(USUARIO|JEFE|OFICINA)$")
+    property_type: str | None = Field(default=None, max_length=80)
     specs: EquipmentSpecs = EquipmentSpecs()
     acquired_on: datetime | None = None
     warranty_until: datetime | None = None
@@ -173,5 +182,7 @@ class EquipmentOut(EquipmentIn):
     id: str
     inventory_id: str | None = None
     office_name: str | None = None
+    zone_id: str | None = None
+    zone_name: str | None = None
     created_at: datetime
     updated_at: datetime
