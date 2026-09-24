@@ -85,8 +85,9 @@ export interface StaffMember {
 }
 
 export interface Office {
-  id: string; code: string; name: string; username: string; location: string | null; head_name: string | null;
-  head_phone: string | null; priority_weight: number; active: boolean; devices_approved: number; devices_pending: number; created_at: string;
+  id: string; code: string; name: string; username: string; zone_id: string | null; zone_name: string | null;
+  location: string | null; head_name: string | null; head_phone: string | null; priority_weight: number;
+  active: boolean; devices_approved: number; devices_pending: number; created_at: string;
 }
 
 export interface Device {
@@ -96,9 +97,12 @@ export interface Device {
 }
 
 export interface Equipment {
-  id: string; inventory_id: string | null; patrimonial_code: string; type: EquipmentType; brand: string | null; model: string | null;
-  hostname: string | null; ip_address: string | null; mac_address: string | null; office_id: string | null; office_name: string | null;
-  specs: { cpu: string | null; ram_gb: number | null; storage_gb: number | null; os: string | null };
+  id: string; inventory_id: string | null; patrimonial_code: string; type: EquipmentType;
+  area: string | null; device_label: string | null; brand: string | null; model: string | null;
+  hostname: string | null; ip_address: string | null; mac_address: string | null;
+  office_id: string | null; office_name: string | null; zone_id: string | null; zone_name: string | null;
+  responsible_name: string | null; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string | null;
+  specs: { cpu: string | null; ram_gb: number | null; storage_gb: number | null; screen_size_inches: number | null; os: string | null };
   acquired_on: string | null; warranty_until: string | null; status: EquipmentStatus; criticality: number; notes: string | null;
   created_at: string; updated_at: string;
 }
@@ -121,6 +125,8 @@ export interface EquipmentImportOfficeRef {
   office_code: string;
   office_name: string;
   zone_id: string | null;
+  zone_name: string | null;
+  head_name: string | null;
   import_enabled: boolean;
 }
 
