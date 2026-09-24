@@ -203,6 +203,9 @@ async def _get(equipment_id: str) -> Equipment:
     eq = await Equipment.get(eid) if eid else None
     if not eq:
         raise HTTPException(status_code=404, detail="Equipo no encontrado.")
+    if not eq.inventory_id:
+        eq.inventory_id = await _next_inventory_id()
+        await eq.save()
     return eq
 
 
@@ -232,6 +235,10 @@ async def list_equipment(
         query["$or"] = [{"inventory_id": rx}, {"patrimonial_code": rx}, {"brand": rx}, {"model": rx}, {"ip_address": rx}, {"hostname": rx}]
     offices = {o.id: o.name for o in await Office.find_all().to_list()}
     items = await Equipment.find(query).sort("patrimonial_code").limit(1000).to_list()
+    for equipment in items:
+        if not equipment.inventory_id:
+            equipment.inventory_id = await _next_inventory_id()
+            await equipment.save()
     return [equipment_out(e, offices.get(e.office_id)) for e in items]
 
 
