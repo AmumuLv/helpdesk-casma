@@ -193,7 +193,14 @@ async def add_note(ticket_id: str, body: NoteIn, user: StaffUser = Depends(requi
 
 @router.post("/{ticket_id}/resolve", response_model=TicketOut)
 async def resolve(ticket_id: str, body: ResolveIn, user: StaffUser = Depends(require_staff)):
-    return ticket_out(await ticket_service.resolve(await _get(ticket_id), user, body.notes))
+    return ticket_out(
+        await ticket_service.resolve(
+            await _get(ticket_id),
+            user,
+            body.notes,
+            body.tipo_resolucion,
+        )
+    )
 
 
 @router.post("/{ticket_id}/reopen", response_model=TicketOut)
