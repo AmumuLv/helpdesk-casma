@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/Toasts";
-import { api, errorMessage } from "../../lib/api";
+import { api, errorMessage, isOfflineQueued, type OfflineQueuedResponse } from "../../lib/api";
 import { useMe } from "../../lib/session";
 import type { Device, Equipment, Insights, Kpis, Office, StaffMember, Ticket } from "../../lib/types";
 
@@ -24,13 +24,22 @@ export function useTicketAction<TBody = unknown>(buildPath: (id: string) => stri
   const qc = useQueryClient();
   const toast = useToast();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body?: TBody }) => api<Ticket>(buildPath(id), { method, json: body ?? {} }),
-    onSuccess: (ticket) => {
-      qc.setQueryData(["ticket", ticket.id], ticket);
+    mutationFn: ({ id, body }: { id: string; body?: TBody }) => api<Ticket | OfflineQueuedResponse>(buildPath(id), { method, json: body ?? {} }),
+    onSuccess: (result, variables) => {
+      if (isOfflineQueued(result)) {
+        toast({
+          tone: "success",
+          title: "Acción guardada sin conexión",
+          body: "Quedó pendiente de sincronización y se aplicará automáticamente cuando vuelva internet.",
+        });
+        qc.invalidateQueries({ queryKey: ["ticket-audit", variables.id] });
+        return;
+      }
+      qc.setQueryData(["ticket", result.id], result);
       qc.invalidateQueries({ queryKey: ["tickets"] });
-      qc.invalidateQueries({ queryKey: ["ticket-audit", ticket.id] });
+      qc.invalidateQueries({ queryKey: ["ticket-audit", result.id] });
       qc.invalidateQueries({ queryKey: ["kpis"] });
-      if (successText) toast({ tone: "success", title: successText, body: ticket.number });
+      if (successText) toast({ tone: "success", title: successText, body: result.number });
     },
     onError: (err) => toast({ tone: "danger", title: "No se pudo completar", body: errorMessage(err) }),
   });
