@@ -21,7 +21,7 @@ from app.api.deps import parse_id, require_admin, require_staff
 from app.core.config import get_settings
 from app.core.timeutil import utcnow
 from app.db import next_sequence
-from app.models import Device, Equipment, Office, StaffUser, Ticket
+from app.models import Device, Equipment, MunicipalUser, Office, StaffUser, Ticket
 from app.models.enums import EquipmentStatus, EquipmentType
 from app.schemas.admin import EquipmentIn, EquipmentOut
 from app.schemas.common import Message
@@ -108,6 +108,10 @@ _HEADER_ALIASES = {
     "estado": "estado",
     "propiedad": "propiedad",
     "responsable": "responsable",
+    "usuario": "responsable",
+    "usuario_responsable": "responsable",
+    "codigo_responsable": "responsable",
+    "responsable_codigo": "responsable",
     "responsable_tipo": "responsable_tipo",
     "tipo_responsable": "responsable_tipo",
     "criticidad": "criticidad",
@@ -283,7 +287,7 @@ async def _validate_office(office_id: str | None) -> Office:
     return office
 
 
-def _assignment_data(data: dict, office: Office) -> dict:
+async def _assignment_data(data: dict, office: Office) -> dict:
     result = dict(data)
     result["office_id"] = office.id
     result["area"] = (result.get("area") or office.name).strip()
@@ -292,13 +296,29 @@ def _assignment_data(data: dict, office: Office) -> dict:
 
     responsible_type = str(result.get("responsible_type") or "USUARIO").upper().strip()
     responsible_name = (result.get("responsible_name") or "").strip()
+    responsible_id_raw = result.get("responsable_id")
+
     if responsible_type == "OFICINA":
         responsible_name = responsible_name or office.name
+        result["responsable_id"] = None
     elif responsible_type == "JEFE":
         responsible_name = responsible_name or office.head_name or office.name
+        result["responsable_id"] = None
     elif responsible_type == "USUARIO":
-        if not responsible_name:
-            raise HTTPException(status_code=422, detail="Debe indicar el nombre del usuario responsable.")
+        if responsible_id_raw:
+            uid = parse_id(str(responsible_id_raw))
+            municipal_user = await MunicipalUser.get(uid) if uid else None
+            if not municipal_user or not municipal_user.active:
+                raise HTTPException(status_code=422, detail="El usuario responsable no existe o está inactivo.")
+            if municipal_user.office_id != office.id:
+                raise HTTPException(status_code=422, detail="El usuario responsable no pertenece a la oficina seleccionada.")
+            result["responsable_id"] = municipal_user.id
+            responsible_name = municipal_user.full_name
+        elif not responsible_name:
+            raise HTTPException(status_code=422, detail="Seleccione un usuario responsable de la oficina.")
+        else:
+            # Compatibilidad temporal para registros antiguos todavía no vinculados.
+            result["responsable_id"] = None
     else:
         raise HTTPException(status_code=422, detail="Tipo de responsable no válido.")
 
@@ -354,7 +374,7 @@ async def list_equipment(
 async def create_equipment(request: Request, body: EquipmentIn, user: StaffUser = Depends(require_staff)):
     _ensure_supported_type(body.type)
     office = await _validate_office(body.office_id)
-    data = _assignment_data(body.model_dump(), office)
+    data = await _assignment_data(body.model_dump(), office)
     data["inventory_id"] = await _next_inventory_id()
     eq = Equipment(**data)
     try:
@@ -506,6 +526,15 @@ async def import_equipment_xlsx(
     for office in offices:
         by_name.setdefault(_normal(office.name), []).append(office)
 
+    municipal_users = await MunicipalUser.find({"active": True}).to_list()
+    users_by_office_code: dict[tuple[str, str], MunicipalUser] = {}
+    users_by_office_name: dict[tuple[str, str], list[MunicipalUser]] = {}
+    for municipal_user in municipal_users:
+        office_key = str(municipal_user.office_id)
+        if municipal_user.employee_code:
+            users_by_office_code[(office_key, _normal(municipal_user.employee_code))] = municipal_user
+        users_by_office_name.setdefault((office_key, _normal(municipal_user.full_name)), []).append(municipal_user)
+
     existing_codes = {
         str(doc.get("patrimonial_code", "")).upper()
         for doc in await Equipment.get_pymongo_collection().find(
@@ -575,13 +604,26 @@ async def import_equipment_xlsx(
 
                 responsible_type = (_cell_text(value_at(row, "responsable_tipo")) or "OFICINA").upper()
                 responsible_name = _cell_text(value_at(row, "responsable"))
+                responsable_id = None
                 if responsible_type == "OFICINA":
                     responsible_name = responsible_name or office.name
                 elif responsible_type == "JEFE":
                     responsible_name = responsible_name or office.head_name or office.name
                 elif responsible_type == "USUARIO":
                     if not responsible_name:
-                        raise ValueError("Responsable: indique el nombre del usuario.")
+                        raise ValueError("Responsable: indique el código o nombre del usuario.")
+                    office_key = str(office.id)
+                    municipal_user = users_by_office_code.get((office_key, _normal(responsible_name)))
+                    if not municipal_user:
+                        matches = users_by_office_name.get((office_key, _normal(responsible_name)), [])
+                        if len(matches) == 1:
+                            municipal_user = matches[0]
+                        elif len(matches) > 1:
+                            raise ValueError("Responsable ambiguo: use el código de trabajador.")
+                    if not municipal_user:
+                        raise ValueError("El responsable no está registrado como usuario de esa oficina.")
+                    responsable_id = municipal_user.id
+                    responsible_name = municipal_user.full_name
                 else:
                     raise ValueError("responsable_tipo debe ser USUARIO, JEFE u OFICINA.")
 
@@ -598,6 +640,7 @@ async def import_equipment_xlsx(
                     ip_address=ip_value,
                     mac_address=_cell_text(value_at(row, "mac")) or None,
                     office_id=office.id,
+                    responsable_id=responsable_id,
                     responsible_name=responsible_name,
                     responsible_type=responsible_type,
                     property_type=_cell_text(value_at(row, "propiedad")) or "MUNICIPALIDAD PROVINCIAL DE CASMA",
