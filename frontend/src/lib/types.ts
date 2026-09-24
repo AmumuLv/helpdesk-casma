@@ -56,7 +56,7 @@ export interface Ticket {
   id: string; number: string; office_id: string; office_name: string; office_location: string | null;
   equipment: EquipmentSnapshot | null; channel: string; quick_issue: QuickIssue | null; subject: string; description: string;
   reporter_name: string | null; contact_phone: string | null; category: TicketCategory; category_source: string;
-  priority: TicketPriority; status: TicketStatus; assigned_to_id: string | null; assigned_to_name: string | null;
+  priority: TicketPriority; priority_source: string; status: TicketStatus; assigned_to_id: string | null; assigned_to_name: string | null;
   attachments: Attachment[]; ai: AIAnalysis | null;
   resolution: { notes: string; resolved_by_name: string; tipo_resolucion: ResolutionType; resolved_at: string; confirmed_by_user: boolean | null } | null;
   timeline: TimelineEntry[]; first_response_at: string | null; created_at: string; updated_at: string;
