@@ -23,7 +23,6 @@ const CORE_PRIVATE_URLS = [
   "/api/organization/zones",
   "/api/organization/users",
   "/api/technicians",
-  "/api/ai/insights",
   "/api/admin/offices",
 ];
 
