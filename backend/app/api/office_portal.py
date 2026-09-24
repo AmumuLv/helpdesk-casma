@@ -102,6 +102,11 @@ async def create_ticket(
     photo: UploadFile | None = File(None),
     p: OfficePrincipal = Depends(require_office),
 ):
+    if replayed_id := await audit.replayed_target_id(request, "ticket"):
+        replayed = await Ticket.get(parse_id(replayed_id)) if parse_id(replayed_id) else None
+        if replayed and not replayed.deleted_at and replayed.office_id == p.office.id:
+            return OfficeTicketCreatedOut(ticket=office_ticket_out(replayed), duplicated=False)
+
     equipment = None
     if equipment_id:
         eid = parse_id(equipment_id)
@@ -123,7 +128,7 @@ async def create_ticket(
             actor_id=str(p.office.id), actor_name=p.office.name,
             target_type="ticket", target_id=str(ticket.id),
             channel=channel.value,
-            offline_replay=request.headers.get("X-Offline-Replay") == "1",
+            **audit.offline_request_details(request),
         )
     return OfficeTicketCreatedOut(ticket=office_ticket_out(ticket), duplicated=duplicated)
 
