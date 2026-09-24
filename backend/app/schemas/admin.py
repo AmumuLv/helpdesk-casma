@@ -8,6 +8,7 @@ from app.models.enums import (
     DeviceStatus,
     EquipmentStatus,
     EquipmentType,
+    OfficeServiceLevel,
     StaffRole,
     TicketCategory,
 )
@@ -32,6 +33,8 @@ class OfficeIn(BaseModel):
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
     head_phone: str | None = Field(default=None, max_length=20)
+    service_level: OfficeServiceLevel = OfficeServiceLevel.NORMAL
+    service_reason: str | None = Field(default=None, max_length=160)
     priority_weight: float = Field(default=1.0, ge=0.5, le=2.0)
 
     _u = field_validator("username")(_username)
@@ -50,6 +53,8 @@ class OfficePatch(BaseModel):
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
     head_phone: str | None = Field(default=None, max_length=20)
+    service_level: OfficeServiceLevel | None = None
+    service_reason: str | None = Field(default=None, max_length=160)
     priority_weight: float | None = Field(default=None, ge=0.5, le=2.0)
     active: bool | None = None
 
@@ -69,6 +74,8 @@ class OfficeOut(BaseModel):
     location: str | None
     head_name: str | None
     head_phone: str | None
+    service_level: OfficeServiceLevel
+    service_reason: str | None
     priority_weight: float
     active: bool
     devices_approved: int = 0
