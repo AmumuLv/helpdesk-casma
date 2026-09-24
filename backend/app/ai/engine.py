@@ -196,13 +196,19 @@ class AIEngine:
         self,
         equipment: Equipment,
         exclude_ticket_id: str | None = None,
+        current_text: str = "",
     ) -> str:
-        """Lee el historial real del equipo y devuelve una nota predictiva breve."""
+        """Lee el historial real del equipo y devuelve una nota predictiva explicable."""
         now = utcnow()
         history = await load_ticket_rows(now - timedelta(days=365), {"equipment_id": equipment.id})
         if exclude_ticket_id:
             history = [item for item in history if item.id != exclude_ticket_id]
-        return summarize_equipment_history(history, now).note
+        return summarize_equipment_history(
+            history,
+            now,
+            current_text=current_text,
+            equipment_type=equipment.type.value,
+        ).note
 
     async def analyze_ticket_background(self, ticket_id: str) -> None:
         """Enriquece un ticket ya guardado; pensado para FastAPI BackgroundTasks."""
@@ -230,12 +236,7 @@ class AIEngine:
                 )
             )
 
-            predictive_note = None
-            if equipment:
-                predictive_note = await self.load_equipment_history_summary(
-                    equipment,
-                    exclude_ticket_id=ticket_id,
-                )
+            predictive_note = analysis.historical_summary if equipment else None
 
             # Recargar para no sobrescribir cambios hechos por un técnico mientras corría la IA.
             current = await Ticket.get(tid)
@@ -325,12 +326,19 @@ class AIEngine:
             category, confidence = pred.category, pred.confidence
 
         risk, factors, incidents_90d, eq_desc = None, [], 0, None
+        history_summary = None
         if req.equipment:
             eq = req.equipment
             risk, factors = st["risk"].score(equipment_row(eq), history, st["model_rates"], now)
             incidents_90d = sum(1 for h in history if h.created_at > now - timedelta(days=90))
             name = " ".join(x for x in (eq.brand, eq.model) if x) or eq.type.value
             eq_desc = f"{name} ({eq.patrimonial_code})" + (f", IP {eq.ip_address}" if eq.ip_address else "")
+            history_summary = summarize_equipment_history(
+                history,
+                now,
+                current_text=text,
+                equipment_type=eq.type.value,
+            )
 
         alert = next((a for a in alerts if a.category in (None, category)), None)
         prio = score_priority(
@@ -356,6 +364,10 @@ class AIEngine:
             equipment_risk=risk,
             equipment_risk_factors=factors,
             equipment_incidents_90d=incidents_90d,
+            historical_summary=history_summary.note if history_summary else None,
+            historical_patterns=history_summary.patterns if history_summary else [],
+            historical_recommendations=history_summary.recommendations if history_summary else [],
+            historical_evidence=history_summary.evidence if history_summary else [],
             related_alert=alert.staff_message if alert else None,
             briefing=briefing(category, confidence, eq_desc, incidents_90d, risk, similar[0][0].resolution if similar else None, alert.staff_message if alert else None),
             user_message=user_message(prio.priority, alert.message if alert else None),
