@@ -60,6 +60,11 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const resolve = useTicketAction<{ notes: string; tipo_resolucion: ResolutionType }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia resuelta");
   const reopen = useTicketAction((id) => `/tickets/${id}/reopen`, "POST", "Incidencia reabierta");
   const reanalyze = useTicketAction((id) => `/tickets/${id}/reanalyze`, "POST", "Análisis actualizado");
+  const applyAiPriority = useTicketAction<{ priority: TicketPriority; model_version: string }>(
+    (id) => `/tickets/${id}/apply-ai-priority`,
+    "POST",
+    "Prioridad IA aplicada con supervisión",
+  );
   const remove = useMutation({
     mutationFn: () => api(`/tickets/${t.id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); qc.invalidateQueries({ queryKey: ["kpis"] }); toast({ tone: "success", title: "Incidencia eliminada" }); onClose(); },
@@ -224,7 +229,36 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
             </div>
             <p className="text-sm">{ai.briefing}</p>
             <AiBlock title={`Categoría sugerida: ${CATEGORY_LABEL[ai.category]} (${pct(ai.category_confidence)})`} />
-            <AiBlock title={`Prioridad sugerida: ${PRIORITY_LABEL[ai.priority]}`} items={ai.priority_reasons} />
+            <AiBlock title={`Prioridad sugerida: ${PRIORITY_LABEL[ai.priority]} · puntaje ${pct(ai.priority_score)}`} items={ai.priority_reasons} />
+            {ai.priority !== t.priority ? (
+              <div className="rounded-xl border border-sol/40 bg-white/10 p-3">
+                <p className="text-sm font-bold text-sol">La IA discrepa de la prioridad actual</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span>Actual:</span>
+                  <span className="rounded bg-white/10 px-2 py-1 font-bold">{PRIORITY_LABEL[t.priority]}</span>
+                  <span>→ IA:</span>
+                  <span className="rounded bg-sol/20 px-2 py-1 font-bold text-sol">{PRIORITY_LABEL[ai.priority]}</span>
+                </div>
+                <p className="mt-2 text-xs text-white/65">
+                  La IA no cambia la prioridad automáticamente. Al aceptar, su decisión quedará registrada a nombre del técnico.
+                </p>
+                <Button
+                  className="mt-3 w-full"
+                  variant="secondary"
+                  loading={applyAiPriority.isPending}
+                  onClick={() => applyAiPriority.mutate({
+                    id: t.id,
+                    body: { priority: ai.priority, model_version: ai.model_version },
+                  })}
+                >
+                  <ShieldCheck className="size-4" /> Aplicar recomendación IA
+                </Button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-hecho/30 bg-white/10 p-2 text-xs text-white/75">
+                La prioridad actual coincide con la recomendación de IA.
+              </div>
+            )}
             {ai.suggested_technician_name && <AiBlock title={`Técnico sugerido: ${ai.suggested_technician_name}`} items={ai.technician_reasons} />}
             {ai.equipment_risk != null && (
               <div className="flex flex-col gap-1">
@@ -291,6 +325,7 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
   "ticket.created": "Ticket registrado",
   "ticket.viewed": "Ticket abierto por el técnico",
   "ticket.classification_updated": "Clasificación actualizada",
+  "ticket.ai_priority_applied": "Recomendación de prioridad IA aceptada",
   "ticket.assigned": "Asignación de técnico actualizada",
   "ticket.note_added": "Nota registrada",
   "ticket.resolved": "Ticket resuelto",
@@ -304,6 +339,15 @@ function auditEventText(event: TicketAuditEvent): string {
   if (event.action === "ticket.assigned") {
     const name = typeof event.details.technician_name === "string" ? event.details.technician_name : null;
     return name ? `${base}: ${name}.` : `${base}: sin técnico asignado.`;
+  }
+  if (event.action === "ticket.ai_priority_applied") {
+    const previous = typeof event.details.previous_priority === "string" ? event.details.previous_priority : null;
+    const applied = typeof event.details.applied_priority === "string" ? event.details.applied_priority : null;
+    const score = typeof event.details.ai_score === "number" ? Math.round(event.details.ai_score * 100) : null;
+    if (previous && applied) {
+      return `El técnico aceptó la recomendación IA: ${previous} → ${applied}${score != null ? ` (puntaje ${score}%)` : ""}.`;
+    }
+    return "El técnico aceptó la recomendación de prioridad propuesta por la IA.";
   }
   if (event.action === "ticket.classification_updated") {
     const category = typeof event.details.category === "string" ? event.details.category : null;
