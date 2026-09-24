@@ -32,6 +32,7 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
     try {
       await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({ type: "GET_OFFLINE_QUEUE_COUNT" });
       if (navigator.onLine) registration.active?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
     } catch (err) {
       console.error("No se pudo registrar el Service Worker", err);
@@ -43,8 +44,19 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
   });
 
   navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data?.type === "OFFLINE_TICKET_SENT") {
+    const message = event.data;
+    if (!message?.type) return;
+
+    if (message.type === "OFFLINE_REQUEST_SENT") {
       queryClient.invalidateQueries({ queryKey: ["office-home"] });
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis"] });
+      if (message.payload?.id) {
+        queryClient.invalidateQueries({ queryKey: ["ticket", message.payload.id] });
+        queryClient.invalidateQueries({ queryKey: ["ticket-audit", message.payload.id] });
+      }
     }
+
+    window.dispatchEvent(new CustomEvent("helpdesk-offline-sync", { detail: message }));
   });
 }
