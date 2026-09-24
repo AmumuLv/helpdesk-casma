@@ -142,7 +142,6 @@ class EquipmentIn(BaseModel):
     type: EquipmentType
     brand: str | None = Field(default=None, max_length=60)
     model: str | None = Field(default=None, max_length=80)
-    serial_number: str | None = Field(default=None, max_length=80)
     hostname: str | None = Field(default=None, max_length=80)
     ip_address: str | None = Field(default=None, max_length=45)
     mac_address: str | None = Field(default=None, max_length=17)
@@ -172,6 +171,7 @@ class EquipmentIn(BaseModel):
 
 class EquipmentOut(EquipmentIn):
     id: str
+    inventory_id: str | None = None
     office_name: str | None = None
     created_at: datetime
     updated_at: datetime
