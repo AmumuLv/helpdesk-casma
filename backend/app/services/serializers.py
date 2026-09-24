@@ -13,7 +13,7 @@ def ticket_out(t: Ticket) -> TicketOut:
         id=str(t.id), number=t.number, office_id=str(t.office_id), office_name=t.office_name, office_location=t.office_location,
         equipment=t.equipment, channel=t.channel, quick_issue=t.quick_issue, subject=t.subject, description=t.description,
         reporter_name=t.reporter_name, contact_phone=t.contact_phone, category=t.category, category_source=t.category_source,
-        priority=t.priority, status=t.status, assigned_to_id=str(t.assigned_to_id) if t.assigned_to_id else None,
+        priority=t.priority, priority_source=t.priority_source, status=t.status, assigned_to_id=str(t.assigned_to_id) if t.assigned_to_id else None,
         assigned_to_name=t.assigned_to_name, attachments=_attachments(t), ai=t.ai, resolution=t.resolution,
         timeline=t.timeline, first_response_at=t.first_response_at, created_at=t.created_at, updated_at=t.updated_at,
     )
