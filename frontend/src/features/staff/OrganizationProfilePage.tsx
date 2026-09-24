@@ -7,7 +7,7 @@ import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, ErrorBox, PriorityBadge, Spinner, StatusBadge } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORY_LABEL, EQUIPMENT_LABEL, EQUIPMENT_STATUS_LABEL, fmtDateTime } from "../../lib/labels";
-import type { MunicipalUser, MunicipalUserProfile, OfficeProfile, Ticket, ZoneProfile } from "../../lib/types";
+import type { MunicipalUser, MunicipalUserProfile, OfficeProfile, Page, Ticket, ZoneProfile } from "../../lib/types";
 import { useIsAdmin } from "./hooks";
 
 type ProfileKind = "zona" | "oficina" | "usuario";
@@ -104,7 +104,12 @@ function ZoneProfileView({ data }: { data: ZoneProfile }) {
 
 function OfficeProfileView({ data }: { data: OfficeProfile }) {
   const navigate = useNavigate();
-  const { office, users, equipment, recent_tickets, ticket_count } = data;
+  const { office, users, equipment, ticket_count } = data;
+  const [ticketPage, setTicketPage] = useState(1);
+  const ticketHistory = useQuery({
+    queryKey: ["organization", "office-tickets", office.id, ticketPage],
+    queryFn: () => api<Page<Ticket>>(`/tickets?office_id=${office.id}&page=${ticketPage}&page_size=50`),
+  });
 
   return (
     <>
@@ -148,7 +153,23 @@ function OfficeProfileView({ data }: { data: OfficeProfile }) {
       </section>
 
       <EquipmentList equipment={equipment} />
-      <TicketHistory tickets={recent_tickets} title={`Historial de incidencias (${ticket_count})`} />
+      <section>
+        <h2 className="mb-3 text-lg font-bold">Historial completo de incidencias ({ticket_count})</h2>
+        {ticketHistory.isLoading ? <Spinner label="Cargando incidencias" /> : ticketHistory.error ? (
+          <ErrorBox message={errorMessage(ticketHistory.error)} />
+        ) : (
+          <>
+            <TicketHistory tickets={ticketHistory.data?.items ?? []} title="" />
+            {ticket_count > 50 && (
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <Button variant="secondary" disabled={ticketPage <= 1} onClick={() => setTicketPage((page) => Math.max(1, page - 1))}>Anterior</Button>
+                <span className="text-sm text-tenue">Página {ticketPage} de {Math.max(1, Math.ceil(ticket_count / 50))}</span>
+                <Button variant="secondary" disabled={ticketPage >= Math.ceil(ticket_count / 50)} onClick={() => setTicketPage((page) => page + 1)}>Siguiente</Button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
     </>
   );
 }
@@ -303,7 +324,7 @@ function EquipmentList({ equipment }: { equipment: OfficeProfile["equipment"] })
 function TicketHistory({ tickets, title }: { tickets: Ticket[]; title: string }) {
   return (
     <section>
-      <h2 className="mb-3 text-lg font-bold">{title}</h2>
+      {title && <h2 className="mb-3 text-lg font-bold">{title}</h2>}
       <Card className="overflow-hidden">
         <ol className="divide-y divide-linea">
           {tickets.map((ticket) => (
