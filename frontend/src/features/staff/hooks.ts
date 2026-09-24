@@ -24,7 +24,7 @@ export const useMunicipalUsers = (officeId?: string, includeInactive = false) =>
     queryFn: () => {
       const params = new URLSearchParams();
       if (officeId) params.set("office_id", officeId);
-      if (includeInactive) params.set("active", "");
+      if (!includeInactive) params.set("active", "true");
       const suffix = params.toString();
       return api<MunicipalUser[]>(`/organization/users${suffix ? `?${suffix}` : ""}`);
     },
