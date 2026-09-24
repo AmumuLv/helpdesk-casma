@@ -7,7 +7,7 @@ from datetime import timedelta
 from beanie import PydanticObjectId
 from fastapi import HTTPException, UploadFile
 
-from app.ai.engine import TriageRequest, get_engine
+from app.ai.engine import get_engine
 from app.ai.taxonomy import CATEGORY_LABELS, QUICK_ISSUES
 from app.core.config import get_settings
 from app.core.timeutil import local_now, utcnow
@@ -206,26 +206,9 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         equipment=data.equipment,
     )
 
-    analysis = None
-    try:
-        analysis = await get_engine().analyze(
-            TriageRequest(
-                subject=subject,
-                description=data.description,
-                quick_issue=data.quick_issue,
-                office=data.office,
-                equipment=data.equipment,
-                category_hint=data.category,
-            )
-        )
-    except Exception:
-        # La IA es un enriquecimiento: el ticket debe poder crearse aunque el
-        # modelo no esté disponible o falle temporalmente.
-        log.exception("Triaje IA no disponible; se usará clasificación local de respaldo.")
-
-    category = data.category or (
-        analysis.category if analysis else (info.category if info else TicketCategory.OTRO)
-    )
+    # El ticket se clasifica inicialmente sin esperar a la IA.
+    # El análisis avanzado se añade luego con FastAPI BackgroundTasks.
+    category = data.category or (info.category if info else TicketCategory.OTRO)
     priority = data.priority or local_priority
 
     timeline = [TimelineEntry(kind=TimelineKind.CREADO, actor=actor, text="Reporte recibido.")]
@@ -238,11 +221,6 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
                 internal=True,
             )
         )
-    if analysis:
-        timeline.append(
-            TimelineEntry(kind=TimelineKind.IA, actor="Asistente IA", text=analysis.briefing, internal=True)
-        )
-
     ticket = Ticket(
         number=await next_ticket_number(),
         office_id=data.office.id, office_name=data.office.name, office_location=data.office.location,
@@ -251,24 +229,12 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         equipment=equipment_snapshot(data.equipment) if data.equipment else None,
         channel=data.channel, quick_issue=data.quick_issue, subject=subject, description=data.description.strip(),
         reporter_name=data.reporter_name, contact_phone=data.contact_phone,
-        category=category, category_source="TECNICO" if data.category else ("IA" if analysis else "LOCAL"),
+        category=category, category_source="TECNICO" if data.category else "LOCAL",
         priority=priority, priority_source="TECNICO" if data.priority else "LOCAL",
-        attachments=attachments, ai=analysis,
+        attachments=attachments, ai=None,
         created_by_staff_id=data.staff.id if data.staff else None,
         timeline=timeline,
     )
-    settings = get_settings()
-    if (
-        analysis
-        and settings.ai_auto_assign_urgent
-        and priority == TicketPriority.ALTA
-        and analysis.suggested_technician_id
-    ):
-        tech = await StaffUser.get(PydanticObjectId(analysis.suggested_technician_id))
-        if tech and tech.active:
-            ticket.assigned_to_id, ticket.assigned_to_name = tech.id, tech.full_name
-            ticket.status, ticket.first_response_at = TicketStatus.EN_PROCESO, now
-            ticket.timeline.append(TimelineEntry(kind=TimelineKind.ASIGNADO, actor="Asistente IA", text=f"{tech.full_name} atenderá su reporte."))
     await ticket.insert()
     await _publish(ticket, "ticket.created")
     return ticket, False
