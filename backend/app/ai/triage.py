@@ -1,4 +1,6 @@
+from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
@@ -14,6 +16,77 @@ class CategoryPrediction:
     category: TicketCategory
     confidence: float
     ranking: list[tuple[str, float]]
+
+
+@dataclass
+class EquipmentHistorySummary:
+    total_365d: int
+    incidents_90d: int
+    incidents_30d: int
+    resolved: int
+    top_category: str | None
+    recurrence_level: str
+    note: str
+
+
+def summarize_equipment_history(history: list, now: datetime) -> EquipmentHistorySummary:
+    """Resume señales históricas del equipo sin depender de un modelo generativo."""
+    recent = [item for item in history if item.created_at >= now - timedelta(days=365)]
+    last_90 = [item for item in recent if item.created_at >= now - timedelta(days=90)]
+    last_30 = [item for item in recent if item.created_at >= now - timedelta(days=30)]
+    resolved = [item for item in recent if item.status == "RESUELTO"]
+
+    categories = Counter(item.category for item in recent if item.category)
+    top_category = categories.most_common(1)[0][0] if categories else None
+
+    if len(last_90) >= 4 or (top_category and categories[top_category] >= 4):
+        recurrence_level = "ALTA"
+    elif len(last_90) >= 2 or (top_category and categories[top_category] >= 2):
+        recurrence_level = "MEDIA"
+    else:
+        recurrence_level = "BAJA"
+
+    if not recent:
+        note = (
+            "Contexto histórico predictivo: no hay incidencias previas registradas "
+            "para este equipo en los últimos 365 días."
+        )
+        return EquipmentHistorySummary(0, 0, 0, 0, None, "BAJA", note)
+
+    category_label = None
+    if top_category:
+        try:
+            category_label = top_category.replace("_", " ").title()
+        except AttributeError:
+            category_label = str(top_category)
+
+    latest_resolution = next(
+        (item.resolution_notes.strip() for item in reversed(recent) if item.resolution_notes and item.resolution_notes.strip()),
+        None,
+    )
+    resolution_text = f" Última solución registrada: {latest_resolution[:220]}." if latest_resolution else ""
+    trend_text = (
+        " Se observa actividad reciente elevada."
+        if len(last_30) >= 2
+        else " No se observa un aumento fuerte de incidencias en los últimos 30 días."
+    )
+    category_text = f" La categoría más frecuente es {category_label}." if category_label else ""
+
+    note = (
+        "Contexto histórico predictivo: "
+        f"{len(recent)} incidencia(s) en 365 días, {len(last_90)} en 90 días y {len(last_30)} en 30 días; "
+        f"{len(resolved)} resuelta(s). Señal de recurrencia: {recurrence_level}."
+        f"{category_text}{trend_text}{resolution_text}"
+    )
+    return EquipmentHistorySummary(
+        total_365d=len(recent),
+        incidents_90d=len(last_90),
+        incidents_30d=len(last_30),
+        resolved=len(resolved),
+        top_category=top_category,
+        recurrence_level=recurrence_level,
+        note=note,
+    )
 
 
 class CategoryClassifier:
