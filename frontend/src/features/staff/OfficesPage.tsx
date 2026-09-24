@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Pencil, Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, ErrorBox, Field, Input, Modal, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -9,13 +9,26 @@ import type { Office } from "../../lib/types";
 import { useOffices } from "./hooks";
 import { PageHeader } from "./PageHeader";
 
-type OfficeForm = { code: string; name: string; username: string; location: string; head_name: string; head_phone: string; priority_weight: number; active: boolean };
-const blank: OfficeForm = { code: "", name: "", username: "", location: "", head_name: "", head_phone: "", priority_weight: 1, active: true };
+type OfficeForm = { code: string; name: string; username: string; zone_name: string; location: string; head_name: string; head_phone: string; priority_weight: number; active: boolean };
+const blank: OfficeForm = { code: "", name: "", username: "", zone_name: "", location: "", head_name: "", head_phone: "", priority_weight: 1, active: true };
 
 export function OfficesPage() {
   const offices = useOffices();
   const [editing, setEditing] = useState<Office | "new" | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const grouped = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const filtered = (offices.data ?? []).filter((office) => !needle || [
+      office.zone_name, office.name, office.code, office.head_name, office.location,
+    ].some((value) => value?.toLowerCase().includes(needle)));
+    const map = new Map<string, Office[]>();
+    for (const office of filtered) {
+      const zone = office.zone_name || "Sin zona asignada";
+      map.set(zone, [...(map.get(zone) ?? []), office]);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, "es"));
+  }, [offices.data, q]);
   const qc = useQueryClient();
   const toast = useToast();
   const revoke = useMutation({
@@ -26,40 +39,58 @@ export function OfficesPage() {
 
   return (
     <div>
-      <PageHeader title="Oficinas" description="Cada oficina tiene su propio usuario. La contraseña es común para todas las oficinas."
+      <PageHeader title="Oficinas" description="Jerarquía organizacional: Zona → Oficina → Responsable."
         actions={<>
           <Button variant="secondary" onClick={() => setPasswordOpen(true)}><KeyRound className="size-4" /> Contraseña de oficinas</Button>
           <Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nueva oficina</Button>
         </>} />
-      {offices.isLoading ? <Spinner /> : offices.error ? <ErrorBox message={errorMessage(offices.error)} /> : (
-        <Card className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-linea bg-papel text-tenue">
-              <tr><th className="p-3">Oficina</th><th className="p-3">Usuario</th><th className="p-3">Responsable</th><th className="p-3">Dispositivos</th><th className="p-3">Peso</th><th className="p-3" /></tr>
-            </thead>
-            <tbody className="divide-y divide-linea">
-              {offices.data?.map((o) => (
-                <tr key={o.id} className={o.active ? "" : "opacity-55"}>
-                  <td className="p-3"><p className="font-bold">{o.name}</p><p className="text-tenue">{o.code}{o.location && `, ${o.location}`}</p></td>
-                  <td className="p-3 font-bold">{o.username}</td>
-                  <td className="p-3">{o.head_name ?? "–"}<p className="text-tenue">{o.head_phone}</p></td>
-                  <td className="p-3">
-                    <span className="font-bold">{o.devices_approved}</span> autorizados
-                    {o.devices_pending > 0 && <Badge className="ml-2 border-sol bg-sol-claro">{o.devices_pending} pendientes</Badge>}
-                  </td>
-                  <td className="p-3">{o.priority_weight.toFixed(1)}</td>
-                  <td className="p-3">
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(o)} aria-label={`Editar ${o.name}`}><Pencil className="size-4" /></Button>
-                      <Button size="sm" variant="ghost" loading={revoke.isPending && revoke.variables?.id === o.id}
-                        onClick={() => confirm(`Se cerrará la sesión en todos los equipos de «${o.name}». ¿Continuar?`) && revoke.mutate(o)}>Cerrar sesiones</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+      <Card className="mb-4 p-3">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar zona, oficina, código o responsable" aria-label="Buscar oficinas" />
+      </Card>
+      {offices.isLoading ? <Spinner /> : offices.error ? <ErrorBox message={errorMessage(offices.error)} /> : grouped.length === 0 ? (
+        <Card className="p-8 text-center text-tenue">No se encontraron oficinas.</Card>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {grouped.map(([zone, zoneOffices]) => (
+            <Card key={zone} className="overflow-hidden">
+              <div className="border-b border-linea bg-papel px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-tenue">Zona</p>
+                <h2 className="text-lg font-bold">{zone}</h2>
+                <p className="text-sm text-tenue">{zoneOffices.length} oficina{zoneOffices.length === 1 ? "" : "s"}</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-left text-sm">
+                  <thead className="border-b border-linea text-tenue">
+                    <tr><th className="p-3">Oficina</th><th className="p-3">Responsable</th><th className="p-3">Ubicación</th><th className="p-3">Dispositivos</th><th className="p-3">Acciones</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-linea">
+                    {zoneOffices.map((o) => (
+                      <tr key={o.id} className={o.active ? "" : "opacity-55"}>
+                        <td className="p-3">
+                          <p className="font-bold">{o.name}</p>
+                          <p className="text-tenue">{o.code} · usuario: {o.username}</p>
+                        </td>
+                        <td className="p-3"><p className="font-bold">{o.head_name ?? "Sin responsable"}</p><p className="text-tenue">{o.head_phone ?? "–"}</p></td>
+                        <td className="p-3">{o.location ?? "–"}</td>
+                        <td className="p-3">
+                          <span className="font-bold">{o.devices_approved}</span> autorizados
+                          {o.devices_pending > 0 && <Badge className="ml-2 border-sol bg-sol-claro">{o.devices_pending} pendientes</Badge>}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => setEditing(o)} aria-label={`Editar ${o.name}`}><Pencil className="size-4" /></Button>
+                            <Button size="sm" variant="ghost" loading={revoke.isPending && revoke.variables?.id === o.id}
+                              onClick={() => confirm(`Se cerrará la sesión en todos los equipos de «${o.name}». ¿Continuar?`) && revoke.mutate(o)}>Cerrar sesiones</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
       {editing && <OfficeModal office={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       <OfficePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
@@ -69,14 +100,15 @@ export function OfficesPage() {
 
 function OfficeModal({ office, onClose }: { office: Office | null; onClose: () => void }) {
   const [f, setF] = useState<OfficeForm>(office ? {
-    code: office.code, name: office.name, username: office.username, location: office.location ?? "", head_name: office.head_name ?? "",
+    code: office.code, name: office.name, username: office.username, zone_name: office.zone_name ?? "",
+    location: office.location ?? "", head_name: office.head_name ?? "",
     head_phone: office.head_phone ?? "", priority_weight: office.priority_weight, active: office.active,
   } : blank);
   const qc = useQueryClient();
   const toast = useToast();
   const save = useMutation({
     mutationFn: () => {
-      const body = { ...f, location: f.location || null, head_name: f.head_name || null, head_phone: f.head_phone || null };
+      const body = { ...f, zone_name: f.zone_name || null, location: f.location || null, head_name: f.head_name || null, head_phone: f.head_phone || null };
       if (office) {
         const { code: _code, ...patch } = body;
         return api<Office>(`/admin/offices/${office.id}`, { method: "PATCH", json: patch });
@@ -96,6 +128,7 @@ function OfficeModal({ office, onClose }: { office: Office | null; onClose: () =
           <Field label="Usuario de acceso">{(id) => <Input id={id} {...bind("username")} required autoCapitalize="none" pattern="[a-z0-9][a-z0-9._\-]{2,39}" />}</Field>
         </div>
         <Field label="Nombre">{(id) => <Input id={id} {...bind("name")} required minLength={3} maxLength={120} />}</Field>
+        <Field label="Zona" hint="Agrupa visualmente las oficinas dentro de la estructura municipal.">{(id) => <Input id={id} {...bind("zone_name")} placeholder="Ej. Gerencia de Administración" maxLength={120} />}</Field>
         <Field label="Ubicación" hint="Se usa para detectar fallas masivas por piso o local.">{(id) => <Input id={id} {...bind("location")} placeholder="Piso 2, Palacio municipal" maxLength={120} />}</Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Jefe / responsable">{(id) => <Input id={id} {...bind("head_name")} maxLength={120} />}</Field>
