@@ -271,8 +271,12 @@ async def update_municipal_user(
     changes = body.model_dump(exclude_unset=True)
     assigned_count = await Equipment.find({"responsable_id": user.id}).count()
 
-    if "office_id" in changes and changes["office_id"]:
+    if "office_id" in changes:
+        if not changes["office_id"]:
+            raise HTTPException(status_code=422, detail="El usuario municipal debe pertenecer a una oficina.")
         office = await _office(changes["office_id"])
+        if not office.active:
+            raise HTTPException(status_code=422, detail="La oficina seleccionada está inactiva.")
         if office.id != user.office_id and assigned_count:
             raise HTTPException(
                 status_code=409,
