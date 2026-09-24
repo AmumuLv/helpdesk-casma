@@ -11,7 +11,6 @@ type PatrimonialOcrResult = {
   matched: boolean;
   equipment_id: string | null;
   candidates: string[];
-  raw_text: string;
 };
 
 type PhotoPickerProps = {
@@ -45,7 +44,9 @@ export function PhotoPicker({ value, onChange, large, patrimonialOcr = false, on
   }, [stream]);
 
   const pick = async (file?: File) => {
-    if (file) onChange(await compressImage(file));
+    if (file) {
+      onChange(await compressImage(file, patrimonialOcr ? 2200 : 1600, patrimonialOcr ? 0.9 : 0.85));
+    }
   };
 
   const readPatrimonialLabel = async () => {
