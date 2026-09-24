@@ -86,10 +86,10 @@ async function serializeRequest(request) {
   return { bodyType: "text", text: await request.clone().text(), contentType };
 }
 
-async function queueRequest(request, scope) {
+async function queueRequest(request, scope, operationId) {
   const serialized = await serializeRequest(request);
   const item = {
-    id: crypto.randomUUID(),
+    id: operationId,
     url: request.url,
     method: request.method,
     scope,
@@ -265,15 +265,20 @@ self.addEventListener("fetch", (event) => {
     && (isOfficeTicketCreate(request, url) || isStaffTicketMutation(request, url))
   ) {
     const scope = isOfficeTicketCreate(request, url) ? "office" : "staff";
-    event.respondWith(
-      fetch(request.clone()).catch(async () => {
-        const queueId = await queueRequest(request, scope);
+    const operationId = crypto.randomUUID();
+    event.respondWith((async () => {
+      const forwardedHeaders = new Headers(request.headers);
+      forwardedHeaders.set("X-Offline-Operation", operationId);
+      try {
+        return await fetch(new Request(request.clone(), { headers: forwardedHeaders }));
+      } catch {
+        const queueId = await queueRequest(request, scope, operationId);
         return new Response(
           JSON.stringify({ offline_queued: true, queue_id: queueId, scope }),
           { status: 202, headers: { "Content-Type": "application/json" } }
         );
-      })
-    );
+      }
+    })());
     return;
   }
 
