@@ -67,7 +67,11 @@ def equipment_out(
     zone_name: str | None = None,
 ) -> EquipmentOut:
     return EquipmentOut(
-        id=str(e.id), office_id=str(e.office_id) if e.office_id else None, office_name=office_name,
-        zone_id=zone_id, zone_name=zone_name,
-        **e.model_dump(exclude={"id", "office_id", "revision_id"}),
+        id=str(e.id),
+        office_id=str(e.office_id) if e.office_id else None,
+        office_name=office_name,
+        zone_id=zone_id,
+        zone_name=zone_name,
+        responsable_id=str(e.responsable_id) if e.responsable_id else None,
+        **e.model_dump(exclude={"id", "office_id", "responsable_id", "revision_id"}),
     )
