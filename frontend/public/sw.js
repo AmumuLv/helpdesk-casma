@@ -126,7 +126,10 @@ async function flushTicketQueue() {
         method: item.method,
         body: form,
         credentials: "include",
-        headers: { "X-Requested-With": "HelpDeskCasma" },
+        headers: {
+          "X-Requested-With": "HelpDeskCasma",
+          "X-Offline-Replay": "1",
+        },
       });
 
       if (response.ok) {
