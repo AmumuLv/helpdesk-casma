@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from app.ai.engine import TriageRequest, get_engine
@@ -145,6 +145,7 @@ async def list_tickets(
 @router.post("", response_model=TicketOut, status_code=201)
 async def create_by_staff(
     request: Request,
+    background_tasks: BackgroundTasks,
     office_id: str = Form(...),
     description: str = Form(..., min_length=3, max_length=2000),
     subject: str | None = Form(None, max_length=160),
@@ -168,7 +169,7 @@ async def create_by_staff(
 ):
     office = await _office(office_id)
     equipment = await _equipment_for(office, equipment_id)
-    ticket, _ = await ticket_service.create_ticket(ticket_service.NewTicket(
+    ticket, duplicated = await ticket_service.create_ticket(ticket_service.NewTicket(
         office=office, channel=TicketChannel.TELEFONO, description=description, quick_issue=quick_issue, subject=subject,
         equipment=equipment, reporter_name=reporter_name, contact_phone=contact_phone,
         photo=photo if photo and photo.filename else None, staff=user, category=category, priority=priority,
@@ -176,6 +177,8 @@ async def create_by_staff(
     ))
     if technician_id and (tid := parse_id(technician_id)):
         ticket = await ticket_service.assign(ticket, user, tid)
+    if not duplicated:
+        background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
     await audit.record(request, "staff", "ticket.created", actor_id=str(user.id), actor_name=user.full_name, target_type="ticket", target_id=str(ticket.id))
     return ticket_out(ticket)
 
@@ -230,16 +233,13 @@ async def reopen(ticket_id: str, user: StaffUser = Depends(require_staff)):
 
 
 @router.post("/{ticket_id}/reanalyze", response_model=TicketOut)
-async def reanalyze(ticket_id: str, _: StaffUser = Depends(require_staff)):
+async def reanalyze(
+    ticket_id: str,
+    background_tasks: BackgroundTasks,
+    _: StaffUser = Depends(require_staff),
+):
     ticket = await _get(ticket_id)
-    office = await Office.get(ticket.office_id)
-    equipment = await Equipment.get(ticket.equipment_id) if ticket.equipment_id else None
-    ticket.ai = await get_engine().analyze(TriageRequest(
-        subject=ticket.subject, description=ticket.description, quick_issue=ticket.quick_issue, office=office,
-        equipment=equipment, exclude_ticket_id=str(ticket.id),
-    ))
-    ticket.updated_at = utcnow()
-    await ticket.save()
+    background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
     return ticket_out(ticket)
 
 
