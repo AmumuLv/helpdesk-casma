@@ -6,11 +6,11 @@ import { Badge, Button, Card, ErrorBox, Field, Input, Modal, Spinner } from "../
 import { api, errorMessage } from "../../lib/api";
 import { fmtDateTime } from "../../lib/labels";
 import type { Office } from "../../lib/types";
-import { useOffices } from "./hooks";
+import { useOffices, useZones } from "./hooks";
 import { PageHeader } from "./PageHeader";
 
-type OfficeForm = { code: string; name: string; username: string; zone_name: string; location: string; head_name: string; head_phone: string; priority_weight: number; active: boolean };
-const blank: OfficeForm = { code: "", name: "", username: "", zone_name: "", location: "", head_name: "", head_phone: "", priority_weight: 1, active: true };
+type OfficeForm = { code: string; name: string; username: string; zone_id: string; location: string; head_name: string; head_phone: string; priority_weight: number; active: boolean };
+const blank: OfficeForm = { code: "", name: "", username: "", zone_id: "", location: "", head_name: "", head_phone: "", priority_weight: 1, active: true };
 
 export function OfficesPage() {
   const offices = useOffices();
@@ -100,15 +100,16 @@ export function OfficesPage() {
 
 function OfficeModal({ office, onClose }: { office: Office | null; onClose: () => void }) {
   const [f, setF] = useState<OfficeForm>(office ? {
-    code: office.code, name: office.name, username: office.username, zone_name: office.zone_name ?? "",
+    code: office.code, name: office.name, username: office.username, zone_id: office.zone_id ?? "",
     location: office.location ?? "", head_name: office.head_name ?? "",
     head_phone: office.head_phone ?? "", priority_weight: office.priority_weight, active: office.active,
   } : blank);
+  const zones = useZones();
   const qc = useQueryClient();
   const toast = useToast();
   const save = useMutation({
     mutationFn: () => {
-      const body = { ...f, zone_name: f.zone_name || null, location: f.location || null, head_name: f.head_name || null, head_phone: f.head_phone || null };
+      const body = { ...f, zone_id: f.zone_id || null, location: f.location || null, head_name: f.head_name || null, head_phone: f.head_phone || null };
       if (office) {
         const { code: _code, ...patch } = body;
         return api<Office>(`/admin/offices/${office.id}`, { method: "PATCH", json: patch });
@@ -128,7 +129,14 @@ function OfficeModal({ office, onClose }: { office: Office | null; onClose: () =
           <Field label="Usuario de acceso">{(id) => <Input id={id} {...bind("username")} required autoCapitalize="none" pattern="[a-z0-9][a-z0-9._\-]{2,39}" />}</Field>
         </div>
         <Field label="Nombre">{(id) => <Input id={id} {...bind("name")} required minLength={3} maxLength={120} />}</Field>
-        <Field label="Zona" hint="Agrupa visualmente las oficinas dentro de la estructura municipal.">{(id) => <Input id={id} {...bind("zone_name")} placeholder="Ej. Gerencia de Administración" maxLength={120} />}</Field>
+        <Field label="Zona" hint="Relación formal de la jerarquía Zona → Oficina.">
+          {(id) => (
+            <Select id={id} {...bind("zone_id")} required>
+              <option value="">Seleccione una zona</option>
+              {zones.data?.filter((zone) => zone.active).map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+            </Select>
+          )}
+        </Field>
         <Field label="Ubicación" hint="Se usa para detectar fallas masivas por piso o local.">{(id) => <Input id={id} {...bind("location")} placeholder="Piso 2, Palacio municipal" maxLength={120} />}</Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Jefe / responsable">{(id) => <Input id={id} {...bind("head_name")} maxLength={120} />}</Field>
