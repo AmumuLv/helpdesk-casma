@@ -277,6 +277,44 @@ async def patch_ticket(request: Request, ticket_id: str, body: TicketPatch, user
     return ticket_out(ticket)
 
 
+@router.post("/{ticket_id}/apply-ai-priority", response_model=TicketOut)
+async def apply_ai_priority(
+    request: Request,
+    ticket_id: str,
+    user: StaffUser = Depends(require_staff),
+):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
+
+    ticket = await _get(ticket_id)
+    if not ticket.ai:
+        raise HTTPException(status_code=409, detail="El ticket todavía no tiene análisis de IA.")
+
+    previous_priority = ticket.priority
+    ai_priority = ticket.ai.priority
+    ai_score = ticket.ai.priority_score
+    ai_reasons = list(ticket.ai.priority_reasons)
+    ai_model_version = ticket.ai.model_version
+
+    ticket = await ticket_service.apply_ai_priority(ticket, user)
+    await audit.record(
+        request,
+        "staff",
+        "ticket.ai_priority_applied",
+        actor_id=str(user.id),
+        actor_name=user.full_name,
+        target_type="ticket",
+        target_id=str(ticket.id),
+        previous_priority=previous_priority.value,
+        applied_priority=ai_priority.value,
+        ai_score=ai_score,
+        ai_reasons=ai_reasons,
+        ai_model_version=ai_model_version,
+        **audit.offline_request_details(request),
+    )
+    return ticket_out(ticket)
+
+
 @router.post("/{ticket_id}/assign", response_model=TicketOut)
 async def assign(request: Request, ticket_id: str, body: AssignIn, user: StaffUser = Depends(require_staff)):
     if replayed := await _replayed_ticket(request):
