@@ -1,3 +1,4 @@
+import asyncio
 import io
 import ipaddress
 import re
@@ -66,7 +67,6 @@ class EquipmentOcrOut(BaseModel):
     matched: bool
     equipment_id: str | None = None
     candidates: list[str] = []
-    raw_text: str = ""
 
 
 _HEADER_ALIASES = {
@@ -391,7 +391,7 @@ async def ocr_patrimonial(
 
     image = _prepare_ocr_image(raw)
     try:
-        text = await __import__("asyncio").to_thread(
+        text = await asyncio.to_thread(
             pytesseract.image_to_string,
             image,
             lang="spa+eng",
@@ -399,7 +399,7 @@ async def ocr_patrimonial(
         )
     except pytesseract.pytesseract.TesseractNotFoundError:
         raise HTTPException(status_code=503, detail="El motor OCR no está disponible en el servidor.")
-    except pytesseract.TesseractError:
+    except pytesseract.pytesseract.TesseractError:
         raise HTTPException(status_code=422, detail="No se pudo reconocer texto en la etiqueta.")
 
     text = (text or "").strip()
@@ -437,7 +437,6 @@ async def ocr_patrimonial(
         matched=bool(matched_code),
         equipment_id=matched_id,
         candidates=[candidate.upper() for candidate in candidates],
-        raw_text=text[:1200],
     )
 
 
