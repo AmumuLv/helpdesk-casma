@@ -16,7 +16,9 @@ class EquipmentSpecs(BaseModel):
 
 
 class Equipment(Document):
-    # Nombre legado usado por la API actual.
+    # Identificador interno corto para búsqueda rápida en Soporte TI.
+    inventory_id: Annotated[str | None, Indexed(unique=True, sparse=True)] = None
+    # Código oficial del Margesí / patrimonio municipal.
     patrimonial_code: Annotated[str, Indexed(unique=True)]
     # Nombre solicitado para la estructura patrimonial. Se sincroniza con
     # patrimonial_code para no romper clientes ni registros existentes.
@@ -24,6 +26,7 @@ class Equipment(Document):
     type: EquipmentType
     brand: str | None = None
     model: str | None = None
+    # Campo legado; los nuevos registros usan Código patrimonial + ID TI.
     serial_number: str | None = None
     hostname: str | None = None
     ip_address: str | None = None
