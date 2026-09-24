@@ -6,12 +6,13 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.ai.engine import TriageRequest, get_engine
 from app.api.deps import OfficePrincipal, StaffPrincipal, parse_id, require_admin, require_staff, resolve_principal
 from app.core.config import get_settings
 from app.core.timeutil import aware, utcnow
-from app.models import Equipment, Office, StaffUser, Ticket
+from app.models import AuditLog, Equipment, Office, StaffUser, Ticket
 from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority, TicketStatus
 from app.models.ticket import AIAnalysis
 from app.schemas.admin import StaffOut
@@ -25,6 +26,14 @@ from app.services.storage import attachment_path
 router = APIRouter(prefix="/tickets", tags=["incidencias"])
 tech_router = APIRouter(prefix="/technicians", tags=["incidencias"])
 lookup_router = APIRouter(prefix="/lookup", tags=["incidencias"])
+
+
+class TicketAuditOut(BaseModel):
+    at: datetime
+    actor_type: str
+    actor_name: str | None = None
+    action: str
+    details: dict
 
 
 @lookup_router.get("/offices")
@@ -197,49 +206,107 @@ async def get_ticket(ticket_id: str, _: StaffUser = Depends(require_staff)):
     return ticket_out(await _get(ticket_id))
 
 
+@router.get("/{ticket_id}/audit", response_model=list[TicketAuditOut])
+async def ticket_audit(ticket_id: str, _: StaffUser = Depends(require_staff)):
+    await _get(ticket_id)
+    logs = await AuditLog.find(
+        {"target_type": "ticket", "target_id": ticket_id}
+    ).sort("at").limit(300).to_list()
+    return [
+        TicketAuditOut(
+            at=log.at,
+            actor_type=log.actor_type,
+            actor_name=log.actor_name,
+            action=log.action,
+            details=log.details,
+        )
+        for log in logs
+    ]
+
+
 @router.patch("/{ticket_id}", response_model=TicketOut)
-async def patch_ticket(ticket_id: str, body: TicketPatch, user: StaffUser = Depends(require_staff)):
-    return ticket_out(await ticket_service.update_classification(await _get(ticket_id), user, body.category, body.priority))
+async def patch_ticket(request: Request, ticket_id: str, body: TicketPatch, user: StaffUser = Depends(require_staff)):
+    ticket = await ticket_service.update_classification(await _get(ticket_id), user, body.category, body.priority)
+    await audit.record(
+        request, "staff", "ticket.classification_updated",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+        category=body.category.value if body.category else None,
+        priority=body.priority.value if body.priority else None,
+    )
+    return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/assign", response_model=TicketOut)
-async def assign(ticket_id: str, body: AssignIn, user: StaffUser = Depends(require_staff)):
+async def assign(request: Request, ticket_id: str, body: AssignIn, user: StaffUser = Depends(require_staff)):
     tech_id = parse_id(body.technician_id) if body.technician_id else None
     if body.technician_id and not tech_id:
         raise HTTPException(status_code=422, detail="Técnico no válido.")
-    return ticket_out(await ticket_service.assign(await _get(ticket_id), user, tech_id))
+    ticket = await ticket_service.assign(await _get(ticket_id), user, tech_id)
+    await audit.record(
+        request, "staff", "ticket.assigned",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+        technician_id=str(ticket.assigned_to_id) if ticket.assigned_to_id else None,
+        technician_name=ticket.assigned_to_name,
+    )
+    return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/notes", response_model=TicketOut)
-async def add_note(ticket_id: str, body: NoteIn, user: StaffUser = Depends(require_staff)):
-    return ticket_out(await ticket_service.add_note(await _get(ticket_id), user, body.text, body.visible_to_office))
+async def add_note(request: Request, ticket_id: str, body: NoteIn, user: StaffUser = Depends(require_staff)):
+    ticket = await ticket_service.add_note(await _get(ticket_id), user, body.text, body.visible_to_office)
+    await audit.record(
+        request, "staff", "ticket.note_added",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+        visible_to_office=body.visible_to_office,
+    )
+    return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/resolve", response_model=TicketOut)
-async def resolve(ticket_id: str, body: ResolveIn, user: StaffUser = Depends(require_staff)):
-    return ticket_out(
-        await ticket_service.resolve(
-            await _get(ticket_id),
-            user,
-            body.notes,
-            body.tipo_resolucion,
-        )
+async def resolve(request: Request, ticket_id: str, body: ResolveIn, user: StaffUser = Depends(require_staff)):
+    ticket = await ticket_service.resolve(
+        await _get(ticket_id),
+        user,
+        body.notes,
+        body.tipo_resolucion,
     )
+    await audit.record(
+        request, "staff", "ticket.resolved",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+        resolution_type=body.tipo_resolucion.value,
+    )
+    return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/reopen", response_model=TicketOut)
-async def reopen(ticket_id: str, user: StaffUser = Depends(require_staff)):
-    return ticket_out(await ticket_service.reopen(await _get(ticket_id), user.full_name, by_user=False))
+async def reopen(request: Request, ticket_id: str, user: StaffUser = Depends(require_staff)):
+    ticket = await ticket_service.reopen(await _get(ticket_id), user.full_name, by_user=False)
+    await audit.record(
+        request, "staff", "ticket.reopened",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+    )
+    return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/reanalyze", response_model=TicketOut)
 async def reanalyze(
+    request: Request,
     ticket_id: str,
     background_tasks: BackgroundTasks,
-    _: StaffUser = Depends(require_staff),
+    user: StaffUser = Depends(require_staff),
 ):
     ticket = await _get(ticket_id)
     background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
+    await audit.record(
+        request, "staff", "ticket.reanalysis_requested",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+    )
     return ticket_out(ticket)
 
 
