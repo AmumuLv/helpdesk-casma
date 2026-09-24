@@ -5,8 +5,19 @@ import { useToast } from "../../components/Toasts";
 import { Badge, Button, CategoryBadge, cx, ErrorBox, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORIES, CATEGORY_LABEL, EQUIPMENT_LABEL, fmtDateTime, pct, PRIORITY_LABEL } from "../../lib/labels";
-import type { Ticket, TicketCategory, TicketPriority } from "../../lib/types";
+import type { ResolutionType, Ticket, TicketCategory, TicketPriority } from "../../lib/types";
 import { useIsAdmin, useTechnicians, useTicketAction } from "./hooks";
+
+const RESOLUTION_LABEL: Record<ResolutionType, string> = {
+  SOLUCIONADO: "Solucionado",
+  REPARADO: "Reparado",
+  REEMPLAZADO: "Reemplazado",
+  OBSOLETO: "Obsoleto",
+  IRREPARABLE: "Irreparable",
+  BAJA_PATRIMONIAL: "Baja patrimonial",
+  DERIVADO: "Derivado",
+};
+const RESOLUTION_TYPES = Object.keys(RESOLUTION_LABEL) as ResolutionType[];
 
 export function TicketDetail({ ticketId, onClose }: { ticketId: string | null; onClose: () => void }) {
   const { data: t, isLoading, error } = useQuery({
@@ -29,7 +40,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const patch = useTicketAction<{ category?: TicketCategory; priority?: TicketPriority }>((id) => `/tickets/${id}`, "PATCH", "Clasificación corregida");
   const assign = useTicketAction<{ technician_id: string | null }>((id) => `/tickets/${id}/assign`, "POST", "Técnico asignado");
   const note = useTicketAction<{ text: string; visible_to_office: boolean }>((id) => `/tickets/${id}/notes`, "POST", "Nota agregada");
-  const resolve = useTicketAction<{ notes: string }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia resuelta");
+  const resolve = useTicketAction<{ notes: string; tipo_resolucion: ResolutionType }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia resuelta");
   const reopen = useTicketAction((id) => `/tickets/${id}/reopen`, "POST", "Incidencia reabierta");
   const reanalyze = useTicketAction((id) => `/tickets/${id}/reanalyze`, "POST", "Análisis actualizado");
   const remove = useMutation({
@@ -40,6 +51,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const [noteText, setNoteText] = useState("");
   const [visible, setVisible] = useState(false);
   const [resolution, setResolution] = useState("");
+  const [resolutionType, setResolutionType] = useState<ResolutionType>("SOLUCIONADO");
   const suggestedFix = t.ai?.similar_cases.find((c) => c.resolution)?.resolution;
   const ai = t.ai;
 
@@ -76,12 +88,18 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                 <Button size="sm" variant="ghost" onClick={() => setResolution(suggestedFix)}>Usar solución del caso parecido</Button>
               )}
             </div>
+            <label className="flex flex-col gap-1 text-sm font-bold">Tipo de resolución
+              <Select value={resolutionType} onChange={(e) => setResolutionType(e.target.value as ResolutionType)}>
+                {RESOLUTION_TYPES.map((type) => <option key={type} value={type}>{RESOLUTION_LABEL[type]}</option>)}
+              </Select>
+            </label>
             <Textarea rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Qué se hizo para solucionarlo (la oficina lo verá)" />
             <Button variant="success" loading={resolve.isPending} disabled={resolution.trim().length < 5}
-              onClick={() => resolve.mutate({ id: t.id, body: { notes: resolution.trim() } })}>Marcar como resuelto</Button>
+              onClick={() => resolve.mutate({ id: t.id, body: { notes: resolution.trim(), tipo_resolucion: resolutionType } })}>Marcar como resuelto</Button>
           </section>
         ) : (
           <section className="flex flex-col gap-2 rounded-xl bg-hecho-claro p-4">
+            {t.resolution?.tipo_resolucion && <p className="text-sm"><strong>Tipo de resolución:</strong> {RESOLUTION_LABEL[t.resolution.tipo_resolucion]}</p>}
             <p><strong>Solución de {t.resolution?.resolved_by_name}:</strong> {t.resolution?.notes}</p>
             {t.resolution?.confirmed_by_user != null && <p className="text-sm font-bold">{t.resolution.confirmed_by_user ? "La oficina confirmó que funciona." : "La oficina indicó que sigue fallando."}</p>}
             <Button variant="secondary" size="sm" className="w-fit" loading={reopen.isPending} onClick={() => reopen.mutate({ id: t.id })}>Reabrir</Button>
