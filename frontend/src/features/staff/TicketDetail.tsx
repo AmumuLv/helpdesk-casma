@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, RefreshCw, Trash } from "lucide-react";
-import { useState } from "react";
+import { BrainCircuit, History, RefreshCw, ShieldCheck, Trash } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, CategoryBadge, cx, ErrorBox, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -18,6 +18,23 @@ const RESOLUTION_LABEL: Record<ResolutionType, string> = {
   DERIVADO: "Derivado",
 };
 const RESOLUTION_TYPES = Object.keys(RESOLUTION_LABEL) as ResolutionType[];
+
+type TicketAuditEvent = {
+  at: string;
+  actor_type: string;
+  actor_name: string | null;
+  action: string;
+  details: Record<string, unknown>;
+};
+
+type HistoryItem = {
+  key: string;
+  at: string;
+  actor: string;
+  text: string;
+  internal: boolean;
+  source: "timeline" | "audit";
+};
 
 export function TicketDetail({ ticketId, onClose }: { ticketId: string | null; onClose: () => void }) {
   const { data: t, isLoading, error } = useQuery({
@@ -54,6 +71,31 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const [resolutionType, setResolutionType] = useState<ResolutionType>("SOLUCIONADO");
   const suggestedFix = t.ai?.similar_cases.find((c) => c.resolution)?.resolution;
   const ai = t.ai;
+
+  const auditTrail = useQuery({
+    queryKey: ["ticket-audit", t.id],
+    queryFn: () => api<TicketAuditEvent[]>(`/tickets/${t.id}/audit`),
+  });
+
+  const history = useMemo<HistoryItem[]>(() => {
+    const timelineItems: HistoryItem[] = t.timeline.map((entry, index) => ({
+      key: `timeline-${index}-${entry.at}`,
+      at: entry.at,
+      actor: entry.actor,
+      text: entry.text,
+      internal: entry.internal,
+      source: "timeline",
+    }));
+    const auditItems: HistoryItem[] = (auditTrail.data ?? []).map((entry, index) => ({
+      key: `audit-${index}-${entry.at}-${entry.action}`,
+      at: entry.at,
+      actor: entry.actor_name || (entry.actor_type === "office" ? "Oficina" : "Sistema"),
+      text: auditEventText(entry),
+      internal: true,
+      source: "audit",
+    }));
+    return [...timelineItems, ...auditItems].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }, [t.timeline, auditTrail.data]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
@@ -116,11 +158,35 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                 onClick={() => note.mutate({ id: t.id, body: { text: noteText.trim(), visible_to_office: visible } }, { onSuccess: () => setNoteText("") })}>Agregar nota</Button>
             </div>
           </div>
-          <ol className="flex flex-col gap-3 border-l-2 border-linea pl-4">
-            {[...t.timeline].reverse().map((e, i) => (
-              <li key={i} className={cx(e.internal && "text-tenue")}>
-                <p className="text-xs">{fmtDateTime(e.at)}, {e.actor}{e.internal && " (interno)"}</p>
-                <p className="text-sm">{e.text}</p>
+          <div className="flex items-center gap-2">
+            <History className="size-5 text-casma" aria-hidden />
+            <h3 className="font-bold">Historial del ticket</h3>
+            {auditTrail.isLoading && <span className="text-xs text-tenue">Cargando auditoría…</span>}
+          </div>
+          {auditTrail.error && <p className="text-xs text-alerta">No se pudo cargar la auditoría; se muestra el seguimiento del ticket.</p>}
+          <ol className="relative ml-2 flex flex-col gap-0 border-l-2 border-linea pl-6">
+            {history.map((item) => (
+              <li key={item.key} className="relative pb-5 last:pb-0">
+                <span
+                  className={cx(
+                    "absolute -left-[31px] top-1.5 size-3 rounded-full border-2 border-white",
+                    item.source === "audit" ? "bg-casma" : item.internal ? "bg-sol" : "bg-hecho",
+                  )}
+                  aria-hidden
+                />
+                <div className={cx("rounded-xl border p-3", item.source === "audit" ? "border-casma/20 bg-casma-claro/40" : "border-linea bg-white")}>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-tenue">
+                    <span>{fmtDateTime(item.at)}</span>
+                    <span>•</span>
+                    <span className="font-bold text-tinta">{item.actor}</span>
+                    {item.source === "audit" ? (
+                      <Badge className="border-casma/30 bg-white text-casma"><ShieldCheck className="mr-1 size-3" /> Auditoría</Badge>
+                    ) : item.internal ? (
+                      <Badge className="border-linea bg-papel text-tenue">Interno</Badge>
+                    ) : null}
+                  </div>
+                  <p className={cx("mt-1 text-sm", item.internal && item.source !== "audit" && "text-tenue")}>{item.text}</p>
+                </div>
               </li>
             ))}
           </ol>
@@ -190,6 +256,38 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
       </aside>
     </div>
   );
+}
+
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  "ticket.created": "Ticket registrado",
+  "ticket.classification_updated": "Clasificación actualizada",
+  "ticket.assigned": "Asignación de técnico actualizada",
+  "ticket.note_added": "Nota registrada",
+  "ticket.resolved": "Ticket resuelto",
+  "ticket.reopened": "Ticket reabierto",
+  "ticket.reanalysis_requested": "Reanálisis de IA solicitado",
+  "ticket.deleted": "Ticket eliminado",
+};
+
+function auditEventText(event: TicketAuditEvent): string {
+  const base = AUDIT_ACTION_LABEL[event.action] ?? event.action.replace(/^ticket\./, "").replaceAll("_", " ");
+  if (event.action === "ticket.assigned") {
+    const name = typeof event.details.technician_name === "string" ? event.details.technician_name : null;
+    return name ? `${base}: ${name}.` : `${base}: sin técnico asignado.`;
+  }
+  if (event.action === "ticket.classification_updated") {
+    const category = typeof event.details.category === "string" ? event.details.category : null;
+    const priority = typeof event.details.priority === "string" ? event.details.priority : null;
+    const changes = [category && `categoría ${category}`, priority && `prioridad ${priority}`].filter(Boolean).join(", ");
+    return changes ? `${base}: ${changes}.` : base;
+  }
+  if (event.action === "ticket.note_added") {
+    return event.details.visible_to_office ? "Se registró una nota visible para la oficina." : "Se registró una nota interna.";
+  }
+  if (event.action === "ticket.resolved" && typeof event.details.resolution_type === "string") {
+    return `${base}: ${event.details.resolution_type.replaceAll("_", " ").toLowerCase()}.`;
+  }
+  return base;
 }
 
 const Info = ({ label, value }: { label: string; value?: string | null }) => (
