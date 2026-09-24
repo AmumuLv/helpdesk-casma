@@ -257,13 +257,20 @@ class AIEngine:
                 )
             )
             if predictive_note:
-                already_added = any(
-                    entry.internal
-                    and entry.actor == "IA predictiva"
-                    and entry.text.startswith("Contexto histórico predictivo:")
-                    for entry in current.timeline
+                existing_note = next(
+                    (
+                        entry
+                        for entry in current.timeline
+                        if entry.internal
+                        and entry.actor == "IA predictiva"
+                        and entry.text.startswith("Contexto histórico predictivo:")
+                    ),
+                    None,
                 )
-                if not already_added:
+                if existing_note:
+                    existing_note.text = predictive_note
+                    existing_note.at = utcnow()
+                else:
                     current.timeline.append(
                         TimelineEntry(
                             kind=TimelineKind.NOTA,
