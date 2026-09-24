@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Monitor, Plus, Printer, QrCode, Upload } from "lucide-react";
-import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Input, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -14,7 +14,9 @@ type Detail = { equipment: Equipment; risk: number | null; risk_factors: string[
 export function EquipmentPage() {
   const offices = useOfficeLookup();
   const isAdmin = useIsAdmin();
+  const [zoneName, setZoneName] = useState("");
   const [officeId, setOfficeId] = useState("");
+  const [area, setArea] = useState("");
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim());
@@ -33,6 +35,32 @@ export function EquipmentPage() {
     },
   });
 
+  const zones = useMemo(
+    () => [...new Set((offices.data ?? []).map((office) => office.zone_name).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "es")),
+    [offices.data],
+  );
+
+  const filteredOffices = useMemo(
+    () => (offices.data ?? []).filter((office) => !zoneName || office.zone_name === zoneName),
+    [offices.data, zoneName],
+  );
+
+  const areaOptions = useMemo(() => {
+    const values = (list.data ?? [])
+      .filter((equipment) => !zoneName || equipment.zone_name === zoneName)
+      .filter((equipment) => !officeId || equipment.office_id === officeId)
+      .map((equipment) => equipment.area)
+      .filter((value): value is string => !!value);
+    return [...new Set(values)].sort((a, b) => a.localeCompare(b, "es"));
+  }, [list.data, zoneName, officeId]);
+
+  const visibleEquipment = useMemo(
+    () => (list.data ?? [])
+      .filter((equipment) => !zoneName || equipment.zone_name === zoneName)
+      .filter((equipment) => !area || equipment.area === area),
+    [list.data, zoneName, area],
+  );
+
   return (
     <div>
       <PageHeader title="Inventario de equipos" description="ID TI, código patrimonial, oficina, especificaciones, historial de incidencias y riesgo de falla."
@@ -40,19 +68,42 @@ export function EquipmentPage() {
           {isAdmin && <Button variant="secondary" onClick={() => setImportOpen(true)}><Upload className="size-4" /> Importar Margesí</Button>}
           <Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo equipo</Button>
         </>} />
-      <Card className="mb-4 grid gap-3 p-3 sm:grid-cols-[2fr_1fr_1fr]">
+      <Card className="mb-4 grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por código patrimonial, MAC, IP o responsable" aria-label="Buscar equipos" />
-        <Select value={officeId} onChange={(e) => setOfficeId(e.target.value)} aria-label="Oficina">
+        <Select
+          value={zoneName}
+          onChange={(e) => {
+            setZoneName(e.target.value);
+            setOfficeId("");
+            setArea("");
+          }}
+          aria-label="Zona"
+        >
+          <option value="">Todas las zonas</option>
+          {zones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+        </Select>
+        <Select
+          value={officeId}
+          onChange={(e) => {
+            setOfficeId(e.target.value);
+            setArea("");
+          }}
+          aria-label="Oficina"
+        >
           <option value="">Todas las oficinas</option>
-          {offices.data?.map((o) => <option key={o.id} value={o.id}>{o.zone_name ? `${o.zone_name} › ${o.name}` : o.name}</option>)}
+          {filteredOffices.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </Select>
+        <Select value={area} onChange={(e) => setArea(e.target.value)} aria-label="Área">
+          <option value="">Todas las áreas</option>
+          {areaOptions.map((item) => <option key={item} value={item}>{item}</option>)}
         </Select>
         <Select value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">
           <option value="">Todos los tipos</option>
           {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{EQUIPMENT_LABEL[t]}</option>)}
         </Select>
       </Card>
-      {list.isLoading ? <Spinner /> : list.error ? <ErrorBox message={errorMessage(list.error)} /> : !list.data?.length ? (
-        <Card><EmptyState icon={<Monitor />} title="No se encontraron equipos" /></Card>
+      {list.isLoading ? <Spinner /> : list.error ? <ErrorBox message={errorMessage(list.error)} /> : !visibleEquipment.length ? (
+        <Card><EmptyState icon={<Monitor />} title="No se encontraron equipos con estos filtros" /></Card>
       ) : (
         <Card className="overflow-x-auto">
           <table className="w-full min-w-[1080px] text-left text-sm">
@@ -60,7 +111,7 @@ export function EquipmentPage() {
               <tr><th className="p-3">ID TI</th><th className="p-3">Código patrimonial</th><th className="p-3">Equipo</th><th className="p-3">Jerarquía</th><th className="p-3">Responsable</th><th className="p-3">IP / MAC</th><th className="p-3">Estado</th><th className="p-3" /></tr>
             </thead>
             <tbody className="divide-y divide-linea">
-              {list.data.map((e) => (
+              {visibleEquipment.map((e) => (
                 <tr key={e.id} className="cursor-pointer hover:bg-papel" onClick={() => setSelected(e.id)}>
                   <td className="p-3 font-bold text-casma">{e.inventory_id ?? "–"}</td>
                   <td className="p-3 font-bold">{e.patrimonial_code}</td>
