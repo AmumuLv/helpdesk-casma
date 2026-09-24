@@ -1,3 +1,5 @@
+from app.schemas.admin import EquipmentOut, OfficeOut
+from app.schemas.ticket import TicketOut
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
@@ -78,3 +80,36 @@ class MunicipalUserOut(BaseModel):
     equipment_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class OrganizationOfficeSummary(BaseModel):
+    id: str
+    code: str
+    name: str
+    location: str | None
+    head_name: str | None
+    active: bool
+    user_count: int
+    equipment_count: int
+    ticket_count: int
+
+
+class ZoneProfileOut(BaseModel):
+    zone: ZoneOut
+    offices: list[OrganizationOfficeSummary]
+    recent_tickets: list[TicketOut]
+
+
+class OfficeProfileOut(BaseModel):
+    office: OfficeOut
+    users: list[MunicipalUserOut]
+    equipment: list[EquipmentOut]
+    recent_tickets: list[TicketOut]
+    ticket_count: int
+
+
+class MunicipalUserProfileOut(BaseModel):
+    user: MunicipalUserOut
+    equipment: list[EquipmentOut]
+    recent_tickets: list[TicketOut]
+    ticket_count: int
