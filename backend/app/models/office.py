@@ -5,6 +5,7 @@ from beanie import Document, Indexed, PydanticObjectId
 from pydantic import Field
 
 from app.core.timeutil import utcnow
+from app.models.enums import OfficeServiceLevel
 
 
 class Office(Document):
@@ -20,6 +21,9 @@ class Office(Document):
     location: str | None = None
     head_name: str | None = None
     head_phone: str | None = None
+    # Perfil operativo para el triaje local. Ej.: Mesa de Partes, Caja o servicios críticos.
+    service_level: OfficeServiceLevel = OfficeServiceLevel.NORMAL
+    service_reason: str | None = None
     priority_weight: float = Field(default=1.0, ge=0.5, le=2.0)
     active: bool = True
     session_version: int = 1
