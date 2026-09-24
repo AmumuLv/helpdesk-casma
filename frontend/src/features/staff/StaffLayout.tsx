@@ -21,7 +21,7 @@ const NAV: NavItem[] = [
 export function StaffLayout() {
   const { data: me } = useMe();
   const isAdmin = me?.staff?.role === "ADMIN";
-  const pending = useDevices(isAdmin ? "PENDIENTE" : undefined);
+  const pending = useDevices("PENDIENTE", isAdmin);
   const pendingCount = isAdmin ? pending.data?.length ?? 0 : 0;
   const logout = useLogout();
   const navigate = useNavigate();
