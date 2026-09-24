@@ -3,6 +3,7 @@ import io
 import ipaddress
 import re
 import unicodedata
+from collections import Counter
 from datetime import date, datetime
 from zipfile import BadZipFile
 
@@ -67,6 +68,32 @@ class EquipmentOcrOut(BaseModel):
     matched: bool
     equipment_id: str | None = None
     candidates: list[str] = []
+
+
+class RetirementHistoryItem(BaseModel):
+    number: str
+    created_at: datetime
+    subject: str
+    status: str
+    resolution_type: str | None = None
+    resolution_notes: str | None = None
+
+
+class EquipmentRetirementReport(BaseModel):
+    generated_at: datetime
+    equipment: EquipmentOut
+    total_incidents: int
+    resolved_incidents: int
+    incidents_365d: int
+    incidents_90d: int
+    resolution_counts: dict[str, int]
+    risk_30d: float | None
+    risk_factors: list[str]
+    indicators: list[str]
+    recommendation: str
+    technical_conclusion: str
+    disclaimer: str
+    history: list[RetirementHistoryItem]
 
 
 _HEADER_ALIASES = {
@@ -702,6 +729,114 @@ async def import_equipment_xlsx(
     )
 
 
+@router.get("/{equipment_id}/retirement-report", response_model=EquipmentRetirementReport)
+async def equipment_retirement_report(
+    equipment_id: str,
+    _: StaffUser = Depends(require_staff),
+):
+    eq = await _get(equipment_id)
+    office = await Office.get(eq.office_id) if eq.office_id else None
+    tickets = await Ticket.find(
+        {"equipment_id": eq.id, "deleted_at": None}
+    ).sort(-Ticket.created_at).to_list()
+
+    now = utcnow()
+    incidents_365d = sum(1 for ticket in tickets if ticket.created_at >= now - timedelta(days=365))
+    incidents_90d = sum(1 for ticket in tickets if ticket.created_at >= now - timedelta(days=90))
+    resolved = [ticket for ticket in tickets if ticket.status.value == "RESUELTO" and ticket.resolution]
+
+    resolution_counts = Counter(
+        ticket.resolution.tipo_resolucion.value
+        for ticket in resolved
+        if ticket.resolution
+    )
+
+    engine = get_engine()
+    await engine.ensure_ready()
+    history_rows = await load_ticket_rows(now - timedelta(days=730), {"equipment_id": eq.id})
+    risk, risk_factors = engine.state["risk"].score(
+        equipment_row(eq),
+        history_rows,
+        engine.state["model_rates"],
+        now,
+    )
+
+    indicators: list[str] = []
+    explicit_retirement = (
+        resolution_counts.get("OBSOLETO", 0)
+        + resolution_counts.get("IRREPARABLE", 0)
+        + resolution_counts.get("BAJA_PATRIMONIAL", 0)
+    )
+    if eq.status.value == "BAJA":
+        indicators.append("El activo ya figura con estado BAJA en el inventario TI.")
+    if resolution_counts.get("OBSOLETO", 0):
+        indicators.append(f"{resolution_counts['OBSOLETO']} incidencia(s) fueron cerradas como equipo obsoleto.")
+    if resolution_counts.get("IRREPARABLE", 0):
+        indicators.append(f"{resolution_counts['IRREPARABLE']} incidencia(s) fueron cerradas como irreparables.")
+    if resolution_counts.get("BAJA_PATRIMONIAL", 0):
+        indicators.append(f"{resolution_counts['BAJA_PATRIMONIAL']} incidencia(s) registran baja patrimonial como resultado.")
+    if resolution_counts.get("REPARADO", 0) >= 2:
+        indicators.append(f"El equipo registra {resolution_counts['REPARADO']} reparaciones documentadas.")
+    if incidents_365d >= 4:
+        indicators.append(f"Alta recurrencia: {incidents_365d} incidencias en los últimos 365 días.")
+    if risk is not None and risk >= 0.6:
+        indicators.append(f"El modelo de riesgo estima {round(risk * 100)}% de probabilidad de nueva falla en 30 días.")
+
+    if explicit_retirement or eq.status.value == "BAJA":
+        recommendation = "EVALUAR_BAJA_PATRIMONIAL"
+        technical_conclusion = (
+            "El historial contiene evidencia técnica que justifica elevar el activo a revisión para baja patrimonial. "
+            "La decisión administrativa final corresponde a las áreas competentes."
+        )
+    elif incidents_365d >= 4 or resolution_counts.get("REPARADO", 0) >= 2 or (risk is not None and risk >= 0.6):
+        recommendation = "REQUIERE_EVALUACION_TECNICA"
+        technical_conclusion = (
+            "El activo presenta recurrencia o riesgo suficiente para una evaluación técnica integral. "
+            "Se recomienda documentar diagnóstico, costo de reparación y condición del bien antes de proponer una baja."
+        )
+    else:
+        recommendation = "SIN_EVIDENCIA_SUFICIENTE_PARA_BAJA"
+        technical_conclusion = (
+            "Con la información registrada actualmente no existe evidencia técnica suficiente para sugerir una baja patrimonial. "
+            "Debe continuarse el seguimiento y documentar futuras intervenciones."
+        )
+
+    return EquipmentRetirementReport(
+        generated_at=now,
+        equipment=equipment_out(
+            eq,
+            office.name if office else None,
+            str(office.zone_id) if office and office.zone_id else None,
+            office.zone_name if office else None,
+        ),
+        total_incidents=len(tickets),
+        resolved_incidents=len(resolved),
+        incidents_365d=incidents_365d,
+        incidents_90d=incidents_90d,
+        resolution_counts=dict(resolution_counts),
+        risk_30d=risk,
+        risk_factors=risk_factors,
+        indicators=indicators,
+        recommendation=recommendation,
+        technical_conclusion=technical_conclusion,
+        disclaimer=(
+            "Este reporte constituye sustento técnico del Área TI y no reemplaza los procedimientos, "
+            "informes ni autorizaciones administrativas que correspondan para la disposición o baja de bienes patrimoniales."
+        ),
+        history=[
+            RetirementHistoryItem(
+                number=ticket.number,
+                created_at=ticket.created_at,
+                subject=ticket.subject,
+                status=ticket.status.value,
+                resolution_type=ticket.resolution.tipo_resolucion.value if ticket.resolution else None,
+                resolution_notes=ticket.resolution.notes if ticket.resolution else None,
+            )
+            for ticket in tickets
+        ],
+    )
+
+
 @router.get("/{equipment_id}", response_model=EquipmentDetailOut)
 async def equipment_detail(equipment_id: str, _: StaffUser = Depends(require_staff)):
     eq = await _get(equipment_id)
@@ -729,7 +864,7 @@ async def update_equipment(request: Request, equipment_id: str, body: EquipmentI
     _ensure_supported_type(body.type)
     eq = await _get(equipment_id)
     office = await _validate_office(body.office_id)
-    data = _assignment_data(body.model_dump(), office)
+    data = await _assignment_data(body.model_dump(), office)
     for key, value in data.items():
         setattr(eq, key, value)
     eq.updated_at = utcnow()
