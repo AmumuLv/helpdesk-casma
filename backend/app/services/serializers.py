@@ -35,7 +35,9 @@ def office_ticket_out(t: Ticket) -> OfficeTicketOut:
 
 def office_out(o: Office, approved: int = 0, pending: int = 0) -> OfficeOut:
     return OfficeOut(
-        id=str(o.id), code=o.code, name=o.name, username=o.username, location=o.location, head_name=o.head_name,
+        id=str(o.id), code=o.code, name=o.name, username=o.username,
+        zone_id=str(o.zone_id) if o.zone_id else None, zone_name=o.zone_name,
+        location=o.location, head_name=o.head_name,
         head_phone=o.head_phone, priority_weight=o.priority_weight, active=o.active,
         devices_approved=approved, devices_pending=pending, created_at=o.created_at,
     )
@@ -58,8 +60,14 @@ def staff_out(u: StaffUser, open_tickets: int = 0) -> StaffOut:
     )
 
 
-def equipment_out(e: Equipment, office_name: str | None = None) -> EquipmentOut:
+def equipment_out(
+    e: Equipment,
+    office_name: str | None = None,
+    zone_id: str | None = None,
+    zone_name: str | None = None,
+) -> EquipmentOut:
     return EquipmentOut(
         id=str(e.id), office_id=str(e.office_id) if e.office_id else None, office_name=office_name,
+        zone_id=zone_id, zone_name=zone_name,
         **e.model_dump(exclude={"id", "office_id", "revision_id"}),
     )
