@@ -33,8 +33,12 @@ export const useMunicipalUsers = (officeId?: string, includeInactive = false) =>
     staleTime: 120_000,
   });
 
-export const useDevices = (status?: string) =>
-  useQuery({ queryKey: ["devices", status ?? "all"], queryFn: () => api<Device[]>(`/admin/devices${status ? `?status=${status}` : ""}`) });
+export const useDevices = (status?: string, enabled = true) =>
+  useQuery({
+    queryKey: ["devices", status ?? "all"],
+    queryFn: () => api<Device[]>(`/admin/devices${status ? `?status=${status}` : ""}`),
+    enabled,
+  });
 export const useEquipmentList = (officeId?: string) =>
   useQuery({ queryKey: ["equipment", officeId ?? "all"], queryFn: () => api<Equipment[]>(`/equipment${officeId ? `?office_id=${officeId}` : ""}`), enabled: officeId !== "" });
 
