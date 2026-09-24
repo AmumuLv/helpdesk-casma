@@ -1,3 +1,4 @@
+from app.models.enums import OfficeServiceLevel
 from app.schemas.admin import EquipmentOut, OfficeOut
 from app.schemas.ticket import TicketOut
 from datetime import datetime
@@ -88,6 +89,8 @@ class OrganizationOfficeSummary(BaseModel):
     name: str
     location: str | None
     head_name: str | None
+    service_level: OfficeServiceLevel
+    service_reason: str | None
     active: bool
     user_count: int
     equipment_count: int
