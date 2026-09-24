@@ -30,7 +30,8 @@ createRoot(document.getElementById("root")!).render(
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      const registration = await navigator.serviceWorker.ready;
       if (navigator.onLine) registration.active?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
     } catch (err) {
       console.error("No se pudo registrar el Service Worker", err);
