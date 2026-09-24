@@ -61,6 +61,15 @@ async def _get(ticket_id: str) -> Ticket:
     return ticket
 
 
+async def _replayed_ticket(request: Request) -> Ticket | None:
+    target_id = await audit.replayed_target_id(request, "ticket")
+    if not target_id:
+        return None
+    tid = parse_id(target_id)
+    ticket = await Ticket.get(tid) if tid else None
+    return ticket if ticket and not ticket.deleted_at else None
+
+
 async def _office(office_id: str) -> Office:
     oid = parse_id(office_id)
     office = await Office.get(oid) if oid else None
@@ -176,6 +185,8 @@ async def create_by_staff(
     photo: UploadFile | None = File(None),
     user: StaffUser = Depends(require_staff),
 ):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
     office = await _office(office_id)
     equipment = await _equipment_for(office, equipment_id)
     ticket, duplicated = await ticket_service.create_ticket(ticket_service.NewTicket(
@@ -188,7 +199,12 @@ async def create_by_staff(
         ticket = await ticket_service.assign(ticket, user, tid)
     if not duplicated:
         background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
-    await audit.record(request, "staff", "ticket.created", actor_id=str(user.id), actor_name=user.full_name, target_type="ticket", target_id=str(ticket.id))
+    await audit.record(
+        request, "staff", "ticket.created",
+        actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(ticket.id),
+        **audit.offline_request_details(request),
+    )
     return ticket_out(ticket)
 
 
@@ -226,6 +242,8 @@ async def ticket_audit(ticket_id: str, _: StaffUser = Depends(require_staff)):
 
 @router.patch("/{ticket_id}", response_model=TicketOut)
 async def patch_ticket(request: Request, ticket_id: str, body: TicketPatch, user: StaffUser = Depends(require_staff)):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
     ticket = await ticket_service.update_classification(await _get(ticket_id), user, body.category, body.priority)
     await audit.record(
         request, "staff", "ticket.classification_updated",
@@ -233,12 +251,15 @@ async def patch_ticket(request: Request, ticket_id: str, body: TicketPatch, user
         target_type="ticket", target_id=str(ticket.id),
         category=body.category.value if body.category else None,
         priority=body.priority.value if body.priority else None,
+        **audit.offline_request_details(request),
     )
     return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/assign", response_model=TicketOut)
 async def assign(request: Request, ticket_id: str, body: AssignIn, user: StaffUser = Depends(require_staff)):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
     tech_id = parse_id(body.technician_id) if body.technician_id else None
     if body.technician_id and not tech_id:
         raise HTTPException(status_code=422, detail="Técnico no válido.")
@@ -249,24 +270,30 @@ async def assign(request: Request, ticket_id: str, body: AssignIn, user: StaffUs
         target_type="ticket", target_id=str(ticket.id),
         technician_id=str(ticket.assigned_to_id) if ticket.assigned_to_id else None,
         technician_name=ticket.assigned_to_name,
+        **audit.offline_request_details(request),
     )
     return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/notes", response_model=TicketOut)
 async def add_note(request: Request, ticket_id: str, body: NoteIn, user: StaffUser = Depends(require_staff)):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
     ticket = await ticket_service.add_note(await _get(ticket_id), user, body.text, body.visible_to_office)
     await audit.record(
         request, "staff", "ticket.note_added",
         actor_id=str(user.id), actor_name=user.full_name,
         target_type="ticket", target_id=str(ticket.id),
         visible_to_office=body.visible_to_office,
+        **audit.offline_request_details(request),
     )
     return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/resolve", response_model=TicketOut)
 async def resolve(request: Request, ticket_id: str, body: ResolveIn, user: StaffUser = Depends(require_staff)):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
     ticket = await ticket_service.resolve(
         await _get(ticket_id),
         user,
@@ -278,17 +305,21 @@ async def resolve(request: Request, ticket_id: str, body: ResolveIn, user: Staff
         actor_id=str(user.id), actor_name=user.full_name,
         target_type="ticket", target_id=str(ticket.id),
         resolution_type=body.tipo_resolucion.value,
+        **audit.offline_request_details(request),
     )
     return ticket_out(ticket)
 
 
 @router.post("/{ticket_id}/reopen", response_model=TicketOut)
 async def reopen(request: Request, ticket_id: str, user: StaffUser = Depends(require_staff)):
+    if replayed := await _replayed_ticket(request):
+        return ticket_out(replayed)
     ticket = await ticket_service.reopen(await _get(ticket_id), user.full_name, by_user=False)
     await audit.record(
         request, "staff", "ticket.reopened",
         actor_id=str(user.id), actor_name=user.full_name,
         target_type="ticket", target_id=str(ticket.id),
+        **audit.offline_request_details(request),
     )
     return ticket_out(ticket)
 
