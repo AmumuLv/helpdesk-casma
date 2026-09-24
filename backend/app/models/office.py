@@ -15,6 +15,8 @@ class Office(Document):
     # Se mantiene opcional para que los documentos históricos sigan cargando
     # hasta que la migración/asignación de zonas se complete.
     zone_id: Annotated[PydanticObjectId | None, Indexed()] = None
+    # Nombre legible de la zona para navegación y reportes.
+    zone_name: str | None = None
     location: str | None = None
     head_name: str | None = None
     head_phone: str | None = None
