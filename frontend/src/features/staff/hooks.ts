@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/Toasts";
 import { api, errorMessage, isOfflineQueued, type OfflineQueuedResponse } from "../../lib/api";
 import { useMe } from "../../lib/session";
-import type { Device, Equipment, Insights, Kpis, Office, StaffMember, Ticket } from "../../lib/types";
+import type { Device, Equipment, Insights, Kpis, MunicipalUser, Office, StaffMember, Ticket, Zone } from "../../lib/types";
 
 export type OfficeLookup = {
   id: string; code: string; name: string; zone_id: string | null; zone_name: string | null;
@@ -15,6 +15,23 @@ export const useOfficeLookup = () => useQuery({ queryKey: ["offices", "lookup"],
 export const useKpis = () => useQuery({ queryKey: ["kpis"], queryFn: () => api<Kpis>("/tickets/kpis"), refetchInterval: 60_000 });
 export const useInsights = (enabled = true) => useQuery({ queryKey: ["insights"], queryFn: () => api<Insights>("/ai/insights"), staleTime: 120_000, enabled });
 export const useOffices = () => useQuery({ queryKey: ["offices", "admin"], queryFn: () => api<Office[]>("/admin/offices") });
+export const useZones = () =>
+  useQuery({ queryKey: ["organization", "zones"], queryFn: () => api<Zone[]>("/organization/zones"), staleTime: 300_000 });
+
+export const useMunicipalUsers = (officeId?: string, includeInactive = false) =>
+  useQuery({
+    queryKey: ["organization", "users", officeId ?? "all", includeInactive],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (officeId) params.set("office_id", officeId);
+      if (includeInactive) params.set("active", "");
+      const suffix = params.toString();
+      return api<MunicipalUser[]>(`/organization/users${suffix ? `?${suffix}` : ""}`);
+    },
+    enabled: officeId !== "",
+    staleTime: 120_000,
+  });
+
 export const useDevices = (status?: string) =>
   useQuery({ queryKey: ["devices", status ?? "all"], queryFn: () => api<Device[]>(`/admin/devices${status ? `?status=${status}` : ""}`) });
 export const useEquipmentList = (officeId?: string) =>
