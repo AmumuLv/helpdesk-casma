@@ -29,6 +29,7 @@ class TicketOut(BaseModel):
     category: TicketCategory
     category_source: str
     priority: TicketPriority
+    priority_source: str
     status: TicketStatus
     assigned_to_id: str | None
     assigned_to_name: str | None
