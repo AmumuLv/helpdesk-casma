@@ -20,7 +20,7 @@ from app.models.enums import (
     TicketStatus,
     TimelineKind,
 )
-from app.models.ticket import EquipmentSnapshot, Resolution, TimelineEntry
+from app.models.ticket import EquipmentSnapshot, Resolution, ResolutionType, TimelineEntry
 from app.services.events import broker
 from app.services.storage import save_image
 
@@ -186,16 +186,34 @@ async def add_note(ticket: Ticket, actor: StaffUser, text: str, visible_to_offic
     return ticket
 
 
-async def resolve(ticket: Ticket, actor: StaffUser, notes: str) -> Ticket:
+async def resolve(
+    ticket: Ticket,
+    actor: StaffUser,
+    notes: str,
+    tipo_resolucion: ResolutionType = ResolutionType.SOLUCIONADO,
+) -> Ticket:
     if ticket.status == TicketStatus.RESUELTO:
         raise HTTPException(status_code=409, detail="La incidencia ya está resuelta.")
     now = utcnow()
     ticket.status = TicketStatus.RESUELTO
-    ticket.resolution = Resolution(notes=notes.strip(), resolved_by_id=str(actor.id), resolved_by_name=actor.full_name, resolved_at=now)
+    ticket.resolution = Resolution(
+        notes=notes.strip(),
+        resolved_by_id=str(actor.id),
+        resolved_by_name=actor.full_name,
+        tipo_resolucion=tipo_resolucion,
+        resolved_at=now,
+    )
     if not ticket.assigned_to_id:
         ticket.assigned_to_id, ticket.assigned_to_name = actor.id, actor.full_name
     ticket.first_response_at = ticket.first_response_at or now
-    ticket.timeline.append(TimelineEntry(kind=TimelineKind.ESTADO, actor=actor.full_name, text=f"Problema resuelto: {notes.strip()}"))
+    resolution_label = tipo_resolucion.value.replace("_", " ").title()
+    ticket.timeline.append(
+        TimelineEntry(
+            kind=TimelineKind.ESTADO,
+            actor=actor.full_name,
+            text=f"Resolución - {resolution_label}: {notes.strip()}",
+        )
+    )
     ticket.updated_at = now
     await ticket.save()
     await _publish(ticket, "ticket.resolved")
