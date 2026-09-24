@@ -13,7 +13,8 @@ const NAV: NavItem[] = [
   { to: "/soporte/ia", label: "Análisis IA", icon: BrainCircuit },
   { to: "/soporte/dispositivos", label: "Dispositivos", icon: MonitorSmartphone, admin: true },
   { to: "/soporte/oficinas", label: "Oficinas", icon: Building2, admin: true },
-  { to: "/soporte/personal", label: "Personal", icon: Users, admin: true },
+  { to: "/soporte/organizacion", label: "Organización", icon: Users, admin: true },
+  { to: "/soporte/personal", label: "Personal TI", icon: Users, admin: true },
   { to: "/soporte/auditoria", label: "Auditoría", icon: ScrollText, admin: true },
 ];
 
