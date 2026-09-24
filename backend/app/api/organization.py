@@ -195,7 +195,7 @@ async def update_zone(
 async def list_municipal_users(
     office_id: str | None = None,
     zone_id: str | None = None,
-    active: bool | None = True,
+    active: bool | None = None,
     q: str | None = Query(None, max_length=80),
     _: StaffUser = Depends(require_staff),
 ):
