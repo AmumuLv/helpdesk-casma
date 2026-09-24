@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Pencil, Plus } from "lucide-react";
+import { ArrowRight, KeyRound, Pencil, Plus } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, ErrorBox, Field, Input, Modal, Select, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -14,6 +15,7 @@ const blank: OfficeForm = { code: "", name: "", username: "", zone_id: "", locat
 
 export function OfficesPage() {
   const offices = useOffices();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState<Office | "new" | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -78,6 +80,9 @@ export function OfficesPage() {
                         </td>
                         <td className="p-3">
                           <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="secondary" onClick={() => navigate(`/soporte/organizacion/oficina/${o.id}`)}>
+                              Ver perfil <ArrowRight className="size-4" />
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={() => setEditing(o)} aria-label={`Editar ${o.name}`}><Pencil className="size-4" /></Button>
                             <Button size="sm" variant="ghost" loading={revoke.isPending && revoke.variables?.id === o.id}
                               onClick={() => confirm(`Se cerrará la sesión en todos los equipos de «${o.name}». ¿Continuar?`) && revoke.mutate(o)}>Cerrar sesiones</Button>
