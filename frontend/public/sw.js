@@ -1,4 +1,4 @@
-const CACHE_NAME = "helpdesk-casma-v3";
+const CACHE_NAME = "helpdesk-casma-v4";
 const OFFLINE_DB = "helpdesk-casma-offline";
 const OFFLINE_STORE = "ticket-queue";
 const SYNC_TAG = "helpdesk-ticket-sync";
@@ -36,30 +36,65 @@ function openDb() {
   });
 }
 
-async function queueTicket(request) {
-  const clone = request.clone();
-  const form = await clone.formData();
-  const entries = [];
-  for (const [name, value] of form.entries()) {
-    if (value instanceof File) {
-      entries.push({
-        name,
-        kind: "file",
-        value,
-        filename: value.name,
-        contentType: value.type,
-      });
-    } else {
-      entries.push({ name, kind: "text", value: String(value) });
+async function countQueuedRequests() {
+  const db = await openDb();
+  const count = await new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, "readonly");
+    const request = tx.objectStore(OFFLINE_STORE).count();
+    request.onsuccess = () => resolve(request.result || 0);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return count;
+}
+
+async function notifyClients(message) {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) client.postMessage(message);
+}
+
+async function notifyQueueChanged() {
+  await notifyClients({ type: "OFFLINE_QUEUE_CHANGED", pending: await countQueuedRequests() });
+}
+
+async function serializeRequest(request) {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.clone().formData();
+    const entries = [];
+    for (const [name, value] of form.entries()) {
+      if (value instanceof File) {
+        entries.push({
+          name,
+          kind: "file",
+          value,
+          filename: value.name,
+          contentType: value.type,
+        });
+      } else {
+        entries.push({ name, kind: "text", value: String(value) });
+      }
     }
+    return { bodyType: "form", entries };
   }
 
+  if (contentType.includes("application/json")) {
+    return { bodyType: "json", text: await request.clone().text() };
+  }
+
+  return { bodyType: "text", text: await request.clone().text(), contentType };
+}
+
+async function queueRequest(request, scope) {
+  const serialized = await serializeRequest(request);
   const item = {
     id: crypto.randomUUID(),
-    url: clone.url,
-    method: clone.method,
+    url: request.url,
+    method: request.method,
+    scope,
     createdAt: Date.now(),
-    entries,
+    ...serialized,
   };
 
   const db = await openDb();
@@ -75,13 +110,15 @@ async function queueTicket(request) {
     try {
       await self.registration.sync.register(SYNC_TAG);
     } catch {
-      // El evento "online" y los mensajes del cliente sirven como respaldo.
+      // El evento online y los mensajes del cliente sirven como respaldo.
     }
   }
+
+  await notifyQueueChanged();
   return item.id;
 }
 
-async function getQueuedTickets() {
+async function getQueuedRequests() {
   const db = await openDb();
   const items = await new Promise((resolve, reject) => {
     const tx = db.transaction(OFFLINE_STORE, "readonly");
@@ -93,7 +130,7 @@ async function getQueuedTickets() {
   return items.sort((a, b) => a.createdAt - b.createdAt);
 }
 
-async function deleteQueuedTicket(id) {
+async function deleteQueuedRequest(id) {
   const db = await openDb();
   await new Promise((resolve, reject) => {
     const tx = db.transaction(OFFLINE_STORE, "readwrite");
@@ -104,57 +141,102 @@ async function deleteQueuedTicket(id) {
   db.close();
 }
 
-async function notifyClients(message) {
-  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  for (const client of clients) client.postMessage(message);
-}
+function restoreRequestBody(item) {
+  const headers = {
+    "X-Requested-With": "HelpDeskCasma",
+    "X-Offline-Replay": "1",
+    "X-Offline-Operation": item.id,
+  };
 
-async function flushTicketQueue() {
-  const queued = await getQueuedTickets();
-  for (const item of queued) {
+  if (item.bodyType === "form") {
     const form = new FormData();
-    for (const entry of item.entries) {
+    for (const entry of item.entries || []) {
       if (entry.kind === "file") {
         form.append(entry.name, entry.value, entry.filename || "foto.jpg");
       } else {
         form.append(entry.name, entry.value);
       }
     }
+    return { body: form, headers };
+  }
+
+  if (item.bodyType === "json") {
+    headers["Content-Type"] = "application/json";
+    return { body: item.text || "{}", headers };
+  }
+
+  if (item.contentType) headers["Content-Type"] = item.contentType;
+  return { body: item.text || undefined, headers };
+}
+
+async function flushTicketQueue() {
+  const queued = await getQueuedRequests();
+
+  for (const item of queued) {
+    const { body, headers } = restoreRequestBody(item);
 
     try {
       const response = await fetch(item.url, {
         method: item.method,
-        body: form,
+        body,
         credentials: "include",
-        headers: {
-          "X-Requested-With": "HelpDeskCasma",
-          "X-Offline-Replay": "1",
-        },
+        headers,
       });
 
       if (response.ok) {
         const payload = await response.clone().json().catch(() => null);
-        await deleteQueuedTicket(item.id);
-        await notifyClients({ type: "OFFLINE_TICKET_SENT", queueId: item.id, payload });
+        await deleteQueuedRequest(item.id);
+        await notifyClients({
+          type: "OFFLINE_REQUEST_SENT",
+          queueId: item.id,
+          scope: item.scope,
+          payload,
+        });
+        await notifyQueueChanged();
         continue;
       }
 
       if (response.status === 401 || response.status === 403) {
-        await notifyClients({ type: "OFFLINE_TICKET_AUTH_REQUIRED", queueId: item.id });
+        await notifyClients({
+          type: "OFFLINE_REQUEST_AUTH_REQUIRED",
+          queueId: item.id,
+          scope: item.scope,
+        });
         break;
       }
 
-      // Errores de validación no se reintentan indefinidamente.
       if (response.status >= 400 && response.status < 500) {
         const payload = await response.clone().json().catch(() => null);
-        await deleteQueuedTicket(item.id);
-        await notifyClients({ type: "OFFLINE_TICKET_REJECTED", queueId: item.id, payload });
+        await deleteQueuedRequest(item.id);
+        await notifyClients({
+          type: "OFFLINE_REQUEST_REJECTED",
+          queueId: item.id,
+          scope: item.scope,
+          payload,
+        });
+        await notifyQueueChanged();
       }
     } catch {
-      // Sigue sin conexión: se conserva la cola para el siguiente intento.
       break;
     }
   }
+}
+
+function isOfficeTicketCreate(request, url) {
+  return request.method === "POST" && url.pathname === "/api/office/tickets";
+}
+
+function isStaffTicketMutation(request, url) {
+  if (!url.pathname.startsWith("/api/tickets")) return false;
+
+  if (request.method === "POST" && url.pathname === "/api/tickets") return true;
+  if (request.method === "PATCH" && /^\/api\/tickets\/[^/]+$/.test(url.pathname)) return true;
+  if (
+    request.method === "POST"
+    && /^\/api\/tickets\/[^/]+\/(assign|notes|resolve|reopen)$/.test(url.pathname)
+  ) return true;
+
+  return false;
 }
 
 self.addEventListener("sync", (event) => {
@@ -165,6 +247,13 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "FLUSH_OFFLINE_TICKETS") {
     event.waitUntil(flushTicketQueue());
   }
+  if (event.data?.type === "GET_OFFLINE_QUEUE_COUNT") {
+    event.waitUntil(
+      countQueuedRequests().then((pending) => {
+        event.source?.postMessage({ type: "OFFLINE_QUEUE_CHANGED", pending });
+      })
+    );
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -172,15 +261,15 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
 
   if (
-    request.method === "POST"
-    && url.origin === self.location.origin
-    && url.pathname === "/api/office/tickets"
+    url.origin === self.location.origin
+    && (isOfficeTicketCreate(request, url) || isStaffTicketMutation(request, url))
   ) {
+    const scope = isOfficeTicketCreate(request, url) ? "office" : "staff";
     event.respondWith(
       fetch(request.clone()).catch(async () => {
-        const queueId = await queueTicket(request);
+        const queueId = await queueRequest(request, scope);
         return new Response(
-          JSON.stringify({ offline_queued: true, queue_id: queueId }),
+          JSON.stringify({ offline_queued: true, queue_id: queueId, scope }),
           { status: 202, headers: { "Content-Type": "application/json" } }
         );
       })
@@ -190,7 +279,6 @@ self.addEventListener("fetch", (event) => {
 
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // No guardar respuestas API autenticadas en caché.
   if (url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
