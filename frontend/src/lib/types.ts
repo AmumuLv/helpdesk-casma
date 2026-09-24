@@ -1,4 +1,5 @@
 export type TicketStatus = "PENDIENTE" | "EN_PROCESO" | "RESUELTO";
+export type ResolutionType = "SOLUCIONADO" | "REPARADO" | "REEMPLAZADO" | "OBSOLETO" | "IRREPARABLE" | "BAJA_PATRIMONIAL" | "DERIVADO";
 export type TicketPriority = "BAJA" | "MEDIA" | "ALTA";
 export type TicketCategory =
   | "HARDWARE" | "RED_INTERNET" | "IMPRESORA" | "SOFTWARE" | "SISTEMAS_MUNICIPALES"
@@ -51,7 +52,7 @@ export interface Ticket {
   reporter_name: string | null; contact_phone: string | null; category: TicketCategory; category_source: string;
   priority: TicketPriority; status: TicketStatus; assigned_to_id: string | null; assigned_to_name: string | null;
   attachments: Attachment[]; ai: AIAnalysis | null;
-  resolution: { notes: string; resolved_by_name: string; resolved_at: string; confirmed_by_user: boolean | null } | null;
+  resolution: { notes: string; resolved_by_name: string; tipo_resolucion: ResolutionType; resolved_at: string; confirmed_by_user: boolean | null } | null;
   timeline: TimelineEntry[]; first_response_at: string | null; created_at: string; updated_at: string;
 }
 
