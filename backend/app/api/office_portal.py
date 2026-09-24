@@ -1,9 +1,10 @@
 from datetime import timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from app.ai.engine import get_engine
 from app.ai.taxonomy import QUICK_ISSUES
 from app.api.deps import OfficePrincipal, parse_id, require_office
 from app.core.ratelimit import limiter
@@ -90,6 +91,7 @@ async def equipment_by_code(code: str, p: OfficePrincipal = Depends(require_offi
 @limiter.limit("20/hour")
 async def create_ticket(
     request: Request,
+    background_tasks: BackgroundTasks,
     quick_issue: QuickIssue = Form(...),
     description: str = Form("", max_length=2000),
     equipment_id: str | None = Form(None),
@@ -113,6 +115,8 @@ async def create_ticket(
         device=p.device, reporter_name=(reporter_name or "").strip() or None, contact_phone=(contact_phone or "").strip() or None,
         photo=photo if photo and photo.filename else None,
     ))
+    if not duplicated:
+        background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
     return OfficeTicketCreatedOut(ticket=office_ticket_out(ticket), duplicated=duplicated)
 
 
