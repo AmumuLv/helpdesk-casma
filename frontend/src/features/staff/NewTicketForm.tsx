@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PhoneCall, Sparkles } from "lucide-react";
+import { PhoneCall, Sparkles, WifiOff } from "lucide-react";
 import { useDeferredValue, useState, type FormEvent } from "react";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
 import { Button, Card, ErrorBox, Field, Input, Select, Textarea } from "../../components/ui";
-import { api, errorMessage } from "../../lib/api";
+import { api, errorMessage, isOfflineQueued, type OfflineQueuedResponse } from "../../lib/api";
 import { CATEGORIES, CATEGORY_LABEL, EQUIPMENT_LABEL, pct, PRIORITY_LABEL } from "../../lib/labels";
 import type { AIAnalysis, Ticket } from "../../lib/types";
 import { useEquipmentList, useOfficeLookup, useTechnicians } from "./hooks";
@@ -39,15 +39,25 @@ export function NewTicketForm({ onCreated }: { onCreated: (id: string) => void }
         ["category", f.category], ["priority", f.priority], ["technician_id", f.technician]];
       optional.forEach(([k, v]) => v && form.set(k, v));
       if (photo) form.set("photo", photo);
-      return api<Ticket>("/tickets", { form });
+      return api<Ticket | OfflineQueuedResponse>("/tickets", { form });
     },
-    onSuccess: (t) => {
+    onSuccess: (result) => {
+      if (isOfflineQueued(result)) {
+        toast({
+          tone: "success",
+          title: "Incidencia guardada sin conexión",
+          body: "Quedó pendiente de sincronización y se enviará automáticamente.",
+        });
+        setF((s) => ({ ...EMPTY, officeId: s.officeId }));
+        setPhoto(null);
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["tickets"] });
       qc.invalidateQueries({ queryKey: ["kpis"] });
-      toast({ tone: "success", title: `Incidencia ${t.number} registrada`, body: t.subject });
+      toast({ tone: "success", title: `Incidencia ${result.number} registrada`, body: result.subject });
       setF((s) => ({ ...EMPTY, officeId: s.officeId }));
       setPhoto(null);
-      onCreated(t.id);
+      onCreated(result.id);
     },
   });
 
@@ -125,6 +135,12 @@ export function NewTicketForm({ onCreated }: { onCreated: (id: string) => void }
           )}
         </Field>
         <PhotoPicker value={photo} onChange={setPhoto} />
+        {!navigator.onLine && (
+          <div className="flex items-center gap-2 rounded-xl border border-sol bg-sol-claro p-3 text-sm">
+            <WifiOff className="size-5 shrink-0" />
+            <span><strong>Sin conexión.</strong> Puede registrar la incidencia; quedará guardada en este equipo hasta recuperar internet.</span>
+          </div>
+        )}
         {create.error && <ErrorBox message={errorMessage(create.error)} />}
         <Button type="submit" size="lg" loading={create.isPending}>Registrar</Button>
       </form>
