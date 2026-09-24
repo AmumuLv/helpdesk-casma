@@ -90,6 +90,17 @@ export interface Office {
   active: boolean; devices_approved: number; devices_pending: number; created_at: string;
 }
 
+export interface Zone {
+  id: string; code: string; name: string; description: string | null; active: boolean;
+  office_count: number; user_count: number; equipment_count: number; created_at: string; updated_at: string;
+}
+
+export interface MunicipalUser {
+  id: string; employee_code: string | null; full_name: string; office_id: string; office_name: string;
+  zone_id: string | null; zone_name: string | null; job_title: string | null; email: string | null; phone: string | null;
+  photo_url: string | null; active: boolean; equipment_count: number; created_at: string; updated_at: string;
+}
+
 export interface Device {
   id: string; office_id: string; office_name: string; status: DeviceStatus; pair_code: string; kind: DeviceKind; label: string | null;
   user_agent: string | null; first_ip: string | null; last_ip: string | null; equipment_id: string | null; equipment_code: string | null;
@@ -101,7 +112,7 @@ export interface Equipment {
   area: string | null; device_label: string | null; brand: string | null; model: string | null;
   hostname: string | null; ip_address: string | null; mac_address: string | null;
   office_id: string | null; office_name: string | null; zone_id: string | null; zone_name: string | null;
-  responsible_name: string | null; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string | null;
+  responsable_id: string | null; responsible_name: string | null; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string | null;
   specs: { cpu: string | null; ram_gb: number | null; storage_gb: number | null; screen_size_inches: number | null; os: string | null };
   acquired_on: string | null; warranty_until: string | null; status: EquipmentStatus; criticality: number; notes: string | null;
   created_at: string; updated_at: string;
