@@ -44,7 +44,7 @@ export function EquipmentPage() {
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por código patrimonial, MAC, IP o responsable" aria-label="Buscar equipos" />
         <Select value={officeId} onChange={(e) => setOfficeId(e.target.value)} aria-label="Oficina">
           <option value="">Todas las oficinas</option>
-          {offices.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          {offices.data?.map((o) => <option key={o.id} value={o.id}>{o.zone_name ? `${o.zone_name} › ${o.name}` : o.name}</option>)}
         </Select>
         <Select value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">
           <option value="">Todos los tipos</option>
