@@ -30,7 +30,18 @@ lookup_router = APIRouter(prefix="/lookup", tags=["incidencias"])
 @lookup_router.get("/offices")
 async def office_lookup(_: StaffUser = Depends(require_staff)):
     offices = await Office.find({"active": True}).sort("name").to_list()
-    return [{"id": str(o.id), "code": o.code, "name": o.name, "location": o.location} for o in offices]
+    return [
+        {
+            "id": str(o.id),
+            "code": o.code,
+            "name": o.name,
+            "zone_id": str(o.zone_id) if o.zone_id else None,
+            "zone_name": o.zone_name,
+            "location": o.location,
+            "head_name": o.head_name,
+        }
+        for o in offices
+    ]
 
 
 async def _get(ticket_id: str) -> Ticket:
