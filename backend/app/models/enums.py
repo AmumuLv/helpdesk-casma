@@ -22,10 +22,16 @@ class DeviceKind(StrEnum):
 
 
 class EquipmentType(StrEnum):
-    PC = "PC"
+    # Tipos operativos usados por el Área TI de la Municipalidad Provincial de Casma.
+    CPU = "CPU"
     LAPTOP = "LAPTOP"
     IMPRESORA = "IMPRESORA"
     MONITOR = "MONITOR"
+    MOUSE = "MOUSE"
+    TECLADO = "TECLADO"
+
+    # Valores legados: se conservan para poder leer registros históricos.
+    PC = "PC"
     ESCANER = "ESCANER"
     SWITCH_ROUTER = "SWITCH_ROUTER"
     SERVIDOR = "SERVIDOR"
