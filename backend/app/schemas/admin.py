@@ -27,6 +27,7 @@ class OfficeIn(BaseModel):
     code: str = Field(min_length=2, max_length=20)
     name: str = Field(min_length=3, max_length=120)
     username: str
+    zone_id: str | None = None
     zone_name: str | None = Field(default=None, max_length=120)
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
@@ -44,6 +45,7 @@ class OfficeIn(BaseModel):
 class OfficePatch(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=120)
     username: str | None = None
+    zone_id: str | None = None
     zone_name: str | None = Field(default=None, max_length=120)
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
@@ -152,6 +154,7 @@ class EquipmentIn(BaseModel):
     ip_address: str | None = Field(default=None, max_length=45)
     mac_address: str | None = Field(default=None, max_length=17)
     office_id: str | None = None
+    responsable_id: str | None = None
     responsible_name: str | None = Field(default=None, max_length=120)
     responsible_type: str = Field(default="USUARIO", pattern="^(USUARIO|JEFE|OFICINA)$")
     property_type: str | None = Field(default=None, max_length=80)
