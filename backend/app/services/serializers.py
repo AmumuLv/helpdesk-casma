@@ -38,7 +38,8 @@ def office_out(o: Office, approved: int = 0, pending: int = 0) -> OfficeOut:
         id=str(o.id), code=o.code, name=o.name, username=o.username,
         zone_id=str(o.zone_id) if o.zone_id else None, zone_name=o.zone_name,
         location=o.location, head_name=o.head_name,
-        head_phone=o.head_phone, priority_weight=o.priority_weight, active=o.active,
+        head_phone=o.head_phone, service_level=o.service_level, service_reason=o.service_reason,
+        priority_weight=o.priority_weight, active=o.active,
         devices_approved=approved, devices_pending=pending, created_at=o.created_at,
     )
 
