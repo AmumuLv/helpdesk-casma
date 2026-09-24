@@ -53,11 +53,14 @@ class EquipmentImportOfficeRef(BaseModel):
     office_code: str
     office_name: str
     zone_id: str | None
+    zone_name: str | None
+    head_name: str | None
     import_enabled: bool
 
 
 _HEADER_ALIASES = {
-    "zona": "zona_id",
+    "zona": "zona",
+    "nombre_zona": "zona",
     "zona_id": "zona_id",
     "id_zona": "zona_id",
     "oficina": "oficina",
@@ -68,8 +71,13 @@ _HEADER_ALIASES = {
     "patrimonial_code": "codigo_patrimonial",
     "tipo": "tipo",
     "tipo_equipo": "tipo",
+    "area": "area",
+    "dispositivo": "dispositivo",
     "marca": "marca",
     "modelo": "modelo",
+    "tamano_pantalla": "tamano_pantalla",
+    "tamaño_pantalla": "tamano_pantalla",
+    "nombre_equipo": "nombre_equipo",
     "ip": "ip",
     "direccion_ip": "ip",
     "hostname": "hostname",
@@ -87,6 +95,10 @@ _HEADER_ALIASES = {
     "fecha_adquisicion": "fecha_adquisicion",
     "garantia_hasta": "garantia_hasta",
     "estado": "estado",
+    "propiedad": "propiedad",
+    "responsable": "responsable",
+    "responsable_tipo": "responsable_tipo",
+    "tipo_responsable": "responsable_tipo",
     "criticidad": "criticidad",
     "notas": "notas",
 }
@@ -209,13 +221,38 @@ async def _get(equipment_id: str) -> Equipment:
     return eq
 
 
-async def _validate_office(office_id: str | None):
+async def _validate_office(office_id: str | None) -> Office:
     if not office_id:
-        return None
+        raise HTTPException(status_code=422, detail="Debe seleccionar una oficina.")
     oid = parse_id(office_id)
-    if not oid or not await Office.get(oid):
+    office = await Office.get(oid) if oid else None
+    if not office:
         raise HTTPException(status_code=422, detail="Oficina no válida.")
-    return oid
+    return office
+
+
+def _assignment_data(data: dict, office: Office) -> dict:
+    result = dict(data)
+    result["office_id"] = office.id
+    result["area"] = (result.get("area") or office.name).strip()
+    result["device_label"] = (result.get("device_label") or result.get("type").value).strip()
+    result["property_type"] = (result.get("property_type") or "MUNICIPALIDAD PROVINCIAL DE CASMA").strip()
+
+    responsible_type = str(result.get("responsible_type") or "USUARIO").upper().strip()
+    responsible_name = (result.get("responsible_name") or "").strip()
+    if responsible_type == "OFICINA":
+        responsible_name = responsible_name or office.name
+    elif responsible_type == "JEFE":
+        responsible_name = responsible_name or office.head_name or office.name
+    elif responsible_type == "USUARIO":
+        if not responsible_name:
+            raise HTTPException(status_code=422, detail="Debe indicar el nombre del usuario responsable.")
+    else:
+        raise HTTPException(status_code=422, detail="Tipo de responsable no válido.")
+
+    result["responsible_type"] = responsible_type
+    result["responsible_name"] = responsible_name
+    return result
 
 
 @router.get("", response_model=list[EquipmentOut])
@@ -232,21 +269,40 @@ async def list_equipment(
         query["type"] = type.value
     if q and q.strip():
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
-        query["$or"] = [{"inventory_id": rx}, {"patrimonial_code": rx}, {"brand": rx}, {"model": rx}, {"ip_address": rx}, {"hostname": rx}]
-    offices = {o.id: o.name for o in await Office.find_all().to_list()}
+        query["$or"] = [
+            {"inventory_id": rx},
+            {"patrimonial_code": rx},
+            {"mac_address": rx},
+            {"ip_address": rx},
+            {"responsible_name": rx},
+            {"hostname": rx},
+            {"device_label": rx},
+            {"area": rx},
+            {"brand": rx},
+            {"model": rx},
+        ]
+    offices = {o.id: o for o in await Office.find_all().to_list()}
     items = await Equipment.find(query).sort("patrimonial_code").limit(1000).to_list()
     for equipment in items:
         if not equipment.inventory_id:
             equipment.inventory_id = await _next_inventory_id()
             await equipment.save()
-    return [equipment_out(e, offices.get(e.office_id)) for e in items]
+    return [
+        equipment_out(
+            e,
+            offices[e.office_id].name if e.office_id in offices else None,
+            str(offices[e.office_id].zone_id) if e.office_id in offices and offices[e.office_id].zone_id else None,
+            offices[e.office_id].zone_name if e.office_id in offices else None,
+        )
+        for e in items
+    ]
 
 
 @router.post("", response_model=EquipmentOut, status_code=201)
 async def create_equipment(request: Request, body: EquipmentIn, user: StaffUser = Depends(require_staff)):
     _ensure_supported_type(body.type)
-    data = body.model_dump()
-    data["office_id"] = await _validate_office(body.office_id)
+    office = await _validate_office(body.office_id)
+    data = _assignment_data(body.model_dump(), office)
     data["inventory_id"] = await _next_inventory_id()
     eq = Equipment(**data)
     try:
@@ -254,7 +310,12 @@ async def create_equipment(request: Request, body: EquipmentIn, user: StaffUser 
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Ya existe un equipo con ese código patrimonial.")
     await audit.record(request, "staff", "equipment.created", actor_id=str(user.id), actor_name=user.full_name, target_type="equipment", target_id=str(eq.id))
-    return equipment_out(eq)
+    return equipment_out(
+        eq,
+        office.name,
+        str(office.zone_id) if office.zone_id else None,
+        office.zone_name,
+    )
 
 
 @router.get("/import-references", response_model=list[EquipmentImportOfficeRef])
@@ -265,7 +326,9 @@ async def import_references(_: StaffUser = Depends(require_admin)):
             office_code=o.code,
             office_name=o.name,
             zone_id=str(o.zone_id) if o.zone_id else None,
-            import_enabled=o.zone_id is not None,
+            zone_name=o.zone_name,
+            head_name=o.head_name,
+            import_enabled=bool(o.zone_id or o.zone_name),
         )
         for o in offices
     ]
@@ -306,14 +369,14 @@ async def import_equipment_xlsx(
         if canonical and canonical not in headers:
             headers[canonical] = index
 
-    required = {"zona_id", "oficina", "codigo_patrimonial", "tipo"}
+    required = {"oficina", "codigo_patrimonial", "tipo"}
     missing = sorted(required - set(headers))
-    if missing:
+    if missing or ("zona_id" not in headers and "zona" not in headers):
         workbook.close()
-        raise HTTPException(
-            status_code=422,
-            detail="Faltan columnas obligatorias: " + ", ".join(missing) + ".",
-        )
+        missing_text = ", ".join(missing) if missing else ""
+        zone_text = "zona o zona_id" if "zona_id" not in headers and "zona" not in headers else ""
+        detail = ", ".join(x for x in (missing_text, zone_text) if x)
+        raise HTTPException(status_code=422, detail="Faltan columnas obligatorias: " + detail + ".")
 
     offices = await Office.find({"active": True}).to_list()
     by_code = {_normal(o.code): o for o in offices}
@@ -356,10 +419,9 @@ async def import_equipment_xlsx(
                 if code in existing_codes:
                     raise ValueError("El código patrimonial ya existe en el inventario.")
 
-                zone_text = _cell_text(value_at(row, "zona_id"))
-                zone_id = parse_id(zone_text)
-                if not zone_id:
-                    raise ValueError("zona_id no es un identificador válido.")
+                zone_id_text = _cell_text(value_at(row, "zona_id"))
+                zone_name_text = _cell_text(value_at(row, "zona"))
+                zone_id = parse_id(zone_id_text) if zone_id_text else None
 
                 office_text = _cell_text(value_at(row, "oficina"))
                 office = by_code.get(_normal(office_text))
@@ -371,10 +433,14 @@ async def import_equipment_xlsx(
                         raise ValueError("El nombre de oficina es ambiguo; use su código.")
                 if not office:
                     raise ValueError("La oficina indicada no existe o está inactiva.")
-                if not office.zone_id:
-                    raise ValueError("La oficina no tiene una zona asignada; configure primero su jerarquía.")
-                if office.zone_id != zone_id:
-                    raise ValueError("La oficina no pertenece a la zona indicada en el Excel.")
+                if zone_id:
+                    if not office.zone_id or office.zone_id != zone_id:
+                        raise ValueError("La oficina no pertenece al zona_id indicado en el Excel.")
+                elif zone_name_text:
+                    if not office.zone_name or _normal(office.zone_name) != _normal(zone_name_text):
+                        raise ValueError("La oficina no pertenece a la zona indicada en el Excel.")
+                else:
+                    raise ValueError("Debe indicar zona o zona_id.")
 
                 ip_value = _cell_text(value_at(row, "ip")) or None
                 if ip_value:
@@ -385,21 +451,39 @@ async def import_equipment_xlsx(
                 if criticality not in (1, 2, 3):
                     raise ValueError("Criticidad: use 1, 2 o 3.")
 
+                responsible_type = (_cell_text(value_at(row, "responsable_tipo")) or "OFICINA").upper()
+                responsible_name = _cell_text(value_at(row, "responsable"))
+                if responsible_type == "OFICINA":
+                    responsible_name = responsible_name or office.name
+                elif responsible_type == "JEFE":
+                    responsible_name = responsible_name or office.head_name or office.name
+                elif responsible_type == "USUARIO":
+                    if not responsible_name:
+                        raise ValueError("Responsable: indique el nombre del usuario.")
+                else:
+                    raise ValueError("responsable_tipo debe ser USUARIO, JEFE u OFICINA.")
+
                 equipment = Equipment(
                     inventory_id=await _next_inventory_id(),
                     patrimonial_code=code,
                     codigo_patrimonial=code,
                     type=_equipment_type(value_at(row, "tipo")),
+                    area=_cell_text(value_at(row, "area")) or office.name,
+                    device_label=_cell_text(value_at(row, "dispositivo")) or _cell_text(value_at(row, "tipo")),
                     brand=_cell_text(value_at(row, "marca")) or None,
                     model=_cell_text(value_at(row, "modelo")) or None,
-                    hostname=_cell_text(value_at(row, "hostname")) or None,
+                    hostname=_cell_text(value_at(row, "nombre_equipo")) or _cell_text(value_at(row, "hostname")) or None,
                     ip_address=ip_value,
                     mac_address=_cell_text(value_at(row, "mac")) or None,
                     office_id=office.id,
+                    responsible_name=responsible_name,
+                    responsible_type=responsible_type,
+                    property_type=_cell_text(value_at(row, "propiedad")) or "MUNICIPALIDAD PROVINCIAL DE CASMA",
                     specs={
                         "cpu": _cell_text(value_at(row, "cpu")) or None,
                         "ram_gb": _optional_float(value_at(row, "ram_gb"), "RAM"),
                         "storage_gb": _optional_float(value_at(row, "almacenamiento_gb"), "Almacenamiento"),
+                        "screen_size_inches": _optional_float(value_at(row, "tamano_pantalla"), "Tamaño de pantalla"),
                         "os": _cell_text(value_at(row, "sistema_operativo")) or None,
                     },
                     acquired_on=_parse_excel_date(value_at(row, "fecha_adquisicion"), "Fecha de adquisición"),
@@ -462,15 +546,25 @@ async def equipment_detail(equipment_id: str, _: StaffUser = Depends(require_sta
     risk, factors = engine.state["risk"].score(equipment_row(eq), history, engine.state["model_rates"], utcnow())
     tickets = await Ticket.find({"equipment_id": eq.id, "deleted_at": None}).sort(-Ticket.created_at).limit(50).to_list()
     office = await Office.get(eq.office_id) if eq.office_id else None
-    return EquipmentDetailOut(equipment=equipment_out(eq, office.name if office else None), risk=risk, risk_factors=factors, tickets=[ticket_out(t) for t in tickets])
+    return EquipmentDetailOut(
+        equipment=equipment_out(
+            eq,
+            office.name if office else None,
+            str(office.zone_id) if office and office.zone_id else None,
+            office.zone_name if office else None,
+        ),
+        risk=risk,
+        risk_factors=factors,
+        tickets=[ticket_out(t) for t in tickets],
+    )
 
 
 @router.put("/{equipment_id}", response_model=EquipmentOut)
 async def update_equipment(request: Request, equipment_id: str, body: EquipmentIn, user: StaffUser = Depends(require_staff)):
     _ensure_supported_type(body.type)
     eq = await _get(equipment_id)
-    data = body.model_dump()
-    data["office_id"] = await _validate_office(body.office_id)
+    office = await _validate_office(body.office_id)
+    data = _assignment_data(body.model_dump(), office)
     for key, value in data.items():
         setattr(eq, key, value)
     eq.updated_at = utcnow()
@@ -479,7 +573,12 @@ async def update_equipment(request: Request, equipment_id: str, body: EquipmentI
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Ya existe un equipo con ese código patrimonial.")
     await audit.record(request, "staff", "equipment.updated", actor_id=str(user.id), actor_name=user.full_name, target_type="equipment", target_id=str(eq.id))
-    return equipment_out(eq)
+    return equipment_out(
+        eq,
+        office.name,
+        str(office.zone_id) if office.zone_id else None,
+        office.zone_name,
+    )
 
 
 @router.delete("/{equipment_id}", response_model=Message)
