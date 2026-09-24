@@ -14,6 +14,7 @@ from app.core.timeutil import local_now, utcnow
 from app.db import next_sequence
 from app.models import AIModelRecord, Device, Equipment, Office, StaffUser, Ticket
 from app.models.enums import (
+    OfficeServiceLevel,
     QuickIssue,
     TicketCategory,
     TicketChannel,
@@ -91,6 +92,8 @@ def calculate_local_priority(
     description: str,
     hierarchy_level: str = "PERSONAL",
     equipment: Equipment | None = None,
+    office_service_level: OfficeServiceLevel = OfficeServiceLevel.NORMAL,
+    office_service_reason: str | None = None,
 ) -> tuple[TicketPriority, list[str]]:
     """Triaje inicial determinista y local, antes de consultar a la IA."""
     equipment_text = f" {equipment.type.value} {equipment.brand or ''} {equipment.model or ''}" if equipment else ""
@@ -118,6 +121,21 @@ def calculate_local_priority(
             reasons.append(f"Nivel jerárquico {level}: se mantiene prioridad ALTA.")
     elif level not in _HIERARCHY_BOOST:
         reasons.append(f"Nivel jerárquico desconocido ({level}); se trató como PERSONAL.")
+
+    service_level = office_service_level or OfficeServiceLevel.NORMAL
+    if service_level in (OfficeServiceLevel.ATENCION_PUBLICO, OfficeServiceLevel.SERVICIO_CRITICO):
+        original = priority
+        priority = _PRIORITY_UP[priority]
+        label = (
+            "atención al público"
+            if service_level == OfficeServiceLevel.ATENCION_PUBLICO
+            else "servicio crítico"
+        )
+        reason = f" ({office_service_reason.strip()})" if office_service_reason and office_service_reason.strip() else ""
+        if priority != original:
+            reasons.append(f"Oficina de {label}{reason}: prioridad elevada un nivel.")
+        else:
+            reasons.append(f"Oficina de {label}{reason}: se mantiene prioridad ALTA.")
 
     if matched is None and equipment and equipment.type.value == "SERVIDOR":
         priority = _PRIORITY_UP[priority]
@@ -204,6 +222,8 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         description=data.description,
         hierarchy_level=data.hierarchy_level,
         equipment=data.equipment,
+        office_service_level=data.office.service_level,
+        office_service_reason=data.office.service_reason,
     )
 
     # El ticket se clasifica inicialmente sin esperar a la IA.
