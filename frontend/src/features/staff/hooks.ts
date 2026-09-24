@@ -4,7 +4,10 @@ import { api, errorMessage } from "../../lib/api";
 import { useMe } from "../../lib/session";
 import type { Device, Equipment, Insights, Kpis, Office, StaffMember, Ticket } from "../../lib/types";
 
-export type OfficeLookup = { id: string; code: string; name: string; location: string | null };
+export type OfficeLookup = {
+  id: string; code: string; name: string; zone_id: string | null; zone_name: string | null;
+  location: string | null; head_name: string | null;
+};
 
 export const useIsAdmin = () => useMe().data?.staff?.role === "ADMIN";
 export const useTechnicians = () => useQuery({ queryKey: ["technicians"], queryFn: () => api<StaffMember[]>("/technicians"), staleTime: 60_000 });
