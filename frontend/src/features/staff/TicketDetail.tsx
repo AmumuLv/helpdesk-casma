@@ -233,6 +233,35 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                 {ai.equipment_risk_factors.length > 0 && <ul className="list-disc pl-5 text-xs text-white/75">{ai.equipment_risk_factors.map((f) => <li key={f}>{f}</li>)}</ul>}
               </div>
             )}
+            {(ai.historical_patterns.length > 0 || ai.historical_recommendations.length > 0) && (
+              <div className="flex flex-col gap-2 rounded-xl border border-sol/30 bg-white/10 p-3">
+                <p className="text-sm font-bold text-sol">Contexto histórico del equipo</p>
+                {ai.historical_patterns.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-white/60">Patrones detectados</p>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-white/85">
+                      {ai.historical_patterns.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {ai.historical_evidence.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-white/60">Evidencia</p>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-white/75">
+                      {ai.historical_evidence.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {ai.historical_recommendations.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-white/60">Recomendación inicial</p>
+                    <ol className="mt-1 list-decimal pl-5 text-xs text-sol">
+                      {ai.historical_recommendations.map((item) => <li key={item}>{item}</li>)}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
             {ai.similar_cases.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-bold">Casos parecidos resueltos</p>
