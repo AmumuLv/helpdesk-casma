@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Camera, MapPinned, Monitor, TicketIcon, UserRound, Users } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Building2, Camera, ClipboardList, MapPinned, Monitor, UserRound, Users } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
@@ -116,7 +116,7 @@ function OfficeProfileView({ data }: { data: OfficeProfile }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <Metric label="Usuarios" value={users.length} icon={<Users />} />
         <Metric label="Equipos" value={equipment.length} icon={<Monitor />} />
-        <Metric label="Incidencias" value={ticket_count} icon={<TicketIcon />} />
+        <Metric label="Incidencias" value={ticket_count} icon={<ClipboardList />} />
       </div>
 
       <Card className="grid gap-3 p-4 text-sm sm:grid-cols-3">
@@ -229,7 +229,7 @@ function UserProfileView({ data, isAdmin }: { data: MunicipalUserProfile; isAdmi
   );
 }
 
-function ProfileHeader({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+function ProfileHeader({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return (
     <Card className="flex items-center gap-4 p-5">
       <div className="flex size-14 items-center justify-center rounded-2xl bg-casma-claro text-casma">{icon}</div>
@@ -241,7 +241,7 @@ function ProfileHeader({ icon, title, subtitle }: { icon: React.ReactNode; title
   );
 }
 
-function Metric({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function Metric({ label, value, icon }: { label: string; value: number; icon: ReactNode }) {
   return (
     <Card className="flex items-center gap-3 p-4">
       <div className="text-casma [&_svg]:size-6">{icon}</div>
@@ -286,7 +286,7 @@ function EquipmentList({ equipment }: { equipment: OfficeProfile["equipment"] })
                   <td className="p-3 font-bold text-casma">{item.inventory_id ?? "–"}</td>
                   <td className="p-3 font-bold">{item.patrimonial_code}</td>
                   <td className="p-3">{EQUIPMENT_LABEL[item.type]}</td>
-                  <td className="p-3">{item.hostname ?? item.device_label ?? [item.brand, item.model].filter(Boolean).join(" ") || "–"}</td>
+                  <td className="p-3">{item.hostname ?? item.device_label ?? ([item.brand, item.model].filter(Boolean).join(" ") || "–")}</td>
                   <td className="p-3">{item.ip_address ?? "–"}</td>
                   <td className="p-3"><Badge className="border-linea bg-papel">{EQUIPMENT_STATUS_LABEL[item.status]}</Badge></td>
                 </tr>
