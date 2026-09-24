@@ -102,6 +102,27 @@ export interface Equipment {
   created_at: string; updated_at: string;
 }
 
+export interface EquipmentImportError {
+  row: number;
+  patrimonial_code: string | null;
+  message: string;
+}
+
+export interface EquipmentImportResult {
+  processed: number;
+  imported: number;
+  rejected: number;
+  errors: EquipmentImportError[];
+  more_errors: number;
+}
+
+export interface EquipmentImportOfficeRef {
+  office_code: string;
+  office_name: string;
+  zone_id: string | null;
+  import_enabled: boolean;
+}
+
 export interface Insights {
   equipment_risk: { equipment_id: string; patrimonial_code: string; type: string; name: string; office: string; risk: number; factors: string[]; incidents_90d: number }[];
   category_trend: { category: TicketCategory; label: string; last_30d: number; previous_30d: number }[];
