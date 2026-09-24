@@ -28,6 +28,7 @@ export function useTicketAction<TBody = unknown>(buildPath: (id: string) => stri
     onSuccess: (ticket) => {
       qc.setQueryData(["ticket", ticket.id], ticket);
       qc.invalidateQueries({ queryKey: ["tickets"] });
+      qc.invalidateQueries({ queryKey: ["ticket-audit", ticket.id] });
       qc.invalidateQueries({ queryKey: ["kpis"] });
       if (successText) toast({ tone: "success", title: successText, body: ticket.number });
     },
