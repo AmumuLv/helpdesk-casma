@@ -1,8 +1,9 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.timeutil import utcnow
 from app.models.enums import (
@@ -14,6 +15,15 @@ from app.models.enums import (
     TicketStatus,
     TimelineKind,
 )
+
+
+class ResolutionStatus(StrEnum):
+    RESUELTO = "Resuelto"
+    REPARADO = "Resuelto - Reparado"
+    REEMPLAZADO = "Resuelto - Reemplazado"
+    OBSOLETO = "Resuelto - Obsoleto"
+    BAJA_PATRIMONIAL = "Resuelto - Baja patrimonial"
+    DERIVADO = "Resuelto - Derivado"
 
 
 class AttachmentMeta(BaseModel):
@@ -76,15 +86,21 @@ class Resolution(BaseModel):
     notes: str
     resolved_by_id: str
     resolved_by_name: str
+    status: ResolutionStatus = ResolutionStatus.RESUELTO
     resolved_at: datetime = Field(default_factory=utcnow)
     confirmed_by_user: bool | None = None
 
 
 class Ticket(Document):
     number: Annotated[str, Indexed(unique=True)]
+    # La zona se conserva en el ticket para mantener trazabilidad histórica
+    # aunque posteriormente cambie la oficina de zona.
+    zone_id: Annotated[PydanticObjectId | None, Indexed()] = None
     office_id: Annotated[PydanticObjectId, Indexed()]
     office_name: str
     office_location: str | None = None
+    # Usuario que reporta/posee el ticket dentro de la oficina.
+    user_id: Annotated[PydanticObjectId | None, Indexed()] = None
     device_id: PydanticObjectId | None = None
     equipment_id: Annotated[PydanticObjectId | None, Indexed()] = None
     equipment: EquipmentSnapshot | None = None
@@ -110,6 +126,12 @@ class Ticket(Document):
     deleted_at: datetime | None = None
     created_at: Annotated[datetime, Indexed()] = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @model_validator(mode="after")
+    def _validate_hierarchy(self):
+        if self.user_id is not None and self.office_id is None:
+            raise ValueError("Un ticket con user_id debe pertenecer a una oficina.")
+        return self
 
     class Settings:
         name = "tickets"
