@@ -6,6 +6,12 @@ class StaffRole(StrEnum):
     TECNICO = "TECNICO"
 
 
+class OfficeServiceLevel(StrEnum):
+    NORMAL = "NORMAL"
+    ATENCION_PUBLICO = "ATENCION_PUBLICO"
+    SERVICIO_CRITICO = "SERVICIO_CRITICO"
+
+
 class DeviceStatus(StrEnum):
     PENDIENTE = "PENDIENTE"
     APROBADO = "APROBADO"
