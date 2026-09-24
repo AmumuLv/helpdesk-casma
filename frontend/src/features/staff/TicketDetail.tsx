@@ -19,6 +19,13 @@ const RESOLUTION_LABEL: Record<ResolutionType, string> = {
 };
 const RESOLUTION_TYPES = Object.keys(RESOLUTION_LABEL) as ResolutionType[];
 
+const PRIORITY_SOURCE_LABEL: Record<string, string> = {
+  LOCAL: "Triaje local",
+  TECNICO: "Técnico",
+  IA: "IA",
+  IA_SUPERVISADA: "IA supervisada",
+};
+
 type TicketAuditEvent = {
   at: string;
   actor_type: string;
@@ -216,6 +223,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
               {(["BAJA", "MEDIA", "ALTA"] as TicketPriority[]).map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
             </Select>
           </label>
+          <p className="text-xs text-tenue">Origen actual: <strong>{PRIORITY_SOURCE_LABEL[t.priority_source] ?? t.priority_source}</strong>.</p>
           <p className="text-xs text-tenue">Corregir la categoría o prioridad enseña a la IA.</p>
         </div>
 
