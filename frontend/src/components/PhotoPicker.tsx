@@ -1,17 +1,36 @@
-import { Camera, ImagePlus, X } from "lucide-react";
+import { Camera, ImagePlus, ScanLine, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { compressImage } from "../lib/image";
+import { api, errorMessage } from "../lib/api";
 import { Button, cx } from "./ui";
 
 const isTouchDevice = () => window.matchMedia("(pointer: coarse)").matches;
 
-export function PhotoPicker({ value, onChange, large }: { value: File | null; onChange: (f: File | null) => void; large?: boolean }) {
+type PatrimonialOcrResult = {
+  detected_code: string | null;
+  matched: boolean;
+  equipment_id: string | null;
+  candidates: string[];
+  raw_text: string;
+};
+
+type PhotoPickerProps = {
+  value: File | null;
+  onChange: (f: File | null) => void;
+  large?: boolean;
+  patrimonialOcr?: boolean;
+  onPatrimonialDetected?: (code: string, result: PatrimonialOcrResult) => void;
+};
+
+export function PhotoPicker({ value, onChange, large, patrimonialOcr = false, onPatrimonialDetected }: PhotoPickerProps) {
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!value) return setPreview(null);
@@ -27,6 +46,28 @@ export function PhotoPicker({ value, onChange, large }: { value: File | null; on
 
   const pick = async (file?: File) => {
     if (file) onChange(await compressImage(file));
+  };
+
+  const readPatrimonialLabel = async () => {
+    if (!value) return;
+    setError(null);
+    setOcrMessage(null);
+    setOcrLoading(true);
+    try {
+      const form = new FormData();
+      form.append("file", value);
+      const result = await api<PatrimonialOcrResult>("/equipment/ocr-patrimonial", { form });
+      if (!result.detected_code) {
+        setOcrMessage("No se pudo identificar un código patrimonial. Intente acercar más la cámara y evitar reflejos.");
+        return;
+      }
+      setOcrMessage(result.matched ? `Código encontrado: ${result.detected_code}` : `Código leído: ${result.detected_code}`);
+      onPatrimonialDetected?.(result.detected_code, result);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   const openCamera = async () => {
@@ -74,13 +115,21 @@ export function PhotoPicker({ value, onChange, large }: { value: File | null; on
         </div>
       )}
       {preview && (
-        <div className={cx("relative overflow-hidden rounded-xl border border-linea", large ? "h-56" : "h-40")}>
-          <img src={preview} alt="Foto adjunta" className="size-full object-cover" />
-          <button type="button" onClick={() => onChange(null)} className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-tinta/85 px-3 py-1.5 font-bold text-white">
-            <X className="size-4" /> Quitar
-          </button>
-        </div>
+        <>
+          <div className={cx("relative overflow-hidden rounded-xl border border-linea", large ? "h-56" : "h-40")}>
+            <img src={preview} alt={patrimonialOcr ? "Foto de etiqueta patrimonial" : "Foto adjunta"} className="size-full object-cover" />
+            <button type="button" onClick={() => { onChange(null); setOcrMessage(null); }} className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-tinta/85 px-3 py-1.5 font-bold text-white">
+              <X className="size-4" /> Quitar
+            </button>
+          </div>
+          {patrimonialOcr && (
+            <Button type="button" variant="secondary" loading={ocrLoading} onClick={readPatrimonialLabel}>
+              <ScanLine className="size-5" /> Leer etiqueta patrimonial
+            </Button>
+          )}
+        </>
       )}
+      {ocrMessage && <p className="text-sm font-bold text-casma">{ocrMessage}</p>}
       {error && <p className="text-sm font-bold text-alerta">{error}</p>}
     </div>
   );
