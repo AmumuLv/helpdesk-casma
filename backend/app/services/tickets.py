@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import unicodedata
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -27,6 +28,102 @@ from app.services.storage import save_image
 log = logging.getLogger("helpdesk.tickets")
 _PRIORITY_UP = {TicketPriority.BAJA: TicketPriority.MEDIA, TicketPriority.MEDIA: TicketPriority.ALTA, TicketPriority.ALTA: TicketPriority.ALTA}
 
+_LOCAL_PRIORITY_KEYWORDS = {
+    TicketPriority.ALTA: (
+        "servidor caido",
+        "servidor fuera de servicio",
+        "sin internet",
+        "internet caido",
+        "red caida",
+        "sistema caido",
+        "sin sistema",
+        "no enciende",
+        "ransomware",
+        "virus",
+        "toda la oficina",
+        "todos los usuarios",
+        "sin servicio",
+    ),
+    TicketPriority.MEDIA: (
+        "internet",
+        "servidor",
+        "red",
+        "impresora",
+        "correo",
+        "sistema",
+        "software",
+        "lento",
+        "lenta",
+        "error",
+        "no imprime",
+        "conexion",
+    ),
+    TicketPriority.BAJA: (
+        "consulta",
+        "configurar",
+        "instalar",
+        "actualizar",
+        "solicitud",
+        "periferico",
+    ),
+}
+
+_HIERARCHY_BOOST = {
+    "USUARIO": 0,
+    "TECNICO": 0,
+    "COORDINADOR": 0,
+    "JEFE": 1,
+    "GERENTE": 1,
+    "DIRECTOR": 1,
+    "ADMIN": 1,
+    "ALCALDE": 1,
+}
+
+
+def _normalize_local_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).lower()
+
+
+def calculate_local_priority(
+    subject: str,
+    description: str,
+    hierarchy_level: str = "USUARIO",
+    equipment: Equipment | None = None,
+) -> tuple[TicketPriority, list[str]]:
+    """Triaje inicial determinista y local, antes de consultar a la IA."""
+    equipment_text = f" {equipment.type.value} {equipment.brand or ''} {equipment.model or ''}" if equipment else ""
+    text = _normalize_local_text(f"{subject} {description}{equipment_text}")
+    priority = TicketPriority.MEDIA
+    reasons: list[str] = ["Prioridad base local: MEDIA."]
+
+    matched = None
+    for candidate in (TicketPriority.ALTA, TicketPriority.MEDIA, TicketPriority.BAJA):
+        keyword = next((word for word in _LOCAL_PRIORITY_KEYWORDS[candidate] if word in text), None)
+        if keyword:
+            priority = candidate
+            matched = keyword
+            reasons = [f'Palabra clave local detectada: "{keyword}".']
+            break
+
+    level = (hierarchy_level or "USUARIO").strip().upper()
+    boost = _HIERARCHY_BOOST.get(level, 0)
+    if boost:
+        original = priority
+        priority = _PRIORITY_UP[priority]
+        if priority != original:
+            reasons.append(f"Nivel jerárquico {level}: prioridad elevada un nivel.")
+        else:
+            reasons.append(f"Nivel jerárquico {level}: se mantiene prioridad ALTA.")
+    elif level not in _HIERARCHY_BOOST:
+        reasons.append(f"Nivel jerárquico desconocido ({level}); se trató como USUARIO.")
+
+    if matched is None and equipment and equipment.type.value == "SERVIDOR":
+        priority = _PRIORITY_UP[priority]
+        reasons.append("Equipo de tipo SERVIDOR: prioridad elevada un nivel.")
+
+    return priority, reasons
+
 
 @dataclass
 class NewTicket:
@@ -43,6 +140,7 @@ class NewTicket:
     staff: StaffUser | None = None
     category: TicketCategory | None = None
     priority: TicketPriority | None = None
+    hierarchy_level: str = "USUARIO"
 
 
 def equipment_snapshot(e: Equipment) -> EquipmentSnapshot:
@@ -100,12 +198,50 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         subject = f"{subject} - {data.equipment.patrimonial_code}"
     attachments = [await save_image(data.photo)] if data.photo else []
 
-    analysis = await get_engine().analyze(
-        TriageRequest(subject=subject, description=data.description, quick_issue=data.quick_issue, office=data.office,
-                      equipment=data.equipment, category_hint=data.category)
+    local_priority, local_priority_reasons = calculate_local_priority(
+        subject=subject,
+        description=data.description,
+        hierarchy_level=data.hierarchy_level,
+        equipment=data.equipment,
     )
-    category = data.category or analysis.category
-    priority = data.priority or analysis.priority
+
+    analysis = None
+    try:
+        analysis = await get_engine().analyze(
+            TriageRequest(
+                subject=subject,
+                description=data.description,
+                quick_issue=data.quick_issue,
+                office=data.office,
+                equipment=data.equipment,
+                category_hint=data.category,
+            )
+        )
+    except Exception:
+        # La IA es un enriquecimiento: el ticket debe poder crearse aunque el
+        # modelo no esté disponible o falle temporalmente.
+        log.exception("Triaje IA no disponible; se usará clasificación local de respaldo.")
+
+    category = data.category or (
+        analysis.category if analysis else (info.category if info else TicketCategory.OTRO)
+    )
+    priority = data.priority or local_priority
+
+    timeline = [TimelineEntry(kind=TimelineKind.CREADO, actor=actor, text="Reporte recibido.")]
+    if not data.priority:
+        timeline.append(
+            TimelineEntry(
+                kind=TimelineKind.PRIORIDAD,
+                actor="Triaje local",
+                text=f"Prioridad inicial {priority.value}: {' '.join(local_priority_reasons)}",
+                internal=True,
+            )
+        )
+    if analysis:
+        timeline.append(
+            TimelineEntry(kind=TimelineKind.IA, actor="Asistente IA", text=analysis.briefing, internal=True)
+        )
+
     ticket = Ticket(
         number=await next_ticket_number(),
         office_id=data.office.id, office_name=data.office.name, office_location=data.office.location,
@@ -114,17 +250,19 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         equipment=equipment_snapshot(data.equipment) if data.equipment else None,
         channel=data.channel, quick_issue=data.quick_issue, subject=subject, description=data.description.strip(),
         reporter_name=data.reporter_name, contact_phone=data.contact_phone,
-        category=category, category_source="TECNICO" if data.category else "IA",
-        priority=priority, priority_source="TECNICO" if data.priority else "IA",
+        category=category, category_source="TECNICO" if data.category else ("IA" if analysis else "LOCAL"),
+        priority=priority, priority_source="TECNICO" if data.priority else "LOCAL",
         attachments=attachments, ai=analysis,
         created_by_staff_id=data.staff.id if data.staff else None,
-        timeline=[
-            TimelineEntry(kind=TimelineKind.CREADO, actor=actor, text="Reporte recibido."),
-            TimelineEntry(kind=TimelineKind.IA, actor="Asistente IA", text=analysis.briefing, internal=True),
-        ],
+        timeline=timeline,
     )
     settings = get_settings()
-    if settings.ai_auto_assign_urgent and priority == TicketPriority.ALTA and analysis.suggested_technician_id:
+    if (
+        analysis
+        and settings.ai_auto_assign_urgent
+        and priority == TicketPriority.ALTA
+        and analysis.suggested_technician_id
+    ):
         tech = await StaffUser.get(PydanticObjectId(analysis.suggested_technician_id))
         if tech and tech.active:
             ticket.assigned_to_id, ticket.assigned_to_name = tech.id, tech.full_name
