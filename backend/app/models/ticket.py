@@ -66,6 +66,10 @@ class AIAnalysis(BaseModel):
     equipment_risk: float | None = None
     equipment_risk_factors: list[str] = Field(default_factory=list)
     equipment_incidents_90d: int = 0
+    historical_summary: str | None = None
+    historical_patterns: list[str] = Field(default_factory=list)
+    historical_recommendations: list[str] = Field(default_factory=list)
+    historical_evidence: list[str] = Field(default_factory=list)
     related_alert: str | None = None
     briefing: str = ""
     user_message: str = ""
