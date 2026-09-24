@@ -4,6 +4,17 @@ export class ApiError extends Error {
   }
 }
 
+export type OfflineQueuedResponse = {
+  offline_queued: true;
+  queue_id: string;
+  scope: "office" | "staff";
+};
+
+export const isOfflineQueued = (value: unknown): value is OfflineQueuedResponse =>
+  !!value
+  && typeof value === "object"
+  && (value as { offline_queued?: unknown }).offline_queued === true;
+
 type Options = { method?: string; json?: unknown; form?: FormData; signal?: AbortSignal };
 
 export async function api<T>(path: string, { method, json, form, signal }: Options = {}): Promise<T> {
