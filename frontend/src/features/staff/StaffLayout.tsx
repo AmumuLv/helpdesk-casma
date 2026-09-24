@@ -28,6 +28,7 @@ export function StaffLayout() {
   const toast = useToast();
   const [online, setOnline] = useState(() => navigator.onLine);
   const [offlinePending, setOfflinePending] = useState(0);
+  const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(null);
 
   const onEvent = useCallback((e: LiveEvent) => {
     if (e.type === "ticket.created") toast({ tone: e.priority === "ALTA" ? "danger" : "info", title: `Nueva incidencia ${e.number ?? ""}`, body: `${e.office}: ${e.subject}` });
@@ -45,11 +46,18 @@ export function StaffLayout() {
         type?: string;
         pending?: number;
         scope?: string;
+        cachedAt?: number;
         payload?: { number?: string };
       }>).detail;
 
       if (detail?.type === "OFFLINE_QUEUE_CHANGED") {
         setOfflinePending(Number(detail.pending ?? 0));
+      }
+      if (detail?.type === "OFFLINE_READ_USED" && detail.cachedAt) {
+        setOfflineCachedAt(Number(detail.cachedAt));
+      }
+      if (detail?.type === "OFFLINE_READ_CACHE_CLEARED") {
+        setOfflineCachedAt(null);
       }
       if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_SENT") {
         toast({
@@ -78,6 +86,9 @@ export function StaffLayout() {
     window.addEventListener("offline", onOffline);
     window.addEventListener("helpdesk-offline-sync", onSync);
     navigator.serviceWorker?.controller?.postMessage({ type: "GET_OFFLINE_QUEUE_COUNT" });
+    if (navigator.onLine) {
+      navigator.serviceWorker?.controller?.postMessage({ type: "WARM_OFFLINE_DATA" });
+    }
 
     return () => {
       window.removeEventListener("online", onOnline);
@@ -118,16 +129,23 @@ export function StaffLayout() {
         </nav>
         {(!online || offlinePending > 0) && (
           <div className="border-t border-white/10 bg-white/10">
-            <div className="mx-auto flex max-w-[1500px] items-center gap-2 px-4 py-2 text-sm">
+            <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-sm">
               {!online ? <WifiOff className="size-4 text-sol" /> : <CloudUpload className="size-4 text-sol" />}
               <span className="font-bold">
-                {!online ? "Sin conexión" : "Sincronizando cambios"}
+                {!online ? "Modo offline" : "Sincronizando cambios"}
               </span>
               <span className="text-white/70">
                 {offlinePending > 0
                   ? `· ${offlinePending} acción${offlinePending === 1 ? "" : "es"} pendiente${offlinePending === 1 ? "" : "s"}`
-                  : "· los nuevos cambios se guardarán en este dispositivo"}
+                  : !online
+                    ? "· los cambios nuevos se guardarán en este dispositivo"
+                    : ""}
               </span>
+              {!online && offlineCachedAt && (
+                <span className="text-white/60">
+                  · mostrando copia local de {new Date(offlineCachedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+              )}
             </div>
           </div>
         )}
