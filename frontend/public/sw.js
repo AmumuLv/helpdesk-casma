@@ -233,7 +233,7 @@ function isStaffTicketMutation(request, url) {
   if (request.method === "PATCH" && /^\/api\/tickets\/[^/]+$/.test(url.pathname)) return true;
   if (
     request.method === "POST"
-    && /^\/api\/tickets\/[^/]+\/(assign|notes|resolve|reopen)$/.test(url.pathname)
+    && /^\/api\/tickets\/[^/]+\/(assign|notes|resolve|reopen|apply-ai-priority)$/.test(url.pathname)
   ) return true;
 
   return false;
