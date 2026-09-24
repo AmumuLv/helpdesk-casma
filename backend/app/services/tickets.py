@@ -302,6 +302,36 @@ async def update_classification(ticket: Ticket, actor: StaffUser, category: Tick
     return ticket
 
 
+async def apply_ai_priority(ticket: Ticket, actor: StaffUser) -> Ticket:
+    if not ticket.ai:
+        raise HTTPException(status_code=409, detail="El ticket todavía no tiene análisis de IA.")
+
+    suggested = ticket.ai.priority
+    if suggested == ticket.priority:
+        raise HTTPException(status_code=409, detail="La prioridad actual ya coincide con la recomendación de IA.")
+
+    previous = ticket.priority
+    score_pct = round(ticket.ai.priority_score * 100)
+    reasons = "; ".join(ticket.ai.priority_reasons[:4]) or "sin razones adicionales"
+    ticket.priority = suggested
+    ticket.priority_source = "IA_SUPERVISADA"
+    ticket.timeline.append(
+        TimelineEntry(
+            kind=TimelineKind.PRIORIDAD,
+            actor=actor.full_name,
+            internal=True,
+            text=(
+                f"Prioridad IA supervisada: {previous.value} → {suggested.value}. "
+                f"El técnico aceptó la recomendación de IA ({score_pct}%). Razones: {reasons}."
+            ),
+        )
+    )
+    ticket.updated_at = utcnow()
+    await ticket.save()
+    await _publish(ticket, "ticket.updated")
+    return ticket
+
+
 async def add_note(ticket: Ticket, actor: StaffUser, text: str, visible_to_office: bool) -> Ticket:
     ticket.timeline.append(TimelineEntry(kind=TimelineKind.NOTA, actor=actor.full_name, text=text.strip(), internal=not visible_to_office))
     ticket.first_response_at = ticket.first_response_at or utcnow()
