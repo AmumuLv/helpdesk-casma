@@ -11,6 +11,10 @@ const TICKET_SNAPSHOT_URL = "/api/__offline/tickets-snapshot";
 
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
 
+function absoluteUrl(value) {
+  return new URL(value, self.location.origin).href;
+}
+
 const CORE_PRIVATE_URLS = [
   "/api/auth/me",
   "/api/tickets/kpis",
@@ -311,7 +315,7 @@ async function storePrivateResponse(request, response) {
 async function storePrivateJson(url, data, cachedAt = Date.now()) {
   const cache = await caches.open(PRIVATE_READ_CACHE);
   await cache.put(
-    new Request(url, { method: "GET" }),
+    new Request(absoluteUrl(url), { method: "GET" }),
     new Response(JSON.stringify(data), {
       status: 200,
       headers: {
@@ -328,7 +332,7 @@ function cacheMaxAge(url) {
 
 async function validCachedResponse(requestOrUrl) {
   const request = typeof requestOrUrl === "string"
-    ? new Request(requestOrUrl, { method: "GET" })
+    ? new Request(absoluteUrl(requestOrUrl), { method: "GET" })
     : requestOrUrl;
   const url = new URL(request.url);
   const cache = await caches.open(PRIVATE_READ_CACHE);
@@ -380,7 +384,7 @@ function offlineUnavailable(detail) {
 }
 
 async function fetchAndCachePrivate(url) {
-  const request = new Request(url, {
+  const request = new Request(absoluteUrl(url), {
     method: "GET",
     credentials: "include",
     headers: { "X-Requested-With": "HelpDeskCasma" },
@@ -604,8 +608,12 @@ async function synthesizeOrganizationUsers(url) {
 async function offlinePrivateFallback(request) {
   const url = new URL(request.url);
 
-  const exact = await validCachedResponse(request);
-  if (exact) return markOfflineResponse(exact.response, exact.cachedAt, url.href);
+  if (url.pathname === "/api/auth/me") {
+    const auth = await validCachedResponse(request);
+    return auth
+      ? markOfflineResponse(auth.response, auth.cachedAt, url.href)
+      : offlineUnavailable("La sesión offline expiró. Conéctese para validar nuevamente su acceso.");
+  }
 
   if (url.pathname.startsWith("/api/tickets")) {
     const response = await synthesizeTickets(url);
@@ -621,6 +629,9 @@ async function offlinePrivateFallback(request) {
     const response = await synthesizeOrganizationUsers(url);
     if (response) return response;
   }
+
+  const exact = await validCachedResponse(request);
+  if (exact) return markOfflineResponse(exact.response, exact.cachedAt, url.href);
 
   return offlineUnavailable("No hay una copia offline reciente para esta vista. Conéctese una vez para actualizarla.");
 }
@@ -644,7 +655,7 @@ async function cacheVerifiedStaffSession(response) {
   await clearPrivateReadCache();
   const cache = await caches.open(PRIVATE_READ_CACHE);
   const stored = await responseWithCacheMetadata(response.clone());
-  await cache.put(new Request("/api/auth/me", { method: "GET" }), stored);
+  await cache.put(new Request(absoluteUrl("/api/auth/me"), { method: "GET" }), stored);
 }
 
 self.addEventListener("sync", (event) => {
@@ -714,15 +725,11 @@ self.addEventListener("fetch", (event) => {
   ) {
     const scope = isOfficeTicketCreate(request, url) ? "office" : "staff";
     const operationId = crypto.randomUUID();
-    event.respondWith((async () => {
+    const mutationPromise = (async () => {
       const forwardedHeaders = new Headers(request.headers);
       forwardedHeaders.set("X-Offline-Operation", operationId);
       try {
-        const response = await fetch(new Request(request.clone(), { headers: forwardedHeaders }));
-        if (response.ok && scope === "staff") {
-          event.waitUntil(warmPrivateData(false).catch(() => undefined));
-        }
-        return response;
+        return await fetch(new Request(request.clone(), { headers: forwardedHeaders }));
       } catch {
         const queueId = await queueRequest(request, scope, operationId);
         return new Response(
@@ -730,7 +737,15 @@ self.addEventListener("fetch", (event) => {
           { status: 202, headers: { "Content-Type": "application/json" } }
         );
       }
-    })());
+    })();
+    event.respondWith(mutationPromise);
+    if (scope === "staff") {
+      event.waitUntil(
+        mutationPromise
+          .then((response) => response.ok && response.status !== 202 ? warmPrivateData(false) : undefined)
+          .catch(() => undefined)
+      );
+    }
     return;
   }
 
