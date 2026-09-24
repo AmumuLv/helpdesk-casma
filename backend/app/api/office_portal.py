@@ -12,6 +12,7 @@ from app.core.timeutil import utcnow
 from app.models import Announcement, Equipment, Ticket
 from app.models.enums import DeviceKind, EquipmentStatus, EquipmentType, QuickIssue, TicketChannel, TicketStatus
 from app.schemas.ticket import ConfirmIn, OfficeTicketCreatedOut, OfficeTicketOut
+from app.services import audit
 from app.services import tickets as ticket_service
 from app.services.serializers import office_ticket_out
 
@@ -117,6 +118,13 @@ async def create_ticket(
     ))
     if not duplicated:
         background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
+        await audit.record(
+            request, "office", "ticket.created",
+            actor_id=str(p.office.id), actor_name=p.office.name,
+            target_type="ticket", target_id=str(ticket.id),
+            channel=channel.value,
+            offline_replay=request.headers.get("X-Offline-Replay") == "1",
+        )
     return OfficeTicketCreatedOut(ticket=office_ticket_out(ticket), duplicated=duplicated)
 
 
