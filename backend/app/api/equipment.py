@@ -2,6 +2,7 @@ import io
 import ipaddress
 import unicodedata
 from datetime import date, datetime
+from zipfile import BadZipFile
 
 import qrcode
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -159,11 +160,9 @@ def _optional_float(value, field: str) -> float | None:
 
 
 def _equipment_type(value) -> EquipmentType:
-    key = _cell_text(value).upper().replace("-", "_")
-    key = " ".join(key.split())
+    key = _normal(value).upper()
     if key in _EQUIPMENT_TYPE_ALIASES:
         return _EQUIPMENT_TYPE_ALIASES[key]
-    key = key.replace(" ", "_")
     try:
         return EquipmentType(key)
     except ValueError:
@@ -174,11 +173,9 @@ def _equipment_type(value) -> EquipmentType:
 def _equipment_status(value) -> EquipmentStatus:
     if value in (None, ""):
         return EquipmentStatus.OPERATIVO
-    key = _cell_text(value).upper().replace("-", "_")
-    key = " ".join(key.split())
+    key = _normal(value).upper()
     if key in _STATUS_ALIASES:
         return _STATUS_ALIASES[key]
-    key = key.replace(" ", "_")
     try:
         return EquipmentStatus(key)
     except ValueError:
@@ -267,7 +264,7 @@ async def import_equipment_xlsx(
 
     try:
         workbook = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-    except (InvalidFileException, OSError, ValueError):
+    except (InvalidFileException, BadZipFile, OSError, ValueError):
         raise HTTPException(status_code=422, detail="No se pudo leer el archivo .xlsx.")
 
     sheet = workbook.active
@@ -319,7 +316,6 @@ async def import_equipment_xlsx(
                 all_errors.append(
                     EquipmentImportError(row=row_number, message="Se alcanzó el máximo de 5000 filas por importación.")
                 )
-                rejected += 1
                 break
             if not any(value not in (None, "") for value in row):
                 continue
@@ -360,7 +356,7 @@ async def import_equipment_xlsx(
                     ipaddress.ip_address(ip_value)
 
                 criticality_raw = value_at(row, "criticidad")
-                criticality = 1 if criticality_raw in (None, "") else int(criticality_raw)
+                criticality = 1 if criticality_raw in (None, "") else int(float(criticality_raw))
                 if criticality not in (1, 2, 3):
                     raise ValueError("Criticidad: use 1, 2 o 3.")
 
