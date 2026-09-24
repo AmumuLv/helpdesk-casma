@@ -141,7 +141,7 @@ class NewTicket:
     staff: StaffUser | None = None
     category: TicketCategory | None = None
     priority: TicketPriority | None = None
-    hierarchy_level: str = "USUARIO"
+    hierarchy_level: str = "PERSONAL"
 
 
 def equipment_snapshot(e: Equipment) -> EquipmentSnapshot:
