@@ -218,8 +218,29 @@ async def triage_preview(body: TriagePreviewIn, _: StaffUser = Depends(require_s
 
 
 @router.get("/{ticket_id}", response_model=TicketOut)
-async def get_ticket(ticket_id: str, _: StaffUser = Depends(require_staff)):
-    return ticket_out(await _get(ticket_id))
+async def get_ticket(
+    request: Request,
+    ticket_id: str,
+    user: StaffUser = Depends(require_staff),
+):
+    ticket = await _get(ticket_id)
+    already_viewed = await AuditLog.find_one({
+        "target_type": "ticket",
+        "target_id": str(ticket.id),
+        "action": "ticket.viewed",
+        "actor_id": str(user.id),
+    })
+    if not already_viewed:
+        await audit.record(
+            request,
+            "staff",
+            "ticket.viewed",
+            actor_id=str(user.id),
+            actor_name=user.full_name,
+            target_type="ticket",
+            target_id=str(ticket.id),
+        )
+    return ticket_out(ticket)
 
 
 @router.get("/{ticket_id}/audit", response_model=list[TicketAuditOut])
