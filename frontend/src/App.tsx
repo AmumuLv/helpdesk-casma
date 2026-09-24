@@ -15,6 +15,7 @@ import { Dashboard } from "./features/staff/Dashboard";
 import { DevicesPage } from "./features/staff/DevicesPage";
 import { EquipmentPage } from "./features/staff/EquipmentPage";
 import { OfficesPage } from "./features/staff/OfficesPage";
+import { OrganizationPage } from "./features/staff/OrganizationPage";
 import { StaffLayout } from "./features/staff/StaffLayout";
 import { StaffPage } from "./features/staff/StaffPage";
 
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
             children: [
               { path: "/soporte/dispositivos", element: <DevicesPage /> },
               { path: "/soporte/oficinas", element: <OfficesPage /> },
+              { path: "/soporte/organizacion", element: <OrganizationPage /> },
               { path: "/soporte/personal", element: <StaffPage /> },
               { path: "/soporte/auditoria", element: <AuditPage /> },
             ],
