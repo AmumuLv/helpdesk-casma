@@ -40,8 +40,8 @@ export function EquipmentPage() {
           {isAdmin && <Button variant="secondary" onClick={() => setImportOpen(true)}><Upload className="size-4" /> Importar Margesí</Button>}
           <Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo equipo</Button>
         </>} />
-      <Card className="mb-4 grid gap-3 p-3 sm:grid-cols-3">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ID TI, código patrimonial, IP, marca o hostname" aria-label="Buscar equipos" />
+      <Card className="mb-4 grid gap-3 p-3 sm:grid-cols-[2fr_1fr_1fr]">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por código patrimonial, MAC, IP o responsable" aria-label="Buscar equipos" />
         <Select value={officeId} onChange={(e) => setOfficeId(e.target.value)} aria-label="Oficina">
           <option value="">Todas las oficinas</option>
           {offices.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -55,18 +55,22 @@ export function EquipmentPage() {
         <Card><EmptyState icon={<Monitor />} title="No se encontraron equipos" /></Card>
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[1080px] text-left text-sm">
             <thead className="border-b border-linea bg-papel text-tenue">
-              <tr><th className="p-3">ID TI</th><th className="p-3">Código patrimonial</th><th className="p-3">Equipo</th><th className="p-3">Oficina</th><th className="p-3">IP / hostname</th><th className="p-3">Estado</th><th className="p-3" /></tr>
+              <tr><th className="p-3">ID TI</th><th className="p-3">Código patrimonial</th><th className="p-3">Equipo</th><th className="p-3">Jerarquía</th><th className="p-3">Responsable</th><th className="p-3">IP / MAC</th><th className="p-3">Estado</th><th className="p-3" /></tr>
             </thead>
             <tbody className="divide-y divide-linea">
               {list.data.map((e) => (
                 <tr key={e.id} className="cursor-pointer hover:bg-papel" onClick={() => setSelected(e.id)}>
                   <td className="p-3 font-bold text-casma">{e.inventory_id ?? "–"}</td>
                   <td className="p-3 font-bold">{e.patrimonial_code}</td>
-                  <td className="p-3">{EQUIPMENT_LABEL[e.type]}<p className="text-tenue">{[e.brand, e.model].filter(Boolean).join(" ") || "–"}</p></td>
-                  <td className="p-3">{e.office_name ?? "Sin asignar"}</td>
-                  <td className="p-3">{e.ip_address ?? "–"}<p className="text-tenue">{e.hostname}</p></td>
+                  <td className="p-3">{EQUIPMENT_LABEL[e.type]}<p className="text-tenue">{e.device_label || [e.brand, e.model].filter(Boolean).join(" ") || "–"}</p></td>
+                  <td className="p-3">
+                    <p className="font-bold">{e.zone_name ?? "Sin zona"}</p>
+                    <p className="text-tenue">{e.office_name ?? "Sin oficina"}{e.area && e.area !== e.office_name ? ` › ${e.area}` : ""}</p>
+                  </td>
+                  <td className="p-3"><p className="font-bold">{e.responsible_name ?? "–"}</p><p className="text-tenue">{e.responsible_type}</p></td>
+                  <td className="p-3">{e.ip_address ?? "–"}<p className="text-tenue">{e.mac_address ?? "–"}</p></td>
                   <td className="p-3"><EquipmentStatusBadge status={e.status} />{e.criticality === 3 && <Badge className="ml-1 border-alerta/40 text-alerta">Crítico</Badge>}</td>
                   <td className="p-3 text-right"><Button size="sm" variant="ghost">Ver</Button></td>
                 </tr>
@@ -124,12 +128,12 @@ function EquipmentImportModal({ open, onClose }: { open: boolean; onClose: () =>
       <div className="flex flex-col gap-5">
         <div className="rounded-xl bg-papel p-4 text-sm">
           <p className="font-bold">Columnas obligatorias</p>
-          <p className="mt-1 font-mono text-xs">zona_id · oficina · codigo_patrimonial · tipo</p>
+          <p className="mt-1 font-mono text-xs">zona (o zona_id) · oficina · codigo_patrimonial · tipo</p>
           <p className="mt-2 text-tenue">
-            La columna <strong>oficina</strong> puede contener el código o el nombre exacto. La fila solo se registra si esa oficina pertenece al <strong>zona_id</strong> indicado.
+            La columna <strong>oficina</strong> puede contener el código o nombre exacto. El sistema valida que pertenezca a la zona indicada.
           </p>
           <p className="mt-2 text-tenue">
-            El ID TI se genera automáticamente. Opcionales: marca, modelo, ip, hostname, mac, cpu, ram_gb, almacenamiento_gb, sistema_operativo, fecha_adquisicion, garantia_hasta, estado, criticidad y notas.
+            El ID TI se genera automáticamente. También puede importar: area, dispositivo, marca, modelo, tamano_pantalla, nombre_equipo, cpu, ram_gb, almacenamiento_gb, ip, mac, propiedad, estado, responsable, responsable_tipo, fechas, criticidad y notas.
           </p>
           <p className="mt-2 text-tenue">
             Tipos admitidos por el Área TI: CPU, MONITOR, MOUSE, TECLADO, IMPRESORA y LAPTOP.
@@ -183,13 +187,14 @@ function EquipmentImportModal({ open, onClose }: { open: boolean; onClose: () =>
           {refs.isLoading ? <Spinner label="Cargando oficinas" /> : refs.error ? <ErrorBox message={errorMessage(refs.error)} /> : (
             <div className="max-h-64 overflow-auto rounded-xl border border-linea">
               <table className="w-full min-w-[620px] text-left text-sm">
-                <thead className="sticky top-0 bg-papel"><tr><th className="p-2">Código</th><th className="p-2">Oficina</th><th className="p-2">zona_id</th><th className="p-2">Importación</th></tr></thead>
+                <thead className="sticky top-0 bg-papel"><tr><th className="p-2">Zona</th><th className="p-2">Código</th><th className="p-2">Oficina</th><th className="p-2">Jefe / responsable</th><th className="p-2">Importación</th></tr></thead>
                 <tbody className="divide-y divide-linea">
                   {refs.data?.map((ref) => (
                     <tr key={ref.office_code}>
+                      <td className="p-2"><p className="font-bold">{ref.zone_name ?? "Sin zona"}</p><p className="font-mono text-xs text-tenue">{ref.zone_id}</p></td>
                       <td className="p-2 font-bold">{ref.office_code}</td>
                       <td className="p-2">{ref.office_name}</td>
-                      <td className="p-2 font-mono text-xs">{ref.zone_id ?? "Sin zona"}</td>
+                      <td className="p-2">{ref.head_name ?? "–"}</td>
                       <td className="p-2">{ref.import_enabled ? <Badge className="border-hecho/30 bg-hecho-claro text-hecho">Habilitada</Badge> : <Badge className="border-alerta/30 bg-alerta-claro text-alerta">Configurar zona</Badge>}</td>
                     </tr>
                   ))}
@@ -248,10 +253,14 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
             <dl className="grid grid-cols-2 gap-3 rounded-xl bg-papel p-4 text-sm sm:grid-cols-3">
               {([
                 ["ID TI", d.equipment.inventory_id], ["Código patrimonial", d.equipment.patrimonial_code],
-                ["Marca / modelo", [d.equipment.brand, d.equipment.model].filter(Boolean).join(" ")],
-                ["Oficina", d.equipment.office_name], ["IP", d.equipment.ip_address], ["Hostname", d.equipment.hostname], ["MAC", d.equipment.mac_address],
-                ["Procesador", d.equipment.specs.cpu], ["RAM", d.equipment.specs.ram_gb ? `${d.equipment.specs.ram_gb} GB` : null],
+                ["Zona", d.equipment.zone_name], ["Oficina", d.equipment.office_name], ["Área", d.equipment.area],
+                ["Responsable", d.equipment.responsible_name], ["Tipo responsable", d.equipment.responsible_type],
+                ["Dispositivo", d.equipment.device_label], ["Marca / modelo", [d.equipment.brand, d.equipment.model].filter(Boolean).join(" ")],
+                ["Tamaño pantalla", d.equipment.specs.screen_size_inches ? `${d.equipment.specs.screen_size_inches}″` : null],
+                ["Nombre equipo", d.equipment.hostname], ["Procesador", d.equipment.specs.cpu],
+                ["RAM", d.equipment.specs.ram_gb ? `${d.equipment.specs.ram_gb} GB` : null],
                 ["Almacenamiento", d.equipment.specs.storage_gb ? `${d.equipment.specs.storage_gb} GB` : null],
+                ["IP", d.equipment.ip_address], ["MAC", d.equipment.mac_address], ["Propiedad", d.equipment.property_type],
                 ["Sistema operativo", d.equipment.specs.os], ["Adquirido", d.equipment.acquired_on && fmtDate(d.equipment.acquired_on)],
                 ["Garantía hasta", d.equipment.warranty_until && fmtDate(d.equipment.warranty_until)],
               ] as [string, string | null][]).map(([k, v]) => (
@@ -299,8 +308,10 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
 }
 
 type Form = {
-  patrimonial_code: string; type: EquipmentType; brand: string; model: string; hostname: string; ip_address: string;
-  mac_address: string; office_id: string; cpu: string; ram_gb: string; storage_gb: string; os: string; acquired_on: string; warranty_until: string;
+  patrimonial_code: string; type: EquipmentType; area: string; device_label: string; brand: string; model: string;
+  screen_size_inches: string; hostname: string; ip_address: string; mac_address: string; office_id: string;
+  responsible_name: string; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string;
+  cpu: string; ram_gb: string; storage_gb: string; os: string; acquired_on: string; warranty_until: string;
   status: EquipmentStatus; criticality: string; notes: string;
 };
 
@@ -310,12 +321,17 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
   const qc = useQueryClient();
   const toast = useToast();
   const [f, setF] = useState<Form>({
-    patrimonial_code: e?.patrimonial_code ?? "", type: e?.type && EQUIPMENT_TYPES.includes(e.type) ? e.type : "CPU", brand: e?.brand ?? "", model: e?.model ?? "",
-    hostname: e?.hostname ?? "", ip_address: e?.ip_address ?? "", mac_address: e?.mac_address ?? "", office_id: e?.office_id ?? "",
+    patrimonial_code: e?.patrimonial_code ?? "", type: e?.type && EQUIPMENT_TYPES.includes(e.type) ? e.type : "CPU",
+    area: e?.area ?? "", device_label: e?.device_label ?? "", brand: e?.brand ?? "", model: e?.model ?? "",
+    screen_size_inches: e?.specs.screen_size_inches?.toString() ?? "", hostname: e?.hostname ?? "",
+    ip_address: e?.ip_address ?? "", mac_address: e?.mac_address ?? "", office_id: e?.office_id ?? "",
+    responsible_name: e?.responsible_name ?? "", responsible_type: e?.responsible_type ?? "USUARIO",
+    property_type: e?.property_type ?? "MUNICIPALIDAD PROVINCIAL DE CASMA",
     cpu: e?.specs.cpu ?? "", ram_gb: e?.specs.ram_gb?.toString() ?? "", storage_gb: e?.specs.storage_gb?.toString() ?? "", os: e?.specs.os ?? "",
     acquired_on: e?.acquired_on?.slice(0, 10) ?? "", warranty_until: e?.warranty_until?.slice(0, 10) ?? "", status: e?.status ?? "OPERATIVO",
     criticality: String(e?.criticality ?? 1), notes: e?.notes ?? "",
   });
+  const selectedOffice = offices.data?.find((office) => office.id === f.office_id);
   const bind = (k: keyof Form) => ({ value: f[k], onChange: (ev: { target: { value: string } }) => setF((s) => ({ ...s, [k]: ev.target.value })) });
   const nul = (v: string) => v.trim() || null;
   const num = (v: string) => (v.trim() ? Number(v) : null);
@@ -323,9 +339,11 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
   const save = useMutation({
     mutationFn: () => {
       const body = {
-        patrimonial_code: f.patrimonial_code, type: f.type, brand: nul(f.brand), model: nul(f.model),
-        hostname: nul(f.hostname), ip_address: nul(f.ip_address), mac_address: nul(f.mac_address), office_id: nul(f.office_id),
-        specs: { cpu: nul(f.cpu), ram_gb: num(f.ram_gb), storage_gb: num(f.storage_gb), os: nul(f.os) },
+        patrimonial_code: f.patrimonial_code, type: f.type, area: nul(f.area), device_label: nul(f.device_label),
+        brand: nul(f.brand), model: nul(f.model), hostname: nul(f.hostname), ip_address: nul(f.ip_address), mac_address: nul(f.mac_address),
+        office_id: nul(f.office_id), responsible_name: nul(f.responsible_name), responsible_type: f.responsible_type,
+        property_type: nul(f.property_type),
+        specs: { cpu: nul(f.cpu), ram_gb: num(f.ram_gb), storage_gb: num(f.storage_gb), screen_size_inches: num(f.screen_size_inches), os: nul(f.os) },
         acquired_on: f.acquired_on ? `${f.acquired_on}T00:00:00Z` : null, warranty_until: f.warranty_until ? `${f.warranty_until}T00:00:00Z` : null,
         status: f.status, criticality: Number(f.criticality), notes: nul(f.notes),
       };
@@ -350,18 +368,29 @@ function EquipmentForm({ equipment: e, onClose }: { equipment: Equipment | null;
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Código patrimonial">{(id) => <Input id={id} {...bind("patrimonial_code")} required minLength={3} maxLength={40} />}</Field>
           <Field label="Tipo">{(id) => <Select id={id} {...bind("type")}>{EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{EQUIPMENT_LABEL[t]}</option>)}</Select>}</Field>
+          <Field label="Zona">{(id) => <Input id={id} value={selectedOffice?.zone_name ?? ""} readOnly placeholder="Se completa según la oficina" />}</Field>
           <Field label="Oficina">
-            {(id) => <Select id={id} {...bind("office_id")}><option value="">Sin asignar (almacén)</option>{offices.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>}
+            {(id) => <Select id={id} {...bind("office_id")} required><option value="">Seleccione oficina</option>{offices.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>}
           </Field>
+          <Field label="Área">{(id) => <Input id={id} {...bind("area")} placeholder={selectedOffice?.name ?? "Área / dependencia"} maxLength={120} />}</Field>
+          <Field label="Dispositivo">{(id) => <Input id={id} {...bind("device_label")} placeholder="Ej. CPU principal, monitor 1" maxLength={120} />}</Field>
           <Field label="Marca">{(id) => <Input id={id} {...bind("brand")} maxLength={60} />}</Field>
           <Field label="Modelo">{(id) => <Input id={id} {...bind("model")} maxLength={80} />}</Field>
+          <Field label="Tamaño pantalla (pulg.)">{(id) => <Input id={id} type="number" min={0} step="0.1" {...bind("screen_size_inches")} />}</Field>
+          <Field label="Nombre equipo">{(id) => <Input id={id} {...bind("hostname")} maxLength={80} placeholder="Ej. PC-CATASTRO-01" />}</Field>
           <Field label="Dirección IP">{(id) => <Input id={id} {...bind("ip_address")} maxLength={45} placeholder="10.10.2.45" />}</Field>
-          <Field label="Hostname">{(id) => <Input id={id} {...bind("hostname")} maxLength={80} />}</Field>
-          <Field label="MAC">{(id) => <Input id={id} {...bind("mac_address")} maxLength={17} placeholder="AA:BB:CC:DD:EE:FF" />}</Field>
+          <Field label="Dirección MAC">{(id) => <Input id={id} {...bind("mac_address")} maxLength={17} placeholder="AA:BB:CC:DD:EE:FF" />}</Field>
           <Field label="Procesador">{(id) => <Input id={id} {...bind("cpu")} maxLength={80} />}</Field>
           <Field label="RAM (GB)">{(id) => <Input id={id} type="number" min={0} max={1024} {...bind("ram_gb")} />}</Field>
           <Field label="Almacenamiento (GB)">{(id) => <Input id={id} type="number" min={0} max={100000} {...bind("storage_gb")} />}</Field>
           <Field label="Sistema operativo">{(id) => <Input id={id} {...bind("os")} maxLength={60} />}</Field>
+          <Field label="Propiedad">{(id) => <Input id={id} {...bind("property_type")} maxLength={80} placeholder="Municipalidad Provincial de Casma" />}</Field>
+          <Field label="Tipo de responsable">
+            {(id) => <Select id={id} {...bind("responsible_type")}><option value="USUARIO">Usuario</option><option value="JEFE">Jefe de oficina</option><option value="OFICINA">Oficina</option></Select>}
+          </Field>
+          <Field label="Responsable" hint={f.responsible_type === "OFICINA" ? "Puede dejarse vacío: se usará el nombre de la oficina." : f.responsible_type === "JEFE" ? "Puede dejarse vacío: se usará el jefe registrado en la oficina." : "Nombre de la persona que utiliza el equipo."}>
+            {(id) => <Input id={id} {...bind("responsible_name")} maxLength={120} required={f.responsible_type === "USUARIO"} placeholder={f.responsible_type === "JEFE" ? selectedOffice?.head_name ?? "Jefe de oficina" : f.responsible_type === "OFICINA" ? selectedOffice?.name ?? "Oficina" : "Nombre y apellidos"} />}
+          </Field>
           <Field label="Fecha de adquisición">{(id) => <Input id={id} type="date" {...bind("acquired_on")} />}</Field>
           <Field label="Garantía hasta">{(id) => <Input id={id} type="date" {...bind("warranty_until")} />}</Field>
           <Field label="Estado">{(id) => <Select id={id} {...bind("status")}>{Object.entries(EQUIPMENT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}</Field>
