@@ -25,3 +25,25 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      if (navigator.onLine) registration.active?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
+    } catch (err) {
+      console.error("No se pudo registrar el Service Worker", err);
+    }
+  });
+
+  window.addEventListener("online", () => {
+    navigator.serviceWorker.controller?.postMessage({ type: "FLUSH_OFFLINE_TICKETS" });
+  });
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "OFFLINE_TICKET_SENT") {
+      queryClient.invalidateQueries({ queryKey: ["office-home"] });
+    }
+  });
+}
