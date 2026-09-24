@@ -9,7 +9,8 @@ export type DeviceStatus = "PENDIENTE" | "APROBADO" | "RECHAZADO" | "REVOCADO";
 export type DeviceKind = "PC" | "LAPTOP" | "CELULAR" | "TABLET" | "OTRO";
 export type StaffRole = "ADMIN" | "TECNICO";
 export type EquipmentType =
-  | "PC" | "LAPTOP" | "IMPRESORA" | "MONITOR" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
+  | "CPU" | "MONITOR" | "MOUSE" | "TECLADO" | "IMPRESORA" | "LAPTOP"
+  | "PC" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
 export type EquipmentStatus = "OPERATIVO" | "EN_REPARACION" | "BAJA";
 
 export interface Me {
@@ -95,7 +96,7 @@ export interface Device {
 }
 
 export interface Equipment {
-  id: string; patrimonial_code: string; type: EquipmentType; brand: string | null; model: string | null; serial_number: string | null;
+  id: string; inventory_id: string | null; patrimonial_code: string; type: EquipmentType; brand: string | null; model: string | null;
   hostname: string | null; ip_address: string | null; mac_address: string | null; office_id: string | null; office_name: string | null;
   specs: { cpu: string | null; ram_gb: number | null; storage_gb: number | null; os: string | null };
   acquired_on: string | null; warranty_until: string | null; status: EquipmentStatus; criticality: number; notes: string | null;
