@@ -53,6 +53,11 @@ async def office_lookup(_: StaffUser = Depends(require_staff)):
             "zone_name": o.zone_name,
             "location": o.location,
             "head_name": o.head_name,
+            "head_phone": o.head_phone,
+            "service_level": o.service_level.value,
+            "service_reason": o.service_reason,
+            "priority_weight": o.priority_weight,
+            "active": o.active,
         }
         for o in offices
     ]
