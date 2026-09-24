@@ -36,6 +36,10 @@ export interface AIAnalysis {
   equipment_risk: number | null;
   equipment_risk_factors: string[];
   equipment_incidents_90d: number;
+  historical_summary: string | null;
+  historical_patterns: string[];
+  historical_recommendations: string[];
+  historical_evidence: string[];
   related_alert: string | null;
   briefing: string;
   user_message: string;
