@@ -108,7 +108,8 @@ export interface MunicipalUser {
 }
 
 export interface OrganizationOfficeSummary {
-  id: string; code: string; name: string; location: string | null; head_name: string | null; active: boolean;
+  id: string; code: string; name: string; location: string | null; head_name: string | null;
+  service_level: OfficeServiceLevel; service_reason: string | null; active: boolean;
   user_count: number; equipment_count: number; ticket_count: number;
 }
 
