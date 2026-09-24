@@ -81,6 +81,124 @@ export function EquipmentPage() {
   );
 }
 
+function EquipmentImportModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<EquipmentImportResult | null>(null);
+
+  const refs = useQuery({
+    queryKey: ["equipment-import-references"],
+    queryFn: () => api<EquipmentImportOfficeRef[]>("/equipment/import-references"),
+    enabled: open,
+  });
+
+  const upload = useMutation({
+    mutationFn: async (selected: File) => {
+      const form = new FormData();
+      form.append("file", selected);
+      return api<EquipmentImportResult>("/equipment/import-xlsx", { form });
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      qc.invalidateQueries({ queryKey: ["equipment"] });
+      toast({
+        tone: "success",
+        title: "Importación de Margesí completada",
+        body: `${data.imported} registrados, ${data.rejected} rechazados.`,
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!open) {
+      setFile(null);
+      setResult(null);
+      upload.reset();
+    }
+  }, [open]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Importar Margesí desde Excel" wide>
+      <div className="flex flex-col gap-5">
+        <div className="rounded-xl bg-papel p-4 text-sm">
+          <p className="font-bold">Columnas obligatorias</p>
+          <p className="mt-1 font-mono text-xs">zona_id · oficina · codigo_patrimonial · tipo</p>
+          <p className="mt-2 text-tenue">
+            La columna <strong>oficina</strong> puede contener el código o el nombre exacto. La fila solo se registra si esa oficina pertenece al <strong>zona_id</strong> indicado.
+          </p>
+          <p className="mt-2 text-tenue">
+            Opcionales: marca, modelo, numero_serie, ip, hostname, mac, cpu, ram_gb, almacenamiento_gb, sistema_operativo, fecha_adquisicion, garantia_hasta, estado, criticidad y notas.
+          </p>
+        </div>
+
+        <Field label="Archivo Excel (.xlsx)" hint="Máximo 10 MB y 5000 filas por importación.">
+          {(id) => <Input id={id} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }} />}
+        </Field>
+
+        {upload.error && <ErrorBox message={errorMessage(upload.error)} />}
+
+        <div className="flex justify-end">
+          <Button loading={upload.isPending} disabled={!file} onClick={() => file && upload.mutate(file)}>
+            <Upload className="size-4" /> Procesar Excel
+          </Button>
+        </div>
+
+        {result && (
+          <Card className="p-4">
+            <h3 className="font-bold">Resultado de la importación</h3>
+            <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl bg-papel p-3"><p className="text-2xl font-bold">{result.processed}</p><p className="text-xs text-tenue">Procesados</p></div>
+              <div className="rounded-xl bg-hecho-claro p-3"><p className="text-2xl font-bold text-hecho">{result.imported}</p><p className="text-xs text-tenue">Registrados</p></div>
+              <div className="rounded-xl bg-alerta-claro p-3"><p className="text-2xl font-bold text-alerta">{result.rejected}</p><p className="text-xs text-tenue">Rechazados</p></div>
+            </div>
+            {result.errors.length > 0 && (
+              <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-linea">
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-papel"><tr><th className="p-2">Fila</th><th className="p-2">Código</th><th className="p-2">Motivo</th></tr></thead>
+                  <tbody className="divide-y divide-linea">
+                    {result.errors.map((error, index) => (
+                      <tr key={`${error.row}-${index}`}>
+                        <td className="p-2 font-bold">{error.row}</td>
+                        <td className="p-2">{error.patrimonial_code ?? "–"}</td>
+                        <td className="p-2 text-alerta">{error.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {result.more_errors > 0 && <p className="p-3 text-sm text-tenue">Hay {result.more_errors} errores adicionales no mostrados.</p>}
+              </div>
+            )}
+          </Card>
+        )}
+
+        <section>
+          <h3 className="mb-2 font-bold">Jerarquía válida Zona / Oficina</h3>
+          <p className="mb-3 text-sm text-tenue">Use estas combinaciones en el Excel. Las oficinas sin zona asignada no pueden recibir una importación de Margesí.</p>
+          {refs.isLoading ? <Spinner label="Cargando oficinas" /> : refs.error ? <ErrorBox message={errorMessage(refs.error)} /> : (
+            <div className="max-h-64 overflow-auto rounded-xl border border-linea">
+              <table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="sticky top-0 bg-papel"><tr><th className="p-2">Código</th><th className="p-2">Oficina</th><th className="p-2">zona_id</th><th className="p-2">Importación</th></tr></thead>
+                <tbody className="divide-y divide-linea">
+                  {refs.data?.map((ref) => (
+                    <tr key={ref.office_code}>
+                      <td className="p-2 font-bold">{ref.office_code}</td>
+                      <td className="p-2">{ref.office_name}</td>
+                      <td className="p-2 font-mono text-xs">{ref.zone_id ?? "Sin zona"}</td>
+                      <td className="p-2">{ref.import_enabled ? <Badge className="border-hecho/30 bg-hecho-claro text-hecho">Habilitada</Badge> : <Badge className="border-alerta/30 bg-alerta-claro text-alerta">Configurar zona</Badge>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
 const EquipmentStatusBadge = ({ status }: { status: EquipmentStatus }) => (
   <Badge className={cx(status === "OPERATIVO" ? "border-hecho/30 bg-hecho-claro text-hecho" : status === "EN_REPARACION" ? "border-sol/40 bg-sol-claro" : "border-linea bg-papel text-tenue")}>
     {EQUIPMENT_STATUS_LABEL[status]}
