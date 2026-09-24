@@ -1,10 +1,13 @@
 import io
 import ipaddress
+import re
 import unicodedata
 from datetime import date, datetime
 from zipfile import BadZipFile
 
+import pytesseract
 import qrcode
+from PIL import Image, ImageOps, UnidentifiedImageError
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from openpyxl import load_workbook
@@ -56,6 +59,14 @@ class EquipmentImportOfficeRef(BaseModel):
     zone_name: str | None
     head_name: str | None
     import_enabled: bool
+
+
+class EquipmentOcrOut(BaseModel):
+    detected_code: str | None
+    matched: bool
+    equipment_id: str | None = None
+    candidates: list[str] = []
+    raw_text: str = ""
 
 
 _HEADER_ALIASES = {
@@ -146,6 +157,47 @@ def _cell_text(value) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def _ocr_normalize(value: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
+
+
+def _ocr_candidates(text: str) -> list[str]:
+    lines = [line.strip().upper() for line in text.splitlines() if line.strip()]
+    prioritized = [line for line in lines if "PATRIMON" in line or "CODIGO" in line or "CÓDIGO" in line]
+    pool = prioritized + lines
+    found: list[str] = []
+    for line in pool:
+        for token in re.findall(r"[A-Z0-9][A-Z0-9._/-]{3,39}", line):
+            cleaned = token.strip("._/-")
+            compact = _ocr_normalize(cleaned)
+            if 4 <= len(compact) <= 40 and compact not in {"PATRIMONIAL", "CODIGO", "MUNICIPALIDAD", "PROVINCIAL", "CASMA"}:
+                if cleaned not in found:
+                    found.append(cleaned)
+    return found[:12]
+
+
+def _prepare_ocr_image(raw: bytes) -> Image.Image:
+    try:
+        image = Image.open(io.BytesIO(raw))
+        image.load()
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(status_code=422, detail="No se pudo leer la imagen.")
+
+    if image.width < 40 or image.height < 40:
+        raise HTTPException(status_code=422, detail="La imagen es demasiado pequeña para leer la etiqueta.")
+
+    image = image.convert("RGB")
+    max_side = 3200
+    if max(image.size) > max_side:
+        image.thumbnail((max_side, max_side))
+
+    gray = ImageOps.grayscale(image)
+    gray = ImageOps.autocontrast(gray)
+    if max(gray.size) < 1800:
+        gray = gray.resize((gray.width * 2, gray.height * 2))
+    return gray
 
 
 def _parse_excel_date(value, field: str) -> datetime | None:
@@ -315,6 +367,77 @@ async def create_equipment(request: Request, body: EquipmentIn, user: StaffUser 
         office.name,
         str(office.zone_id) if office.zone_id else None,
         office.zone_name,
+    )
+
+
+@router.post("/ocr-patrimonial", response_model=EquipmentOcrOut)
+async def ocr_patrimonial(
+    file: UploadFile = File(...),
+    _: StaffUser = Depends(require_staff),
+):
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=422, detail="Debe enviar una imagen de la etiqueta patrimonial.")
+
+    max_bytes = get_settings().max_upload_mb * 1024 * 1024
+    raw = await file.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"La imagen no puede superar {get_settings().max_upload_mb} MB.",
+        )
+    if not raw:
+        raise HTTPException(status_code=422, detail="La imagen está vacía.")
+
+    image = _prepare_ocr_image(raw)
+    try:
+        text = await __import__("asyncio").to_thread(
+            pytesseract.image_to_string,
+            image,
+            lang="spa+eng",
+            config="--psm 6",
+        )
+    except pytesseract.pytesseract.TesseractNotFoundError:
+        raise HTTPException(status_code=503, detail="El motor OCR no está disponible en el servidor.")
+    except pytesseract.TesseractError:
+        raise HTTPException(status_code=422, detail="No se pudo reconocer texto en la etiqueta.")
+
+    text = (text or "").strip()
+    candidates = _ocr_candidates(text)
+    compact_text = _ocr_normalize(text)
+
+    equipment_docs = await Equipment.get_pymongo_collection().find(
+        {},
+        {"patrimonial_code": 1},
+    ).to_list(None)
+
+    matched_code = None
+    matched_id = None
+    for doc in equipment_docs:
+        code = str(doc.get("patrimonial_code") or "").strip().upper()
+        normalized = _ocr_normalize(code)
+        if normalized and normalized in compact_text:
+            matched_code = code
+            matched_id = str(doc["_id"])
+            break
+
+    if not matched_code:
+        candidate_norms = [(_ocr_normalize(candidate), candidate) for candidate in candidates]
+        for doc in equipment_docs:
+            code = str(doc.get("patrimonial_code") or "").strip().upper()
+            normalized = _ocr_normalize(code)
+            if normalized and any(normalized == norm for norm, _ in candidate_norms):
+                matched_code = code
+                matched_id = str(doc["_id"])
+                break
+
+    detected = matched_code or (candidates[0].upper() if candidates else None)
+    return EquipmentOcrOut(
+        detected_code=detected,
+        matched=bool(matched_code),
+        equipment_id=matched_id,
+        candidates=[candidate.upper() for candidate in candidates],
+        raw_text=text[:1200],
     )
 
 
