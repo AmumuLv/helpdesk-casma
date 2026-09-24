@@ -6,12 +6,30 @@ import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, ErrorBox, Field, Input, Modal, Select, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { fmtDateTime } from "../../lib/labels";
-import type { Office } from "../../lib/types";
+import type { Office, OfficeServiceLevel } from "../../lib/types";
 import { useOffices, useZones } from "./hooks";
 import { PageHeader } from "./PageHeader";
 
-type OfficeForm = { code: string; name: string; username: string; zone_id: string; location: string; head_name: string; head_phone: string; priority_weight: number; active: boolean };
-const blank: OfficeForm = { code: "", name: "", username: "", zone_id: "", location: "", head_name: "", head_phone: "", priority_weight: 1, active: true };
+type OfficeForm = {
+  code: string; name: string; username: string; zone_id: string; location: string; head_name: string; head_phone: string;
+  service_level: OfficeServiceLevel; service_reason: string; priority_weight: number; active: boolean;
+};
+const blank: OfficeForm = {
+  code: "", name: "", username: "", zone_id: "", location: "", head_name: "", head_phone: "",
+  service_level: "NORMAL", service_reason: "", priority_weight: 1, active: true,
+};
+
+const SERVICE_LEVEL_LABEL: Record<OfficeServiceLevel, string> = {
+  NORMAL: "Normal",
+  ATENCION_PUBLICO: "Atención al público",
+  SERVICIO_CRITICO: "Servicio crítico",
+};
+
+const SERVICE_LEVEL_WEIGHT: Record<OfficeServiceLevel, number> = {
+  NORMAL: 1,
+  ATENCION_PUBLICO: 1.25,
+  SERVICIO_CRITICO: 1.5,
+};
 
 export function OfficesPage() {
   const offices = useOffices();
@@ -63,7 +81,7 @@ export function OfficesPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] text-left text-sm">
                   <thead className="border-b border-linea text-tenue">
-                    <tr><th className="p-3">Oficina</th><th className="p-3">Responsable</th><th className="p-3">Ubicación</th><th className="p-3">Dispositivos</th><th className="p-3">Acciones</th></tr>
+                    <tr><th className="p-3">Oficina</th><th className="p-3">Servicio</th><th className="p-3">Responsable</th><th className="p-3">Ubicación</th><th className="p-3">Dispositivos</th><th className="p-3">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y divide-linea">
                     {zoneOffices.map((o) => (
@@ -71,6 +89,12 @@ export function OfficesPage() {
                         <td className="p-3">
                           <p className="font-bold">{o.name}</p>
                           <p className="text-tenue">{o.code} · usuario: {o.username}</p>
+                        </td>
+                        <td className="p-3">
+                          <Badge className={o.service_level === "SERVICIO_CRITICO" ? "border-alerta/30 bg-alerta-claro text-alerta" : o.service_level === "ATENCION_PUBLICO" ? "border-sol/40 bg-sol-claro" : "border-linea bg-papel text-tenue"}>
+                            {SERVICE_LEVEL_LABEL[o.service_level]}
+                          </Badge>
+                          {o.service_reason && <p className="mt-1 max-w-52 text-xs text-tenue">{o.service_reason}</p>}
                         </td>
                         <td className="p-3"><p className="font-bold">{o.head_name ?? "Sin responsable"}</p><p className="text-tenue">{o.head_phone ?? "–"}</p></td>
                         <td className="p-3">{o.location ?? "–"}</td>
@@ -107,14 +131,22 @@ function OfficeModal({ office, onClose }: { office: Office | null; onClose: () =
   const [f, setF] = useState<OfficeForm>(office ? {
     code: office.code, name: office.name, username: office.username, zone_id: office.zone_id ?? "",
     location: office.location ?? "", head_name: office.head_name ?? "",
-    head_phone: office.head_phone ?? "", priority_weight: office.priority_weight, active: office.active,
+    head_phone: office.head_phone ?? "", service_level: office.service_level ?? "NORMAL",
+    service_reason: office.service_reason ?? "", priority_weight: office.priority_weight, active: office.active,
   } : blank);
   const zones = useZones();
   const qc = useQueryClient();
   const toast = useToast();
   const save = useMutation({
     mutationFn: () => {
-      const body = { ...f, zone_id: f.zone_id || null, location: f.location || null, head_name: f.head_name || null, head_phone: f.head_phone || null };
+      const body = {
+        ...f,
+        zone_id: f.zone_id || null,
+        location: f.location || null,
+        head_name: f.head_name || null,
+        head_phone: f.head_phone || null,
+        service_reason: f.service_reason.trim() || null,
+      };
       if (office) {
         const { code: _code, ...patch } = body;
         return api<Office>(`/admin/offices/${office.id}`, { method: "PATCH", json: patch });
@@ -147,7 +179,26 @@ function OfficeModal({ office, onClose }: { office: Office | null; onClose: () =
           <Field label="Jefe / responsable">{(id) => <Input id={id} {...bind("head_name")} maxLength={120} />}</Field>
           <Field label="Teléfono / anexo">{(id) => <Input id={id} {...bind("head_phone")} maxLength={20} />}</Field>
         </div>
-        <Field label={`Peso de prioridad: ${f.priority_weight.toFixed(1)}`} hint="Mayor a 1 para oficinas de atención al público o recaudación.">
+        <Field label="Perfil de servicio" hint="El triaje local usa este valor para elevar la prioridad de oficinas sensibles.">
+          {(id) => (
+            <Select
+              id={id}
+              value={f.service_level}
+              onChange={(e) => {
+                const level = e.target.value as OfficeServiceLevel;
+                setF((s) => ({ ...s, service_level: level, priority_weight: SERVICE_LEVEL_WEIGHT[level] }));
+              }}
+            >
+              <option value="NORMAL">Normal</option>
+              <option value="ATENCION_PUBLICO">Atención al público</option>
+              <option value="SERVICIO_CRITICO">Servicio crítico</option>
+            </Select>
+          )}
+        </Field>
+        <Field label="Motivo / función" hint="Ejemplos: Mesa de Partes, Caja, atención tributaria, continuidad de servicio.">
+          {(id) => <Input id={id} {...bind("service_reason")} maxLength={160} placeholder="Ej. Mesa de Partes - recepción de expedientes" />}
+        </Field>
+        <Field label={`Peso de prioridad IA: ${f.priority_weight.toFixed(2)}`} hint="Se ajusta al elegir el perfil; puede afinarse manualmente si TI lo necesita.">
           {(id) => <input id={id} type="range" min={0.5} max={2} step={0.1} {...bind("priority_weight")} className="accent-casma" />}
         </Field>
         {office && (
