@@ -7,10 +7,17 @@ import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, ErrorBox, PriorityBadge, Spinner, StatusBadge } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORY_LABEL, EQUIPMENT_LABEL, EQUIPMENT_STATUS_LABEL, fmtDateTime } from "../../lib/labels";
-import type { MunicipalUser, MunicipalUserProfile, OfficeProfile, Page, Ticket, ZoneProfile } from "../../lib/types";
+import type { MunicipalUser, MunicipalUserProfile, OfficeProfile, OfficeServiceLevel, Page, Ticket, ZoneProfile } from "../../lib/types";
 import { useIsAdmin } from "./hooks";
 
 type ProfileKind = "zona" | "oficina" | "usuario";
+
+const SERVICE_LEVEL_LABEL: Record<OfficeServiceLevel, string> = {
+  NORMAL: "Normal",
+  ATENCION_PUBLICO: "Atención al público",
+  SERVICIO_CRITICO: "Servicio crítico",
+};
+
 
 export function OrganizationProfilePage({ kind }: { kind: ProfileKind }) {
   const { id } = useParams();
@@ -84,14 +91,20 @@ function ZoneProfileView({ data }: { data: ZoneProfile }) {
                   <p className="font-bold">{office.name}</p>
                   <p className="text-sm text-tenue">{office.code}{office.location ? ` · ${office.location}` : ""}</p>
                 </div>
-                {!office.active && <Badge className="border-linea bg-papel text-tenue">Inactiva</Badge>}
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className={office.service_level === "SERVICIO_CRITICO" ? "border-alerta/30 bg-alerta-claro text-alerta" : office.service_level === "ATENCION_PUBLICO" ? "border-sol/40 bg-sol-claro" : "border-linea bg-papel text-tenue"}>
+                    {SERVICE_LEVEL_LABEL[office.service_level]}
+                  </Badge>
+                  {!office.active && <Badge className="border-linea bg-papel text-tenue">Inactiva</Badge>}
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
                 <MiniMetric label="Usuarios" value={office.user_count} />
                 <MiniMetric label="Equipos" value={office.equipment_count} />
                 <MiniMetric label="Incidencias" value={office.ticket_count} />
               </div>
-              {office.head_name && <p className="mt-3 text-sm text-tenue">Responsable: <strong className="text-tinta">{office.head_name}</strong></p>}
+              {office.service_reason && <p className="mt-3 text-xs text-tenue">Función prioritaria: <strong className="text-tinta">{office.service_reason}</strong></p>}
+              {office.head_name && <p className="mt-1 text-sm text-tenue">Responsable: <strong className="text-tinta">{office.head_name}</strong></p>}
             </button>
           ))}
         </div>
@@ -124,10 +137,11 @@ function OfficeProfileView({ data }: { data: OfficeProfile }) {
         <Metric label="Incidencias" value={ticket_count} icon={<ClipboardList />} />
       </div>
 
-      <Card className="grid gap-3 p-4 text-sm sm:grid-cols-3">
+      <Card className="grid gap-3 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Info label="Ubicación" value={office.location} />
         <Info label="Jefe / responsable" value={office.head_name} />
-        <Info label="Teléfono / anexo" value={office.head_phone} />
+        <Info label="Perfil de servicio" value={SERVICE_LEVEL_LABEL[office.service_level]} />
+        <Info label="Motivo de criticidad" value={office.service_reason} />
       </Card>
 
       <section>
