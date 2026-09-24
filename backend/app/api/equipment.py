@@ -16,6 +16,7 @@ from app.ai.engine import equipment_row, get_engine, load_ticket_rows
 from app.api.deps import parse_id, require_admin, require_staff
 from app.core.config import get_settings
 from app.core.timeutil import utcnow
+from app.db import next_sequence
 from app.models import Device, Equipment, Office, StaffUser, Ticket
 from app.models.enums import EquipmentStatus, EquipmentType
 from app.schemas.admin import EquipmentIn, EquipmentOut
@@ -69,9 +70,6 @@ _HEADER_ALIASES = {
     "tipo_equipo": "tipo",
     "marca": "marca",
     "modelo": "modelo",
-    "numero_serie": "numero_serie",
-    "n_serie": "numero_serie",
-    "serie": "numero_serie",
     "ip": "ip",
     "direccion_ip": "ip",
     "hostname": "hostname",
@@ -93,24 +91,28 @@ _HEADER_ALIASES = {
     "notas": "notas",
 }
 
+_SUPPORTED_EQUIPMENT_TYPES = {
+    EquipmentType.CPU,
+    EquipmentType.MONITOR,
+    EquipmentType.MOUSE,
+    EquipmentType.TECLADO,
+    EquipmentType.IMPRESORA,
+    EquipmentType.LAPTOP,
+}
+
 _EQUIPMENT_TYPE_ALIASES = {
-    "COMPUTADORA": EquipmentType.PC,
-    "COMPUTADOR": EquipmentType.PC,
-    "DESKTOP": EquipmentType.PC,
-    "PC": EquipmentType.PC,
+    "CPU": EquipmentType.CPU,
+    "COMPUTADORA": EquipmentType.CPU,
+    "COMPUTADOR": EquipmentType.CPU,
+    "DESKTOP": EquipmentType.CPU,
+    "PC": EquipmentType.CPU,
     "LAPTOP": EquipmentType.LAPTOP,
     "PORTATIL": EquipmentType.LAPTOP,
     "IMPRESORA": EquipmentType.IMPRESORA,
     "MONITOR": EquipmentType.MONITOR,
-    "ESCANER": EquipmentType.ESCANER,
-    "SCANNER": EquipmentType.ESCANER,
-    "SWITCH": EquipmentType.SWITCH_ROUTER,
-    "ROUTER": EquipmentType.SWITCH_ROUTER,
-    "SWITCH_ROUTER": EquipmentType.SWITCH_ROUTER,
-    "SERVIDOR": EquipmentType.SERVIDOR,
-    "TELEFONO_IP": EquipmentType.TELEFONO_IP,
-    "TELEFONO IP": EquipmentType.TELEFONO_IP,
-    "OTRO": EquipmentType.OTRO,
+    "MOUSE": EquipmentType.MOUSE,
+    "RATON": EquipmentType.MOUSE,
+    "TECLADO": EquipmentType.TECLADO,
 }
 
 _STATUS_ALIASES = {
@@ -164,10 +166,24 @@ def _equipment_type(value) -> EquipmentType:
     if key in _EQUIPMENT_TYPE_ALIASES:
         return _EQUIPMENT_TYPE_ALIASES[key]
     try:
-        return EquipmentType(key)
+        equipment_type = EquipmentType(key)
     except ValueError:
-        allowed = ", ".join(t.value for t in EquipmentType)
-        raise ValueError(f"Tipo de equipo no válido. Valores permitidos: {allowed}.")
+        equipment_type = None
+    if equipment_type not in _SUPPORTED_EQUIPMENT_TYPES:
+        allowed = ", ".join(t.value for t in sorted(_SUPPORTED_EQUIPMENT_TYPES, key=lambda item: item.value))
+        raise ValueError(f"Tipo de equipo no válido para el Área TI. Valores permitidos: {allowed}.")
+    return equipment_type
+
+
+def _ensure_supported_type(equipment_type: EquipmentType) -> None:
+    if equipment_type not in _SUPPORTED_EQUIPMENT_TYPES:
+        allowed = ", ".join(t.value for t in sorted(_SUPPORTED_EQUIPMENT_TYPES, key=lambda item: item.value))
+        raise HTTPException(status_code=422, detail=f"Tipo de equipo no permitido. Use: {allowed}.")
+
+
+async def _next_inventory_id() -> str:
+    seq = await next_sequence("equipment-ti")
+    return f"TI-{seq:06d}"
 
 
 def _equipment_status(value) -> EquipmentStatus:
@@ -213,7 +229,7 @@ async def list_equipment(
         query["type"] = type.value
     if q and q.strip():
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
-        query["$or"] = [{"patrimonial_code": rx}, {"brand": rx}, {"model": rx}, {"ip_address": rx}, {"hostname": rx}, {"serial_number": rx}]
+        query["$or"] = [{"inventory_id": rx}, {"patrimonial_code": rx}, {"brand": rx}, {"model": rx}, {"ip_address": rx}, {"hostname": rx}]
     offices = {o.id: o.name for o in await Office.find_all().to_list()}
     items = await Equipment.find(query).sort("patrimonial_code").limit(1000).to_list()
     return [equipment_out(e, offices.get(e.office_id)) for e in items]
@@ -221,8 +237,10 @@ async def list_equipment(
 
 @router.post("", response_model=EquipmentOut, status_code=201)
 async def create_equipment(request: Request, body: EquipmentIn, user: StaffUser = Depends(require_staff)):
+    _ensure_supported_type(body.type)
     data = body.model_dump()
     data["office_id"] = await _validate_office(body.office_id)
+    data["inventory_id"] = await _next_inventory_id()
     eq = Equipment(**data)
     try:
         await eq.insert()
@@ -361,12 +379,12 @@ async def import_equipment_xlsx(
                     raise ValueError("Criticidad: use 1, 2 o 3.")
 
                 equipment = Equipment(
+                    inventory_id=await _next_inventory_id(),
                     patrimonial_code=code,
                     codigo_patrimonial=code,
                     type=_equipment_type(value_at(row, "tipo")),
                     brand=_cell_text(value_at(row, "marca")) or None,
                     model=_cell_text(value_at(row, "modelo")) or None,
-                    serial_number=_cell_text(value_at(row, "numero_serie")) or None,
                     hostname=_cell_text(value_at(row, "hostname")) or None,
                     ip_address=ip_value,
                     mac_address=_cell_text(value_at(row, "mac")) or None,
@@ -442,6 +460,7 @@ async def equipment_detail(equipment_id: str, _: StaffUser = Depends(require_sta
 
 @router.put("/{equipment_id}", response_model=EquipmentOut)
 async def update_equipment(request: Request, equipment_id: str, body: EquipmentIn, user: StaffUser = Depends(require_staff)):
+    _ensure_supported_type(body.type)
     eq = await _get(equipment_id)
     data = body.model_dump()
     data["office_id"] = await _validate_office(body.office_id)
