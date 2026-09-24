@@ -17,13 +17,14 @@ from app.models.enums import (
 )
 
 
-class ResolutionStatus(StrEnum):
-    RESUELTO = "Resuelto"
-    REPARADO = "Resuelto - Reparado"
-    REEMPLAZADO = "Resuelto - Reemplazado"
-    OBSOLETO = "Resuelto - Obsoleto"
-    BAJA_PATRIMONIAL = "Resuelto - Baja patrimonial"
-    DERIVADO = "Resuelto - Derivado"
+class ResolutionType(StrEnum):
+    SOLUCIONADO = "SOLUCIONADO"
+    REPARADO = "REPARADO"
+    REEMPLAZADO = "REEMPLAZADO"
+    OBSOLETO = "OBSOLETO"
+    IRREPARABLE = "IRREPARABLE"
+    BAJA_PATRIMONIAL = "BAJA_PATRIMONIAL"
+    DERIVADO = "DERIVADO"
 
 
 class AttachmentMeta(BaseModel):
@@ -86,9 +87,28 @@ class Resolution(BaseModel):
     notes: str
     resolved_by_id: str
     resolved_by_name: str
-    status: ResolutionStatus = ResolutionStatus.RESUELTO
+    tipo_resolucion: ResolutionType = ResolutionType.SOLUCIONADO
     resolved_at: datetime = Field(default_factory=utcnow)
     confirmed_by_user: bool | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_resolution_status(cls, data):
+        """Convierte el campo temporal 'status' usado en versiones anteriores."""
+        if not isinstance(data, dict) or "tipo_resolucion" in data or "status" not in data:
+            return data
+        values = dict(data)
+        legacy = values.pop("status")
+        mapping = {
+            "Resuelto": ResolutionType.SOLUCIONADO,
+            "Resuelto - Reparado": ResolutionType.REPARADO,
+            "Resuelto - Reemplazado": ResolutionType.REEMPLAZADO,
+            "Resuelto - Obsoleto": ResolutionType.OBSOLETO,
+            "Resuelto - Baja patrimonial": ResolutionType.BAJA_PATRIMONIAL,
+            "Resuelto - Derivado": ResolutionType.DERIVADO,
+        }
+        values["tipo_resolucion"] = mapping.get(legacy, ResolutionType.SOLUCIONADO)
+        return values
 
 
 class Ticket(Document):
