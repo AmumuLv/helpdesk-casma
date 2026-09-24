@@ -1,6 +1,7 @@
 import re
 from collections import Counter
 from datetime import datetime, time, timedelta
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -142,6 +143,7 @@ async def create_by_staff(
     contact_phone: str | None = Form(None, max_length=20),
     category: TicketCategory | None = Form(None),
     priority: TicketPriority | None = Form(None),
+    hierarchy_level: Literal["USUARIO", "COORDINADOR", "JEFE", "GERENTE", "DIRECTOR", "ALCALDE"] = Form("USUARIO"),
     technician_id: str | None = Form(None),
     photo: UploadFile | None = File(None),
     user: StaffUser = Depends(require_staff),
@@ -152,6 +154,7 @@ async def create_by_staff(
         office=office, channel=TicketChannel.TELEFONO, description=description, quick_issue=quick_issue, subject=subject,
         equipment=equipment, reporter_name=reporter_name, contact_phone=contact_phone,
         photo=photo if photo and photo.filename else None, staff=user, category=category, priority=priority,
+        hierarchy_level=hierarchy_level,
     ))
     if technician_id and (tid := parse_id(technician_id)):
         ticket = await ticket_service.assign(ticket, user, tid)
