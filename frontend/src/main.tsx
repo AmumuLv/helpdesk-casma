@@ -51,6 +51,13 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
     const message = event.data;
     if (!message?.type) return;
 
+    if ((message.type === "OFFLINE_READ_CACHE_READY" || message.type === "OFFLINE_READ_USED") && message.cachedAt) {
+      localStorage.setItem("helpdesk_offline_cached_at", String(message.cachedAt));
+    }
+    if (message.type === "OFFLINE_READ_CACHE_CLEARED") {
+      localStorage.removeItem("helpdesk_offline_cached_at");
+    }
+
     if (message.type === "OFFLINE_REQUEST_SENT") {
       queryClient.invalidateQueries({ queryKey: ["office-home"] });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
