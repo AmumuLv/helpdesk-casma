@@ -11,6 +11,32 @@ import { useIsAdmin, useMunicipalUsers, useOfficeLookup } from "./hooks";
 import { PageHeader } from "./PageHeader";
 
 type Detail = { equipment: Equipment; risk: number | null; risk_factors: string[]; tickets: Ticket[] };
+type RetirementHistoryItem = {
+  number: string;
+  created_at: string;
+  subject: string;
+  status: string;
+  resolution_type: string | null;
+  resolution_notes: string | null;
+};
+
+type RetirementReport = {
+  generated_at: string;
+  equipment: Equipment;
+  total_incidents: number;
+  resolved_incidents: number;
+  incidents_365d: number;
+  incidents_90d: number;
+  resolution_counts: Record<string, number>;
+  risk_30d: number | null;
+  risk_factors: string[];
+  indicators: string[];
+  recommendation: "EVALUAR_BAJA_PATRIMONIAL" | "REQUIERE_EVALUACION_TECNICA" | "SIN_EVIDENCIA_SUFICIENTE_PARA_BAJA";
+  technical_conclusion: string;
+  disclaimer: string;
+  history: RetirementHistoryItem[];
+};
+
 
 export function EquipmentPage() {
   const offices = useOfficeLookup();
@@ -303,6 +329,12 @@ const EquipmentStatusBadge = ({ status }: { status: EquipmentStatus }) => (
 function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: () => void; onEdit: (e: Equipment) => void }) {
   const detail = useQuery({ queryKey: ["equipment-detail", id], queryFn: () => api<Detail>(`/equipment/${id}`), enabled: !!id });
   const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [showRetirement, setShowRetirement] = useState(false);
+  const retirement = useQuery({
+    queryKey: ["equipment-retirement", id],
+    queryFn: () => api<RetirementReport>(`/equipment/${id}/retirement-report`),
+    enabled: !!id && showRetirement,
+  });
   useEffect(() => {
     if (!id) return;
     let url: string | null = null;
@@ -312,6 +344,78 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
     return () => { if (url) URL.revokeObjectURL(url); setQrUrl(null); };
   }, [id]);
   const d = detail.data;
+
+  const printRetirementReport = () => {
+    const report = retirement.data;
+    if (!report) return;
+    const w = window.open("", "_blank", "width=900,height=760");
+    if (!w) return;
+    const doc = w.document;
+    doc.title = `Sustento técnico - ${report.equipment.patrimonial_code}`;
+    const style = doc.createElement("style");
+    style.textContent = "body{font-family:Arial,sans-serif;color:#111827;margin:32px}h1,h2{color:#13233B}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #d1d5db;padding:7px;text-align:left;font-size:12px}th{background:#f3f4f6}.muted{color:#6b7280;font-size:12px}.box{border:1px solid #d1d5db;border-radius:10px;padding:14px;margin:12px 0}ul{padding-left:20px}";
+    doc.head.appendChild(style);
+
+    const add = (tag: string, text: string, className?: string) => {
+      const el = doc.createElement(tag);
+      el.textContent = text;
+      if (className) el.className = className;
+      doc.body.appendChild(el);
+      return el;
+    };
+
+    add("h1", "Sustento técnico para evaluación patrimonial");
+    add("p", "Área de Tecnologías de la Información - Municipalidad Provincial de Casma", "muted");
+    add("p", `Generado: ${fmtDateTime(report.generated_at)}`, "muted");
+    add("h2", `${report.equipment.inventory_id ?? "ID TI pendiente"} · Patrimonial ${report.equipment.patrimonial_code}`);
+    add("p", `Equipo: ${EQUIPMENT_LABEL[report.equipment.type]} · ${[report.equipment.brand, report.equipment.model].filter(Boolean).join(" ") || "Sin marca/modelo"}`);
+    add("p", `Zona / Oficina: ${report.equipment.zone_name ?? "Sin zona"} / ${report.equipment.office_name ?? "Sin oficina"}`);
+    add("p", `Responsable: ${report.equipment.responsible_name ?? "Sin responsable"}`);
+
+    add("h2", "Conclusión técnica");
+    add("p", report.technical_conclusion);
+    if (report.indicators.length) {
+      add("h2", "Indicadores");
+      const ul = doc.createElement("ul");
+      report.indicators.forEach((item) => {
+        const li = doc.createElement("li");
+        li.textContent = item;
+        ul.appendChild(li);
+      });
+      doc.body.appendChild(ul);
+    }
+
+    add("h2", "Resumen de incidencias");
+    add("p", `Total: ${report.total_incidents} · Resueltas: ${report.resolved_incidents} · Últimos 365 días: ${report.incidents_365d} · Últimos 90 días: ${report.incidents_90d}`);
+
+    const table = doc.createElement("table");
+    const thead = doc.createElement("thead");
+    const headRow = doc.createElement("tr");
+    ["Fecha", "Ticket", "Incidencia", "Resolución", "Detalle"].forEach((label) => {
+      const th = doc.createElement("th"); th.textContent = label; headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = doc.createElement("tbody");
+    report.history.forEach((item) => {
+      const row = doc.createElement("tr");
+      [
+        fmtDateTime(item.created_at),
+        item.number,
+        item.subject,
+        item.resolution_type?.replaceAll("_", " ") ?? "Pendiente",
+        item.resolution_notes ?? "–",
+      ].forEach((value) => {
+        const td = doc.createElement("td"); td.textContent = value; row.appendChild(td);
+      });
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    doc.body.appendChild(table);
+    add("p", report.disclaimer, "muted");
+    w.focus();
+    w.print();
+  };
 
   const printLabel = () => {
     if (!d || !qrUrl) return;
@@ -372,6 +476,46 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
                 </ol>
               )}
             </section>
+            {showRetirement && (
+              <section className="flex flex-col gap-3 rounded-2xl border border-linea p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-bold">Sustento técnico para evaluación patrimonial</h3>
+                  {retirement.data && <Button size="sm" variant="secondary" onClick={printRetirementReport}><Printer className="size-4" /> Imprimir sustento</Button>}
+                </div>
+                {retirement.isLoading ? <Spinner label="Analizando historial patrimonial" /> : retirement.error ? (
+                  <ErrorBox message={errorMessage(retirement.error)} />
+                ) : retirement.data ? (
+                  <>
+                    <Badge className={cx(
+                      retirement.data.recommendation === "EVALUAR_BAJA_PATRIMONIAL"
+                        ? "border-alerta/40 bg-alerta-claro text-alerta"
+                        : retirement.data.recommendation === "REQUIERE_EVALUACION_TECNICA"
+                          ? "border-sol/40 bg-sol-claro text-tinta"
+                          : "border-hecho/30 bg-hecho-claro text-hecho",
+                    )}>
+                      {retirement.data.recommendation === "EVALUAR_BAJA_PATRIMONIAL"
+                        ? "Evaluar baja patrimonial"
+                        : retirement.data.recommendation === "REQUIERE_EVALUACION_TECNICA"
+                          ? "Requiere evaluación técnica"
+                          : "Sin evidencia suficiente para baja"}
+                    </Badge>
+                    <p className="text-sm">{retirement.data.technical_conclusion}</p>
+                    <div className="grid gap-2 sm:grid-cols-4">
+                      <MiniEvidence label="Incidencias" value={retirement.data.total_incidents} />
+                      <MiniEvidence label="Resueltas" value={retirement.data.resolved_incidents} />
+                      <MiniEvidence label="365 días" value={retirement.data.incidents_365d} />
+                      <MiniEvidence label="Riesgo 30d" value={retirement.data.risk_30d != null ? pct(retirement.data.risk_30d) : "–"} />
+                    </div>
+                    {retirement.data.indicators.length > 0 && (
+                      <ul className="list-disc pl-5 text-sm">
+                        {retirement.data.indicators.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    )}
+                    <p className="text-xs text-tenue">{retirement.data.disclaimer}</p>
+                  </>
+                ) : null}
+              </section>
+            )}
           </div>
           <aside className="flex flex-col gap-4">
             <div className="rounded-xl bg-tinta p-4 text-white">
@@ -385,6 +529,9 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
               <p className="text-center text-xs text-tenue">Pegue esta etiqueta en el equipo: al escanearla se abre el reporte con el equipo ya elegido.</p>
               <Button size="sm" variant="secondary" onClick={printLabel} disabled={!qrUrl}><Printer className="size-4" /> Imprimir etiqueta</Button>
             </div>
+            <Button variant="secondary" onClick={() => setShowRetirement((value) => !value)}>
+              {showRetirement ? "Ocultar sustento" : "Sustento de baja"}
+            </Button>
             <Button variant="secondary" onClick={() => onEdit(d.equipment)}>Editar equipo</Button>
           </aside>
         </div>
@@ -392,6 +539,13 @@ function EquipmentDetail({ id, onClose, onEdit }: { id: string | null; onClose: 
     </Modal>
   );
 }
+
+const MiniEvidence = ({ label, value }: { label: string; value: string | number }) => (
+  <div className="rounded-xl bg-papel p-3 text-center text-sm">
+    <strong className="block text-lg">{value}</strong>
+    <span className="text-tenue">{label}</span>
+  </div>
+);
 
 type Form = {
   patrimonial_code: string; type: EquipmentType; area: string; device_label: string; brand: string; model: string;
