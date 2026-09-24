@@ -12,6 +12,7 @@ class EquipmentSpecs(BaseModel):
     cpu: str | None = None
     ram_gb: float | None = None
     storage_gb: float | None = None
+    screen_size_inches: float | None = None
     os: str | None = None
 
 
@@ -24,6 +25,10 @@ class Equipment(Document):
     # patrimonial_code para no romper clientes ni registros existentes.
     codigo_patrimonial: Annotated[str | None, Indexed(unique=True, sparse=True)] = None
     type: EquipmentType
+    # Área o subárea donde físicamente está asignado el activo.
+    area: str | None = None
+    # Etiqueta descriptiva del dispositivo (ej. "CPU de Catastro", "Monitor principal").
+    device_label: str | None = None
     brand: str | None = None
     model: str | None = None
     # Campo legado; los nuevos registros usan Código patrimonial + ID TI.
@@ -34,6 +39,10 @@ class Equipment(Document):
     office_id: Annotated[PydanticObjectId | None, Indexed()] = None
     # Usuario responsable dentro de la oficina: Zona > Oficina > Usuario.
     responsable_id: Annotated[PydanticObjectId | None, Indexed()] = None
+    responsible_name: Annotated[str | None, Indexed()] = None
+    responsible_type: str = "USUARIO"
+    # Propiedad del activo: municipal, tercero, préstamo, etc.
+    property_type: str | None = None
     specs: EquipmentSpecs = Field(default_factory=EquipmentSpecs)
     acquired_on: datetime | None = None
     warranty_until: datetime | None = None
