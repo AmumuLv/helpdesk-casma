@@ -84,6 +84,13 @@ export function StaffLayout() {
           body: "Debe volver a iniciar sesión para enviar los cambios pendientes.",
         });
       }
+      if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_USER_MISMATCH") {
+        toast({
+          tone: "danger",
+          title: "Cambios pendientes de otro técnico",
+          body: "Estas acciones solo se sincronizarán cuando vuelva a iniciar sesión el técnico que las realizó.",
+        });
+      }
     };
 
     window.addEventListener("online", onOnline);
