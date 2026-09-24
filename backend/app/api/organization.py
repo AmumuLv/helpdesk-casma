@@ -1,21 +1,28 @@
 import re
 from collections import Counter
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from pymongo.errors import DuplicateKeyError
 
 from app.api.deps import parse_id, require_admin, require_staff
 from app.core.timeutil import utcnow
-from app.models import Equipment, MunicipalUser, Office, StaffUser, Zone
+from app.models import Equipment, MunicipalUser, Office, StaffUser, Ticket, Zone
 from app.schemas.organization import (
     MunicipalUserIn,
     MunicipalUserOut,
     MunicipalUserPatch,
+    MunicipalUserProfileOut,
+    OfficeProfileOut,
+    OrganizationOfficeSummary,
     ZoneIn,
     ZoneOut,
     ZonePatch,
+    ZoneProfileOut,
 )
 from app.services import audit
+from app.services.serializers import equipment_out, office_out, ticket_out
+from app.services.storage import save_image, stored_image_path
 
 router = APIRouter(prefix="/organization", tags=["organización municipal"])
 
@@ -108,7 +115,7 @@ async def _user_outs(users: list[MunicipalUser]) -> list[MunicipalUserOut]:
                 job_title=user.job_title,
                 email=user.email,
                 phone=user.phone,
-                photo_url=None,
+                photo_url=f"/api/organization/users/{user.id}/photo" if user.photo_path else None,
                 active=user.active,
                 equipment_count=equipment_counts.get(str(user.id), 0),
                 created_at=user.created_at,
@@ -125,6 +132,178 @@ async def list_zones(
 ):
     query = {} if active is None else {"active": active}
     return await _zone_outs(await Zone.find(query).sort("name").to_list())
+
+
+@router.get("/zones/{zone_id}/profile", response_model=ZoneProfileOut)
+async def zone_profile(zone_id: str, _: StaffUser = Depends(require_staff)):
+    zone = await _zone(zone_id)
+    offices = await Office.find({"zone_id": zone.id}).sort("name").to_list()
+    office_ids = [office.id for office in offices]
+
+    users = await MunicipalUser.get_pymongo_collection().find(
+        {"office_id": {"$in": office_ids}},
+        {"office_id": 1},
+    ).to_list(None) if office_ids else []
+    equipment = await Equipment.get_pymongo_collection().find(
+        {"office_id": {"$in": office_ids}},
+        {"office_id": 1},
+    ).to_list(None) if office_ids else []
+    ticket_docs = await Ticket.get_pymongo_collection().find(
+        {"office_id": {"$in": office_ids}, "deleted_at": None},
+        {"office_id": 1},
+    ).to_list(None) if office_ids else []
+
+    user_counts = Counter(str(doc.get("office_id")) for doc in users)
+    equipment_counts = Counter(str(doc.get("office_id")) for doc in equipment)
+    ticket_counts = Counter(str(doc.get("office_id")) for doc in ticket_docs)
+    recent_tickets = await Ticket.find(
+        {"office_id": {"$in": office_ids}, "deleted_at": None}
+    ).sort(-Ticket.created_at).limit(100).to_list() if office_ids else []
+
+    return ZoneProfileOut(
+        zone=(await _zone_outs([zone]))[0],
+        offices=[
+            OrganizationOfficeSummary(
+                id=str(office.id),
+                code=office.code,
+                name=office.name,
+                location=office.location,
+                head_name=office.head_name,
+                active=office.active,
+                user_count=user_counts.get(str(office.id), 0),
+                equipment_count=equipment_counts.get(str(office.id), 0),
+                ticket_count=ticket_counts.get(str(office.id), 0),
+            )
+            for office in offices
+        ],
+        recent_tickets=[ticket_out(ticket) for ticket in recent_tickets],
+    )
+
+
+@router.get("/offices/{office_id}/profile", response_model=OfficeProfileOut)
+async def office_profile(office_id: str, _: StaffUser = Depends(require_staff)):
+    office = await _office(office_id)
+    users = await MunicipalUser.find({"office_id": office.id}).sort("full_name").to_list()
+    equipment = await Equipment.find({"office_id": office.id}).sort("patrimonial_code").to_list()
+    tickets = await Ticket.find({"office_id": office.id, "deleted_at": None}).sort(-Ticket.created_at).limit(200).to_list()
+    ticket_count = await Ticket.find({"office_id": office.id, "deleted_at": None}).count()
+
+    return OfficeProfileOut(
+        office=office_out(office),
+        users=await _user_outs(users),
+        equipment=[
+            equipment_out(
+                item,
+                office.name,
+                str(office.zone_id) if office.zone_id else None,
+                office.zone_name,
+            )
+            for item in equipment
+        ],
+        recent_tickets=[ticket_out(ticket) for ticket in tickets],
+        ticket_count=ticket_count,
+    )
+
+
+@router.get("/users/{user_id}/profile", response_model=MunicipalUserProfileOut)
+async def municipal_user_profile(user_id: str, _: StaffUser = Depends(require_staff)):
+    user = await _municipal_user(user_id)
+    office = await Office.get(user.office_id)
+    equipment = await Equipment.find({"responsable_id": user.id}).sort("patrimonial_code").to_list()
+    equipment_ids = [item.id for item in equipment]
+
+    ticket_query: dict = {"deleted_at": None}
+    relations = [{"user_id": user.id}]
+    if equipment_ids:
+        relations.append({"equipment_id": {"$in": equipment_ids}})
+    ticket_query["$or"] = relations
+
+    tickets = await Ticket.find(ticket_query).sort(-Ticket.created_at).limit(200).to_list()
+    ticket_count = await Ticket.find(ticket_query).count()
+
+    return MunicipalUserProfileOut(
+        user=(await _user_outs([user]))[0],
+        equipment=[
+            equipment_out(
+                item,
+                office.name if office else None,
+                str(office.zone_id) if office and office.zone_id else None,
+                office.zone_name if office else None,
+            )
+            for item in equipment
+        ],
+        recent_tickets=[ticket_out(ticket) for ticket in tickets],
+        ticket_count=ticket_count,
+    )
+
+
+@router.get("/users/{user_id}/photo")
+async def municipal_user_photo(user_id: str, _: StaffUser = Depends(require_staff)):
+    user = await _municipal_user(user_id)
+    if not user.photo_path:
+        raise HTTPException(status_code=404, detail="El usuario no tiene fotografía.")
+    path = stored_image_path(user.photo_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Fotografía no encontrada.")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.post("/users/{user_id}/photo", response_model=MunicipalUserOut)
+async def upload_municipal_user_photo(
+    request: Request,
+    user_id: str,
+    file: UploadFile = File(...),
+    admin: StaffUser = Depends(require_admin),
+):
+    user = await _municipal_user(user_id)
+    meta = await save_image(file)
+    old_path = user.photo_path
+    user.photo_path = meta.path
+    user.updated_at = utcnow()
+    await user.save()
+
+    if old_path:
+        try:
+            old_file = stored_image_path(old_path)
+            if old_file.exists():
+                old_file.unlink()
+        except HTTPException:
+            pass
+
+    await audit.record(
+        request, "staff", "municipal_user.photo_updated",
+        actor_id=str(admin.id), actor_name=admin.full_name,
+        target_type="municipal_user", target_id=str(user.id),
+    )
+    return (await _user_outs([user]))[0]
+
+
+@router.delete("/users/{user_id}/photo", response_model=MunicipalUserOut)
+async def delete_municipal_user_photo(
+    request: Request,
+    user_id: str,
+    admin: StaffUser = Depends(require_admin),
+):
+    user = await _municipal_user(user_id)
+    old_path = user.photo_path
+    user.photo_path = None
+    user.updated_at = utcnow()
+    await user.save()
+
+    if old_path:
+        try:
+            old_file = stored_image_path(old_path)
+            if old_file.exists():
+                old_file.unlink()
+        except HTTPException:
+            pass
+
+    await audit.record(
+        request, "staff", "municipal_user.photo_deleted",
+        actor_id=str(admin.id), actor_name=admin.full_name,
+        target_type="municipal_user", target_id=str(user.id),
+    )
+    return (await _user_outs([user]))[0]
 
 
 @router.post("/zones", response_model=ZoneOut, status_code=201)
