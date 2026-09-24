@@ -427,10 +427,10 @@ let lastWarmAt = 0;
 
 async function warmPrivateData(force = false) {
   if (!force && Date.now() - lastWarmAt < WARM_THROTTLE_MS) return;
-  lastWarmAt = Date.now();
 
   const meResponse = await fetchAndCachePrivate("/api/auth/me").catch(() => null);
   if (!meResponse?.ok) return;
+  lastWarmAt = Date.now();
 
   await Promise.allSettled([
     buildTicketSnapshot(),
@@ -577,6 +577,135 @@ async function synthesizeEquipment(url) {
   return jsonOfflineResponse(items, base.cachedAt, url.href);
 }
 
+function oldestCachedAt(...values) {
+  const valid = values.filter((value) => Number.isFinite(value) && value > 0);
+  return valid.length ? Math.min(...valid) : Date.now();
+}
+
+function officeProfileShape(office) {
+  return {
+    id: office.id,
+    code: office.code,
+    name: office.name,
+    username: office.username || "",
+    zone_id: office.zone_id ?? null,
+    zone_name: office.zone_name ?? null,
+    location: office.location ?? null,
+    head_name: office.head_name ?? null,
+    head_phone: office.head_phone ?? null,
+    service_level: office.service_level || "NORMAL",
+    service_reason: office.service_reason ?? null,
+    priority_weight: office.priority_weight ?? 1,
+    active: office.active !== false,
+    devices_approved: office.devices_approved ?? 0,
+    devices_pending: office.devices_pending ?? 0,
+    created_at: office.created_at || new Date(0).toISOString(),
+  };
+}
+
+async function synthesizeOrganizationProfile(url) {
+  const zoneMatch = url.pathname.match(/^\/api\/organization\/zones\/([^/]+)\/profile$/);
+  const officeMatch = url.pathname.match(/^\/api\/organization\/offices\/([^/]+)\/profile$/);
+  const userMatch = url.pathname.match(/^\/api\/organization\/users\/([^/]+)\/profile$/);
+  if (!zoneMatch && !officeMatch && !userMatch) return null;
+
+  const [zones, offices, users, equipment, tickets, adminOffices] = await Promise.all([
+    cachedJson("/api/organization/zones"),
+    cachedJson("/api/lookup/offices"),
+    cachedJson("/api/organization/users"),
+    cachedJson("/api/equipment"),
+    cachedJson(TICKET_SNAPSHOT_URL),
+    cachedJson("/api/admin/offices"),
+  ]);
+
+  if (!offices?.data || !users?.data || !equipment?.data || !tickets?.data?.items) return null;
+  const officeRows = Array.isArray(adminOffices?.data) && adminOffices.data.length
+    ? adminOffices.data
+    : offices.data;
+  const cachedAt = oldestCachedAt(
+    zones?.cachedAt,
+    offices.cachedAt,
+    users.cachedAt,
+    equipment.cachedAt,
+    tickets.cachedAt,
+  );
+
+  if (zoneMatch) {
+    const zoneId = zoneMatch[1];
+    const zone = zones?.data?.find((item) => item.id === zoneId);
+    if (!zone) return null;
+    const zoneOffices = officeRows.filter((office) => office.zone_id === zoneId);
+    const officeIds = new Set(zoneOffices.map((office) => office.id));
+    const recentTickets = tickets.data.items
+      .filter((ticket) => officeIds.has(ticket.office_id))
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .slice(0, 100);
+
+    const summaries = zoneOffices.map((office) => ({
+      id: office.id,
+      code: office.code,
+      name: office.name,
+      location: office.location ?? null,
+      head_name: office.head_name ?? null,
+      service_level: office.service_level || "NORMAL",
+      service_reason: office.service_reason ?? null,
+      active: office.active !== false,
+      user_count: users.data.filter((user) => user.office_id === office.id).length,
+      equipment_count: equipment.data.filter((item) => item.office_id === office.id).length,
+      ticket_count: tickets.data.items.filter((ticket) => ticket.office_id === office.id).length,
+    }));
+
+    return jsonOfflineResponse(
+      { zone, offices: summaries, recent_tickets: recentTickets },
+      cachedAt,
+      url.href,
+    );
+  }
+
+  if (officeMatch) {
+    const officeId = officeMatch[1];
+    const office = officeRows.find((item) => item.id === officeId);
+    if (!office) return null;
+    const officeUsers = users.data.filter((user) => user.office_id === officeId);
+    const officeEquipment = equipment.data.filter((item) => item.office_id === officeId);
+    const officeTickets = tickets.data.items
+      .filter((ticket) => ticket.office_id === officeId)
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+
+    return jsonOfflineResponse(
+      {
+        office: officeProfileShape(office),
+        users: officeUsers,
+        equipment: officeEquipment,
+        recent_tickets: officeTickets.slice(0, 200),
+        ticket_count: officeTickets.length,
+      },
+      cachedAt,
+      url.href,
+    );
+  }
+
+  const userId = userMatch[1];
+  const user = users.data.find((item) => item.id === userId);
+  if (!user) return null;
+  const userEquipment = equipment.data.filter((item) => item.responsable_id === userId);
+  const equipmentIds = new Set(userEquipment.map((item) => item.id));
+  const userTickets = tickets.data.items
+    .filter((ticket) => ticket.equipment?.id && equipmentIds.has(ticket.equipment.id))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+
+  return jsonOfflineResponse(
+    {
+      user,
+      equipment: userEquipment,
+      recent_tickets: userTickets.slice(0, 200),
+      ticket_count: userTickets.length,
+    },
+    cachedAt,
+    url.href,
+  );
+}
+
 async function synthesizeOrganizationUsers(url) {
   if (url.pathname !== "/api/organization/users") return null;
   const base = await cachedJson("/api/organization/users");
@@ -622,6 +751,13 @@ async function offlinePrivateFallback(request) {
 
   if (url.pathname.startsWith("/api/equipment")) {
     const response = await synthesizeEquipment(url);
+    if (response) return response;
+  }
+
+  if (
+    /^\/api\/organization\/(zones|offices|users)\/[^/]+\/profile$/.test(url.pathname)
+  ) {
+    const response = await synthesizeOrganizationProfile(url);
     if (response) return response;
   }
 
