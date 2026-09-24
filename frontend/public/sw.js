@@ -115,7 +115,7 @@ async function serializeRequest(request) {
 
 async function queueRequest(request, scope, operationId) {
   const serialized = await serializeRequest(request);
-  const actorId = scope === "staff" ? await currentStaffIdFromCache() : null;
+  const actorId = scope === "staff" ? await lastKnownStaffIdForQueue() : null;
   const item = {
     id: operationId,
     url: request.url,
@@ -494,6 +494,14 @@ async function cachedJson(url) {
 async function currentStaffIdFromCache() {
   const me = await cachedJson("/api/auth/me");
   return me?.data?.kind === "staff" ? me.data.staff?.id ?? null : null;
+}
+
+async function lastKnownStaffIdForQueue() {
+  const cache = await caches.open(PRIVATE_READ_CACHE);
+  const cached = await cache.match(new Request(absoluteUrl("/api/auth/me"), { method: "GET" }));
+  if (!cached) return null;
+  const me = await cached.clone().json().catch(() => null);
+  return me?.kind === "staff" ? me.staff?.id ?? null : null;
 }
 
 async function synthesizeTickets(url) {
