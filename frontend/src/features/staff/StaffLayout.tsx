@@ -28,7 +28,11 @@ export function StaffLayout() {
   const toast = useToast();
   const [online, setOnline] = useState(() => navigator.onLine);
   const [offlinePending, setOfflinePending] = useState(0);
-  const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(null);
+  const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(() => {
+    const value = localStorage.getItem("helpdesk_offline_cached_at");
+    const parsed = value ? Number(value) : 0;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  });
 
   const onEvent = useCallback((e: LiveEvent) => {
     if (e.type === "ticket.created") toast({ tone: e.priority === "ALTA" ? "danger" : "info", title: `Nueva incidencia ${e.number ?? ""}`, body: `${e.office}: ${e.subject}` });
@@ -53,7 +57,7 @@ export function StaffLayout() {
       if (detail?.type === "OFFLINE_QUEUE_CHANGED") {
         setOfflinePending(Number(detail.pending ?? 0));
       }
-      if (detail?.type === "OFFLINE_READ_USED" && detail.cachedAt) {
+      if ((detail?.type === "OFFLINE_READ_USED" || detail?.type === "OFFLINE_READ_CACHE_READY") && detail.cachedAt) {
         setOfflineCachedAt(Number(detail.cachedAt));
       }
       if (detail?.type === "OFFLINE_READ_CACHE_CLEARED") {
