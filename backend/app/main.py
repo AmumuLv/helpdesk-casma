@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.model_dir).mkdir(parents=True, exist_ok=True)
+    Path(settings.backup_dir).mkdir(parents=True, exist_ok=True)
     await db.connect()
     warmup = asyncio.create_task(get_engine().ensure_ready())
     scheduler = None
