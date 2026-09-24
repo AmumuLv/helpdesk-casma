@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Monitor, Plus, Printer, QrCode, Upload } from "lucide-react";
+import { Monitor, Plus, Printer, QrCode, ScanLine, Upload } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "react";
+import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Input, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -23,6 +24,8 @@ export function EquipmentPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<Equipment | "new" | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
+  const [ocrPhoto, setOcrPhoto] = useState<File | null>(null);
 
   const list = useQuery({
     queryKey: ["equipment", "search", officeId, type, query],
@@ -69,7 +72,13 @@ export function EquipmentPage() {
           <Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo equipo</Button>
         </>} />
       <Card className="mb-4 grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por código patrimonial, MAC, IP o responsable" aria-label="Buscar equipos" />
+        <div className="flex gap-2">
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por código patrimonial, MAC, IP o responsable" aria-label="Buscar equipos" />
+          <Button type="button" variant="secondary" className="shrink-0" onClick={() => setOcrOpen(true)} title="Buscar equipo leyendo su etiqueta patrimonial">
+            <ScanLine className="size-5" />
+            <span className="hidden 2xl:inline">Leer etiqueta</span>
+          </Button>
+        </div>
         <Select
           value={zoneName}
           onChange={(e) => {
@@ -133,6 +142,32 @@ export function EquipmentPage() {
       <EquipmentDetail id={selected} onClose={() => setSelected(null)} onEdit={(e) => { setSelected(null); setEditing(e); }} />
       {editing && <EquipmentForm equipment={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       <EquipmentImportModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <Modal
+        open={ocrOpen}
+        onClose={() => { setOcrOpen(false); setOcrPhoto(null); }}
+        title="Buscar por etiqueta patrimonial"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-tenue">
+            Tome una foto clara de la etiqueta. Procure que el código patrimonial ocupe buena parte de la imagen y evite reflejos.
+          </p>
+          <PhotoPicker
+            value={ocrPhoto}
+            onChange={setOcrPhoto}
+            large
+            patrimonialOcr
+            onPatrimonialDetected={(code) => {
+              setQ(code);
+              setZoneName("");
+              setOfficeId("");
+              setArea("");
+              setType("");
+              setOcrOpen(false);
+              setOcrPhoto(null);
+            }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }
