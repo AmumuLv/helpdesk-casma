@@ -12,7 +12,9 @@ import qrcode
 from PIL import Image, ImageOps, UnidentifiedImageError
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel, ValidationError
 from pymongo.errors import DuplicateKeyError
@@ -484,6 +486,159 @@ async def ocr_patrimonial(
         matched=bool(matched_code),
         equipment_id=matched_id,
         candidates=[candidate.upper() for candidate in candidates],
+    )
+
+
+@router.get("/export-xlsx")
+async def export_equipment_xlsx(
+    request: Request,
+    zone_name: str | None = Query(None, max_length=120),
+    office_id: str | None = None,
+    area: str | None = Query(None, max_length=120),
+    type: EquipmentType | None = None,
+    status: EquipmentStatus | None = None,
+    q: str | None = Query(None, max_length=60),
+    admin: StaffUser = Depends(require_admin),
+):
+    query: dict = {}
+
+    offices = await Office.find_all().to_list()
+    office_map = {office.id: office for office in offices}
+
+    if office_id:
+        oid = parse_id(office_id)
+        if not oid:
+            raise HTTPException(status_code=422, detail="Oficina no válida.")
+        query["office_id"] = oid
+    elif zone_name and zone_name.strip():
+        normalized_zone = _normal(zone_name)
+        zone_office_ids = [
+            office.id
+            for office in offices
+            if office.zone_name and _normal(office.zone_name) == normalized_zone
+        ]
+        query["office_id"] = {"$in": zone_office_ids}
+
+    if area and area.strip():
+        query["area"] = area.strip()
+    if type:
+        _ensure_supported_type(type)
+        query["type"] = type.value
+    if status:
+        query["status"] = status.value
+    if q and q.strip():
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        query["$or"] = [
+            {"inventory_id": rx},
+            {"patrimonial_code": rx},
+            {"mac_address": rx},
+            {"ip_address": rx},
+            {"responsible_name": rx},
+            {"hostname": rx},
+            {"device_label": rx},
+            {"area": rx},
+            {"brand": rx},
+            {"model": rx},
+        ]
+
+    equipment = await Equipment.find(query).sort("patrimonial_code").to_list()
+    user_ids = list({item.responsable_id for item in equipment if item.responsable_id})
+    users = {
+        user.id: user
+        for user in await MunicipalUser.find({"_id": {"$in": user_ids}}).to_list()
+    } if user_ids else {}
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Margesi TI"
+
+    headers = [
+        "Zona", "Zona ID", "Oficina", "Código Oficina", "ID TI", "Código Patrimonial",
+        "Tipo", "Área", "Dispositivo", "Marca", "Modelo", "Tamaño Pantalla",
+        "Nombre Equipo", "Procesador", "Memoria RAM GB", "Almacenamiento GB",
+        "Dirección IP", "Dirección MAC", "Sistema Operativo", "Propiedad",
+        "Responsable", "Código Responsable", "Tipo Responsable",
+        "Fecha Adquisición", "Garantía Hasta", "Estado", "Criticidad", "Notas",
+    ]
+    sheet.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="13233B")
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for item in equipment:
+        office = office_map.get(item.office_id)
+        responsible = users.get(item.responsable_id) if item.responsable_id else None
+        sheet.append([
+            office.zone_name if office else None,
+            str(office.zone_id) if office and office.zone_id else None,
+            office.name if office else None,
+            office.code if office else None,
+            item.inventory_id,
+            item.patrimonial_code,
+            item.type.value,
+            item.area,
+            item.device_label,
+            item.brand,
+            item.model,
+            item.specs.screen_size_inches,
+            item.hostname,
+            item.specs.cpu,
+            item.specs.ram_gb,
+            item.specs.storage_gb,
+            item.ip_address,
+            item.mac_address,
+            item.specs.os,
+            item.property_type,
+            item.responsible_name,
+            responsible.employee_code if responsible else None,
+            item.responsible_type,
+            item.acquired_on.date().isoformat() if item.acquired_on else None,
+            item.warranty_until.date().isoformat() if item.warranty_until else None,
+            item.status.value,
+            item.criticality,
+            item.notes,
+        ])
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    widths = {
+        1: 24, 2: 26, 3: 32, 4: 18, 5: 14, 6: 22, 7: 15, 8: 24, 9: 22,
+        10: 18, 11: 22, 12: 16, 13: 24, 14: 28, 15: 16, 16: 20, 17: 18,
+        18: 20, 19: 22, 20: 34, 21: 30, 22: 20, 23: 18, 24: 18, 25: 18,
+        26: 18, 27: 12, 28: 42,
+    }
+    for index, width in widths.items():
+        sheet.column_dimensions[get_column_letter(index)].width = width
+
+    output = io.BytesIO()
+    workbook.save(output)
+    workbook.close()
+
+    await audit.record(
+        request,
+        "staff",
+        "equipment.exported_xlsx",
+        actor_id=str(admin.id),
+        actor_name=admin.full_name,
+        target_type="equipment",
+        target_id="bulk",
+        exported=len(equipment),
+        zone_name=zone_name,
+        office_id=office_id,
+        area=area,
+        equipment_type=type.value if type else None,
+        status=status.value if status else None,
+        query=q,
+    )
+
+    filename = f"margesi-ti-casma-{datetime.now().strftime('%Y%m%d-%H%M')}.xlsx"
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
