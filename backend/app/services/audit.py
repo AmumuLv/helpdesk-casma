@@ -4,6 +4,31 @@ from app.core.network import client_ip
 from app.models import AuditLog
 
 
+def offline_request_details(request: Request | None) -> dict:
+    if request is None:
+        return {}
+    operation = (request.headers.get("X-Offline-Operation") or "").strip()
+    if not operation:
+        return {}
+    return {
+        "offline_operation": operation[:80],
+        "offline_replay": request.headers.get("X-Offline-Replay") == "1",
+    }
+
+
+async def replayed_target_id(request: Request | None, target_type: str) -> str | None:
+    if request is None:
+        return None
+    operation = (request.headers.get("X-Offline-Operation") or "").strip()
+    if not operation:
+        return None
+    previous = await AuditLog.find_one({
+        "target_type": target_type,
+        "details.offline_operation": operation[:80],
+    })
+    return previous.target_id if previous else None
+
+
 async def record(
     request: Request | None,
     actor_type: str,

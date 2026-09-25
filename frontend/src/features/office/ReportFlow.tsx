@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Send } from "lucide-react";
+import { ArrowLeft, Check, Send, WifiOff } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { PhotoPicker } from "../../components/PhotoPicker";
+import { useToast } from "../../components/Toasts";
 import { VoiceButton } from "../../components/VoiceButton";
 import { Button, cx, ErrorBox, Input, Spinner, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -11,6 +12,10 @@ import { ISSUES, ISSUE_ORDER, isQuickIssue } from "./issues";
 import { useOfficeHome } from "./OfficeHome";
 
 const OTHER = "__otro__";
+
+type TicketCreatedResponse = { ticket: OfficeTicket; duplicated: boolean };
+type OfflineQueuedResponse = { offline_queued: true; queue_id: string };
+type TicketSubmitResponse = TicketCreatedResponse | OfflineQueuedResponse;
 
 export function ReportFlow() {
   const params = useParams();
@@ -81,8 +86,10 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
   const [description, setDescription] = useState("");
   const [reporter, setReporter] = useState(() => localStorage.getItem("hd_reporter") ?? "");
   const [photo, setPhoto] = useState<File | null>(null);
+  const [queuedOffline, setQueuedOffline] = useState(false);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const toast = useToast();
 
   const send = useMutation({
     mutationFn: () => {
@@ -93,10 +100,21 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
       if (equipmentId && equipmentId !== OTHER) form.set("equipment_id", equipmentId);
       if (reporter.trim()) form.set("reporter_name", reporter.trim());
       if (photo) form.set("photo", photo);
-      return api<{ ticket: OfficeTicket; duplicated: boolean }>("/office/tickets", { form });
+      return api<TicketSubmitResponse>("/office/tickets", { form });
     },
     onSuccess: (res) => {
       if (reporter.trim()) localStorage.setItem("hd_reporter", reporter.trim());
+      if ("offline_queued" in res) {
+        setQueuedOffline(true);
+        setDescription("");
+        setPhoto(null);
+        toast({
+          tone: "success",
+          title: "Reporte guardado sin conexión",
+          body: "Se enviará automáticamente cuando vuelva el internet.",
+        });
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["office-home"] });
       navigate(`/oficina/reporte/${res.ticket.id}?${res.duplicated ? "repetido" : "nuevo"}=1`, { replace: true });
     },
@@ -105,7 +123,16 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
   const needsText = issue === "OTRO" && description.trim().length < 3;
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); send.mutate(); }} className="flex flex-col gap-8">
+    <form onSubmit={(e) => { e.preventDefault(); setQueuedOffline(false); send.mutate(); }} className="flex flex-col gap-8">
+      {queuedOffline && (
+        <div role="status" className="flex gap-3 rounded-2xl border-2 border-sol bg-sol-claro p-4">
+          <WifiOff className="size-7 shrink-0" aria-hidden />
+          <div>
+            <p className="font-bold">Reporte guardado en este dispositivo</p>
+            <p className="text-sm">No había conexión. La PWA lo enviará automáticamente cuando vuelva el internet.</p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <span className={`grid size-16 shrink-0 place-items-center rounded-2xl ${info.tone}`}><Icon className="size-9" aria-hidden /></span>
         <div>

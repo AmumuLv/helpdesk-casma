@@ -1,10 +1,24 @@
 {
+  "id": "/",
   "name": "Soporte TI - Municipalidad Provincial de Casma",
   "short_name": "Soporte TI",
+  "description": "Mesa de ayuda e inventario del Área TI de la Municipalidad Provincial de Casma.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#F5F7FA",
   "theme_color": "#13233B",
   "lang": "es-PE",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "categories": ["productivity", "business"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Reportar incidencia",
+      "short_name": "Reportar",
+      "url": "/oficina"
+    }
+  ]
 }

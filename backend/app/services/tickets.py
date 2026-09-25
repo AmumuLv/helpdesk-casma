@@ -1,18 +1,20 @@
 import asyncio
 import logging
+import unicodedata
 from dataclasses import dataclass
 from datetime import timedelta
 
 from beanie import PydanticObjectId
 from fastapi import HTTPException, UploadFile
 
-from app.ai.engine import TriageRequest, get_engine
+from app.ai.engine import get_engine
 from app.ai.taxonomy import CATEGORY_LABELS, QUICK_ISSUES
 from app.core.config import get_settings
 from app.core.timeutil import local_now, utcnow
 from app.db import next_sequence
 from app.models import AIModelRecord, Device, Equipment, Office, StaffUser, Ticket
 from app.models.enums import (
+    OfficeServiceLevel,
     QuickIssue,
     TicketCategory,
     TicketChannel,
@@ -20,12 +22,126 @@ from app.models.enums import (
     TicketStatus,
     TimelineKind,
 )
-from app.models.ticket import EquipmentSnapshot, Resolution, TimelineEntry
+from app.models.ticket import EquipmentSnapshot, Resolution, ResolutionType, TimelineEntry
 from app.services.events import broker
 from app.services.storage import save_image
 
 log = logging.getLogger("helpdesk.tickets")
 _PRIORITY_UP = {TicketPriority.BAJA: TicketPriority.MEDIA, TicketPriority.MEDIA: TicketPriority.ALTA, TicketPriority.ALTA: TicketPriority.ALTA}
+
+_LOCAL_PRIORITY_KEYWORDS = {
+    TicketPriority.ALTA: (
+        "servidor caido",
+        "servidor fuera de servicio",
+        "sin internet",
+        "internet caido",
+        "red caida",
+        "sistema caido",
+        "sin sistema",
+        "no enciende",
+        "ransomware",
+        "virus",
+        "toda la oficina",
+        "todos los usuarios",
+        "sin servicio",
+    ),
+    TicketPriority.MEDIA: (
+        "internet",
+        "servidor",
+        "red",
+        "impresora",
+        "correo",
+        "sistema",
+        "software",
+        "lento",
+        "lenta",
+        "error",
+        "no imprime",
+        "conexion",
+    ),
+    TicketPriority.BAJA: (
+        "consulta",
+        "configurar",
+        "instalar",
+        "actualizar",
+        "solicitud",
+        "periferico",
+    ),
+}
+
+_HIERARCHY_BOOST = {
+    # Niveles adaptados a la estructura de la Municipalidad Provincial de Casma.
+    # La jerarquía solo complementa la gravedad técnica: nunca reemplaza las
+    # palabras clave ni convierte automáticamente todo reporte en urgente.
+    "PERSONAL": 0,
+    "UNIDAD_ORGANIZACION": 0,
+    "SUBGERENCIA": 0,
+    "GERENCIA": 1,
+    "GERENCIA_MUNICIPAL": 1,
+    "ALCALDIA": 1,
+}
+
+
+def _normalize_local_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).lower()
+
+
+def calculate_local_priority(
+    subject: str,
+    description: str,
+    hierarchy_level: str = "PERSONAL",
+    equipment: Equipment | None = None,
+    office_service_level: OfficeServiceLevel = OfficeServiceLevel.NORMAL,
+    office_service_reason: str | None = None,
+) -> tuple[TicketPriority, list[str]]:
+    """Triaje inicial determinista y local, antes de consultar a la IA."""
+    equipment_text = f" {equipment.type.value} {equipment.brand or ''} {equipment.model or ''}" if equipment else ""
+    text = _normalize_local_text(f"{subject} {description}{equipment_text}")
+    priority = TicketPriority.MEDIA
+    reasons: list[str] = ["Prioridad base local: MEDIA."]
+
+    matched = None
+    for candidate in (TicketPriority.ALTA, TicketPriority.MEDIA, TicketPriority.BAJA):
+        keyword = next((word for word in _LOCAL_PRIORITY_KEYWORDS[candidate] if word in text), None)
+        if keyword:
+            priority = candidate
+            matched = keyword
+            reasons = [f'Palabra clave local detectada: "{keyword}".']
+            break
+
+    level = (hierarchy_level or "PERSONAL").strip().upper()
+    boost = _HIERARCHY_BOOST.get(level, 0)
+    if boost:
+        original = priority
+        priority = _PRIORITY_UP[priority]
+        if priority != original:
+            reasons.append(f"Nivel jerárquico {level}: prioridad elevada un nivel.")
+        else:
+            reasons.append(f"Nivel jerárquico {level}: se mantiene prioridad ALTA.")
+    elif level not in _HIERARCHY_BOOST:
+        reasons.append(f"Nivel jerárquico desconocido ({level}); se trató como PERSONAL.")
+
+    service_level = office_service_level or OfficeServiceLevel.NORMAL
+    if service_level in (OfficeServiceLevel.ATENCION_PUBLICO, OfficeServiceLevel.SERVICIO_CRITICO):
+        original = priority
+        priority = _PRIORITY_UP[priority]
+        label = (
+            "atención al público"
+            if service_level == OfficeServiceLevel.ATENCION_PUBLICO
+            else "servicio crítico"
+        )
+        reason = f" ({office_service_reason.strip()})" if office_service_reason and office_service_reason.strip() else ""
+        if priority != original:
+            reasons.append(f"Oficina de {label}{reason}: prioridad elevada un nivel.")
+        else:
+            reasons.append(f"Oficina de {label}{reason}: se mantiene prioridad ALTA.")
+
+    if matched is None and equipment and equipment.type.value == "SERVIDOR":
+        priority = _PRIORITY_UP[priority]
+        reasons.append("Equipo de tipo SERVIDOR: prioridad elevada un nivel.")
+
+    return priority, reasons
 
 
 @dataclass
@@ -43,6 +159,7 @@ class NewTicket:
     staff: StaffUser | None = None
     category: TicketCategory | None = None
     priority: TicketPriority | None = None
+    hierarchy_level: str = "PERSONAL"
 
 
 def equipment_snapshot(e: Equipment) -> EquipmentSnapshot:
@@ -100,12 +217,30 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         subject = f"{subject} - {data.equipment.patrimonial_code}"
     attachments = [await save_image(data.photo)] if data.photo else []
 
-    analysis = await get_engine().analyze(
-        TriageRequest(subject=subject, description=data.description, quick_issue=data.quick_issue, office=data.office,
-                      equipment=data.equipment, category_hint=data.category)
+    local_priority, local_priority_reasons = calculate_local_priority(
+        subject=subject,
+        description=data.description,
+        hierarchy_level=data.hierarchy_level,
+        equipment=data.equipment,
+        office_service_level=data.office.service_level,
+        office_service_reason=data.office.service_reason,
     )
-    category = data.category or analysis.category
-    priority = data.priority or analysis.priority
+
+    # El ticket se clasifica inicialmente sin esperar a la IA.
+    # El análisis avanzado se añade luego con FastAPI BackgroundTasks.
+    category = data.category or (info.category if info else TicketCategory.OTRO)
+    priority = data.priority or local_priority
+
+    timeline = [TimelineEntry(kind=TimelineKind.CREADO, actor=actor, text="Reporte recibido.")]
+    if not data.priority:
+        timeline.append(
+            TimelineEntry(
+                kind=TimelineKind.PRIORIDAD,
+                actor="Triaje local",
+                text=f"Prioridad inicial {priority.value}: {' '.join(local_priority_reasons)}",
+                internal=True,
+            )
+        )
     ticket = Ticket(
         number=await next_ticket_number(),
         office_id=data.office.id, office_name=data.office.name, office_location=data.office.location,
@@ -114,22 +249,12 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         equipment=equipment_snapshot(data.equipment) if data.equipment else None,
         channel=data.channel, quick_issue=data.quick_issue, subject=subject, description=data.description.strip(),
         reporter_name=data.reporter_name, contact_phone=data.contact_phone,
-        category=category, category_source="TECNICO" if data.category else "IA",
-        priority=priority, priority_source="TECNICO" if data.priority else "IA",
-        attachments=attachments, ai=analysis,
+        category=category, category_source="TECNICO" if data.category else "LOCAL",
+        priority=priority, priority_source="TECNICO" if data.priority else "LOCAL",
+        attachments=attachments, ai=None,
         created_by_staff_id=data.staff.id if data.staff else None,
-        timeline=[
-            TimelineEntry(kind=TimelineKind.CREADO, actor=actor, text="Reporte recibido."),
-            TimelineEntry(kind=TimelineKind.IA, actor="Asistente IA", text=analysis.briefing, internal=True),
-        ],
+        timeline=timeline,
     )
-    settings = get_settings()
-    if settings.ai_auto_assign_urgent and priority == TicketPriority.ALTA and analysis.suggested_technician_id:
-        tech = await StaffUser.get(PydanticObjectId(analysis.suggested_technician_id))
-        if tech and tech.active:
-            ticket.assigned_to_id, ticket.assigned_to_name = tech.id, tech.full_name
-            ticket.status, ticket.first_response_at = TicketStatus.EN_PROCESO, now
-            ticket.timeline.append(TimelineEntry(kind=TimelineKind.ASIGNADO, actor="Asistente IA", text=f"{tech.full_name} atenderá su reporte."))
     await ticket.insert()
     await _publish(ticket, "ticket.created")
     return ticket, False
@@ -177,6 +302,36 @@ async def update_classification(ticket: Ticket, actor: StaffUser, category: Tick
     return ticket
 
 
+async def apply_ai_priority(ticket: Ticket, actor: StaffUser) -> Ticket:
+    if not ticket.ai:
+        raise HTTPException(status_code=409, detail="El ticket todavía no tiene análisis de IA.")
+
+    suggested = ticket.ai.priority
+    if suggested == ticket.priority:
+        raise HTTPException(status_code=409, detail="La prioridad actual ya coincide con la recomendación de IA.")
+
+    previous = ticket.priority
+    score_pct = round(ticket.ai.priority_score * 100)
+    reasons = "; ".join(ticket.ai.priority_reasons[:4]) or "sin razones adicionales"
+    ticket.priority = suggested
+    ticket.priority_source = "IA_SUPERVISADA"
+    ticket.timeline.append(
+        TimelineEntry(
+            kind=TimelineKind.PRIORIDAD,
+            actor=actor.full_name,
+            internal=True,
+            text=(
+                f"Prioridad IA supervisada: {previous.value} → {suggested.value}. "
+                f"El técnico aceptó la recomendación de IA ({score_pct}%). Razones: {reasons}."
+            ),
+        )
+    )
+    ticket.updated_at = utcnow()
+    await ticket.save()
+    await _publish(ticket, "ticket.updated")
+    return ticket
+
+
 async def add_note(ticket: Ticket, actor: StaffUser, text: str, visible_to_office: bool) -> Ticket:
     ticket.timeline.append(TimelineEntry(kind=TimelineKind.NOTA, actor=actor.full_name, text=text.strip(), internal=not visible_to_office))
     ticket.first_response_at = ticket.first_response_at or utcnow()
@@ -186,16 +341,34 @@ async def add_note(ticket: Ticket, actor: StaffUser, text: str, visible_to_offic
     return ticket
 
 
-async def resolve(ticket: Ticket, actor: StaffUser, notes: str) -> Ticket:
+async def resolve(
+    ticket: Ticket,
+    actor: StaffUser,
+    notes: str,
+    tipo_resolucion: ResolutionType = ResolutionType.SOLUCIONADO,
+) -> Ticket:
     if ticket.status == TicketStatus.RESUELTO:
         raise HTTPException(status_code=409, detail="La incidencia ya está resuelta.")
     now = utcnow()
     ticket.status = TicketStatus.RESUELTO
-    ticket.resolution = Resolution(notes=notes.strip(), resolved_by_id=str(actor.id), resolved_by_name=actor.full_name, resolved_at=now)
+    ticket.resolution = Resolution(
+        notes=notes.strip(),
+        resolved_by_id=str(actor.id),
+        resolved_by_name=actor.full_name,
+        tipo_resolucion=tipo_resolucion,
+        resolved_at=now,
+    )
     if not ticket.assigned_to_id:
         ticket.assigned_to_id, ticket.assigned_to_name = actor.id, actor.full_name
     ticket.first_response_at = ticket.first_response_at or now
-    ticket.timeline.append(TimelineEntry(kind=TimelineKind.ESTADO, actor=actor.full_name, text=f"Problema resuelto: {notes.strip()}"))
+    resolution_label = tipo_resolucion.value.replace("_", " ").title()
+    ticket.timeline.append(
+        TimelineEntry(
+            kind=TimelineKind.ESTADO,
+            actor=actor.full_name,
+            text=f"Resolución - {resolution_label}: {notes.strip()}",
+        )
+    )
     ticket.updated_at = now
     await ticket.save()
     await _publish(ticket, "ticket.resolved")

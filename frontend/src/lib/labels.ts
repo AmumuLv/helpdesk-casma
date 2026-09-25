@@ -8,14 +8,15 @@ export const CATEGORY_LABEL: Record<TicketCategory, string> = {
   PERIFERICOS: "Periféricos", OTRO: "Otro",
 };
 export const EQUIPMENT_LABEL: Record<EquipmentType, string> = {
-  PC: "Computadora", LAPTOP: "Laptop", IMPRESORA: "Impresora", MONITOR: "Monitor", ESCANER: "Escáner",
-  SWITCH_ROUTER: "Switch / router", SERVIDOR: "Servidor", TELEFONO_IP: "Teléfono IP", OTRO: "Otro",
+  CPU: "CPU", MONITOR: "Monitor", MOUSE: "Mouse", TECLADO: "Teclado", IMPRESORA: "Impresora", LAPTOP: "Laptop",
+  PC: "Computadora (legado)", ESCANER: "Escáner (legado)", SWITCH_ROUTER: "Switch / router (legado)",
+  SERVIDOR: "Servidor (legado)", TELEFONO_IP: "Teléfono IP (legado)", OTRO: "Otro (legado)",
 };
 export const EQUIPMENT_STATUS_LABEL: Record<EquipmentStatus, string> = { OPERATIVO: "Operativo", EN_REPARACION: "En reparación", BAJA: "De baja" };
 export const DEVICE_KIND_LABEL: Record<DeviceKind, string> = { PC: "Computadora", LAPTOP: "Laptop", CELULAR: "Celular", TABLET: "Tablet", OTRO: "Otro" };
 
 export const CATEGORIES = Object.keys(CATEGORY_LABEL) as TicketCategory[];
-export const EQUIPMENT_TYPES = Object.keys(EQUIPMENT_LABEL) as EquipmentType[];
+export const EQUIPMENT_TYPES: EquipmentType[] = ["CPU", "MONITOR", "MOUSE", "TECLADO", "IMPRESORA", "LAPTOP"];
 
 const dateTime = new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Lima" });
 const date = new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeZone: "America/Lima" });

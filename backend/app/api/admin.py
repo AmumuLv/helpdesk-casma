@@ -7,8 +7,8 @@ from pymongo.errors import DuplicateKeyError
 from app.api.deps import parse_id, require_admin
 from app.core.security import hash_password, office_password_errors, temp_password
 from app.core.timeutil import utcnow
-from app.models import AuditLog, Device, Equipment, Office, StaffUser, Ticket
-from app.models.enums import DeviceStatus, StaffRole, TicketStatus
+from app.models import AuditLog, Device, Equipment, Office, StaffUser, Ticket, Zone
+from app.models.enums import DeviceStatus, OfficeServiceLevel, StaffRole, TicketStatus
 from app.schemas.admin import (
     DeviceApproveIn,
     DeviceOut,
@@ -42,6 +42,38 @@ async def _get_or_404(model, raw_id: str, label: str):
     return doc
 
 
+async def _office_zone_data(zone_id: str | None, zone_name: str | None = None) -> tuple[object | None, str | None]:
+    if zone_id:
+        zid = parse_id(zone_id)
+        zone = await Zone.get(zid) if zid else None
+        if not zone or not zone.active:
+            raise HTTPException(status_code=422, detail="Zona no válida o inactiva.")
+        return zone.id, zone.name
+    return None, zone_name.strip() if zone_name else None
+
+
+_SERVICE_WEIGHT_MIN = {
+    OfficeServiceLevel.NORMAL: 1.0,
+    OfficeServiceLevel.ATENCION_PUBLICO: 1.25,
+    OfficeServiceLevel.SERVICIO_CRITICO: 1.5,
+}
+
+
+def _normalize_service_weight(data: dict, current: Office | None = None) -> dict:
+    result = dict(data)
+    level = result.get("service_level", current.service_level if current else OfficeServiceLevel.NORMAL)
+    if isinstance(level, str):
+        level = OfficeServiceLevel(level)
+    result["service_level"] = level
+
+    default_weight = _SERVICE_WEIGHT_MIN[level]
+    if "priority_weight" in result:
+        result["priority_weight"] = max(float(result["priority_weight"]), default_weight)
+    elif "service_level" in data:
+        result["priority_weight"] = default_weight
+    return result
+
+
 # ---------- Oficinas ----------
 @router.get("/offices", response_model=list[OfficeOut])
 async def list_offices(_: StaffUser = Depends(require_admin)):
@@ -54,7 +86,12 @@ async def list_offices(_: StaffUser = Depends(require_admin)):
 
 @router.post("/offices", response_model=OfficeOut, status_code=201)
 async def create_office(request: Request, body: OfficeIn, admin: StaffUser = Depends(require_admin)):
-    office = Office(**body.model_dump())
+    data = body.model_dump()
+    zone_id, zone_name = await _office_zone_data(data.pop("zone_id", None), data.get("zone_name"))
+    data["zone_id"] = zone_id
+    data["zone_name"] = zone_name
+    data = _normalize_service_weight(data)
+    office = Office(**data)
     try:
         await office.insert()
     except DuplicateKeyError:
@@ -67,6 +104,11 @@ async def create_office(request: Request, body: OfficeIn, admin: StaffUser = Dep
 async def update_office(request: Request, office_id: str, body: OfficePatch, admin: StaffUser = Depends(require_admin)):
     office: Office = await _get_or_404(Office, office_id, "Oficina")
     changes = body.model_dump(exclude_unset=True)
+    if "zone_id" in changes:
+        zone_id, zone_name = await _office_zone_data(changes.pop("zone_id"), changes.get("zone_name"))
+        changes["zone_id"] = zone_id
+        changes["zone_name"] = zone_name
+    changes = _normalize_service_weight(changes, office)
     if ("username" in changes and changes["username"] != office.username) or changes.get("active") is False:
         office.session_version += 1
     for key, value in changes.items():

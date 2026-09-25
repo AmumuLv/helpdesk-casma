@@ -8,6 +8,7 @@ from app.models.enums import (
     DeviceStatus,
     EquipmentStatus,
     EquipmentType,
+    OfficeServiceLevel,
     StaffRole,
     TicketCategory,
 )
@@ -27,9 +28,13 @@ class OfficeIn(BaseModel):
     code: str = Field(min_length=2, max_length=20)
     name: str = Field(min_length=3, max_length=120)
     username: str
+    zone_id: str | None = None
+    zone_name: str | None = Field(default=None, max_length=120)
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
     head_phone: str | None = Field(default=None, max_length=20)
+    service_level: OfficeServiceLevel = OfficeServiceLevel.NORMAL
+    service_reason: str | None = Field(default=None, max_length=160)
     priority_weight: float = Field(default=1.0, ge=0.5, le=2.0)
 
     _u = field_validator("username")(_username)
@@ -43,9 +48,13 @@ class OfficeIn(BaseModel):
 class OfficePatch(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=120)
     username: str | None = None
+    zone_id: str | None = None
+    zone_name: str | None = Field(default=None, max_length=120)
     location: str | None = Field(default=None, max_length=120)
     head_name: str | None = Field(default=None, max_length=120)
     head_phone: str | None = Field(default=None, max_length=20)
+    service_level: OfficeServiceLevel | None = None
+    service_reason: str | None = Field(default=None, max_length=160)
     priority_weight: float | None = Field(default=None, ge=0.5, le=2.0)
     active: bool | None = None
 
@@ -60,9 +69,13 @@ class OfficeOut(BaseModel):
     code: str
     name: str
     username: str
+    zone_id: str | None = None
+    zone_name: str | None = None
     location: str | None
     head_name: str | None
     head_phone: str | None
+    service_level: OfficeServiceLevel
+    service_reason: str | None
     priority_weight: float
     active: bool
     devices_approved: int = 0
@@ -140,13 +153,18 @@ class StaffCreatedOut(BaseModel):
 class EquipmentIn(BaseModel):
     patrimonial_code: str = Field(min_length=3, max_length=40)
     type: EquipmentType
+    area: str | None = Field(default=None, max_length=120)
+    device_label: str | None = Field(default=None, max_length=120)
     brand: str | None = Field(default=None, max_length=60)
     model: str | None = Field(default=None, max_length=80)
-    serial_number: str | None = Field(default=None, max_length=80)
     hostname: str | None = Field(default=None, max_length=80)
     ip_address: str | None = Field(default=None, max_length=45)
     mac_address: str | None = Field(default=None, max_length=17)
     office_id: str | None = None
+    responsable_id: str | None = None
+    responsible_name: str | None = Field(default=None, max_length=120)
+    responsible_type: str = Field(default="USUARIO", pattern="^(USUARIO|JEFE|OFICINA)$")
+    property_type: str | None = Field(default=None, max_length=80)
     specs: EquipmentSpecs = EquipmentSpecs()
     acquired_on: datetime | None = None
     warranty_until: datetime | None = None
@@ -172,6 +190,9 @@ class EquipmentIn(BaseModel):
 
 class EquipmentOut(EquipmentIn):
     id: str
+    inventory_id: str | None = None
     office_name: str | None = None
+    zone_id: str | None = None
+    zone_name: str | None = None
     created_at: datetime
     updated_at: datetime
