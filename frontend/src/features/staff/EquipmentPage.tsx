@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Monitor, Plus, Printer, QrCode, ScanLine, Upload } from "lucide-react";
+import { Download, Monitor, Plus, Printer, QrCode, ScanLine, Upload } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "react";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Input, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
-import { api, errorMessage } from "../../lib/api";
+import { api, downloadApiFile, errorMessage } from "../../lib/api";
 import { CATEGORY_LABEL, EQUIPMENT_LABEL, EQUIPMENT_STATUS_LABEL, EQUIPMENT_TYPES, fmtDate, fmtDateTime, pct } from "../../lib/labels";
 import type { Equipment, EquipmentImportOfficeRef, EquipmentImportResult, EquipmentStatus, EquipmentType, Ticket } from "../../lib/types";
 import { useIsAdmin, useMunicipalUsers, useOfficeLookup } from "./hooks";
@@ -63,6 +63,24 @@ export function EquipmentPage() {
       return api<Equipment[]>(`/equipment?${p}`);
     },
   });
+  const exportFile = useMutation({
+    mutationFn: async () => {
+      const p = new URLSearchParams();
+      if (zoneName) p.set("zone_name", zoneName);
+      if (officeId) p.set("office_id", officeId);
+      if (area) p.set("area", area);
+      if (type) p.set("type", type);
+      if (q.trim()) p.set("q", q.trim());
+      const suffix = p.toString();
+      await downloadApiFile(
+        `/equipment/export-xlsx${suffix ? `?${suffix}` : ""}`,
+        "margesi-ti-casma.xlsx",
+      );
+    },
+    onSuccess: () => toast({ tone: "success", title: "Margesí exportado", body: "El Excel respeta los filtros actuales del inventario." }),
+    onError: (err) => toast({ tone: "danger", title: "No se pudo exportar", body: errorMessage(err) }),
+  });
+
 
   const zones = useMemo(
     () => [...new Set((offices.data ?? []).map((office) => office.zone_name).filter((value): value is string => !!value))].sort((a, b) => a.localeCompare(b, "es")),
@@ -94,6 +112,11 @@ export function EquipmentPage() {
     <div>
       <PageHeader title="Inventario de equipos" description="ID TI, código patrimonial, oficina, especificaciones, historial de incidencias y riesgo de falla."
         actions={<>
+          {isAdmin && (
+            <Button variant="secondary" loading={exportFile.isPending} onClick={() => exportFile.mutate()}>
+              <Download className="size-4" /> Exportar Margesí
+            </Button>
+          )}
           {isAdmin && <Button variant="secondary" onClick={() => setImportOpen(true)}><Upload className="size-4" /> Importar Margesí</Button>}
           <Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo equipo</Button>
         </>} />
@@ -250,6 +273,9 @@ function EquipmentImportModal({ open, onClose }: { open: boolean; onClose: () =>
           <p className="mt-2 text-tenue">
             Tipos admitidos por el Área TI: CPU, MONITOR, MOUSE, TECLADO, IMPRESORA y LAPTOP.
           </p>
+          <p className="mt-2 text-tenue">
+            La normalización inteligente corrige alias técnicos seguros, por ejemplo <strong>HP Print</strong> o <strong>Impresora HP</strong> → Tipo IMPRESORA / Marca HP. Zona y Oficina nunca se aproximan automáticamente.
+          </p>
         </div>
 
         <Field label="Archivo Excel (.xlsx)" hint="Máximo 10 MB y 5000 filas por importación.">
@@ -268,11 +294,33 @@ function EquipmentImportModal({ open, onClose }: { open: boolean; onClose: () =>
         {result && (
           <Card className="p-4">
             <h3 className="font-bold">Resultado de la importación</h3>
-            <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+            <div className="mt-3 grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
               <div className="rounded-xl bg-papel p-3"><p className="text-2xl font-bold">{result.processed}</p><p className="text-xs text-tenue">Procesados</p></div>
               <div className="rounded-xl bg-hecho-claro p-3"><p className="text-2xl font-bold text-hecho">{result.imported}</p><p className="text-xs text-tenue">Registrados</p></div>
+              <div className="rounded-xl bg-sol-claro p-3"><p className="text-2xl font-bold">{result.normalized}</p><p className="text-xs text-tenue">Normalizados</p></div>
               <div className="rounded-xl bg-alerta-claro p-3"><p className="text-2xl font-bold text-alerta">{result.rejected}</p><p className="text-xs text-tenue">Rechazados</p></div>
             </div>
+            {result.normalizations.length > 0 && (
+              <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-linea">
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-papel">
+                    <tr><th className="p-2">Fila</th><th className="p-2">Campo</th><th className="p-2">Original</th><th className="p-2">Normalizado</th><th className="p-2">Método</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-linea">
+                    {result.normalizations.map((item, index) => (
+                      <tr key={`${item.row}-${item.field}-${index}`}>
+                        <td className="p-2 font-bold">{item.row}</td>
+                        <td className="p-2">{item.field}</td>
+                        <td className="p-2 text-tenue">{item.original}</td>
+                        <td className="p-2 font-bold">{item.normalized}</td>
+                        <td className="p-2 text-tenue">{item.method}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {result.more_normalizations > 0 && <p className="p-3 text-sm text-tenue">Hay {result.more_normalizations} normalizaciones adicionales no mostradas.</p>}
+              </div>
+            )}
             {result.errors.length > 0 && (
               <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-linea">
                 <table className="w-full text-left text-sm">
