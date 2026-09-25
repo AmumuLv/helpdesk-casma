@@ -828,19 +828,6 @@ async def import_equipment_xlsx(
                     brand=_cell_text(value_at(row, "marca")),
                     model=_cell_text(value_at(row, "modelo")),
                 )
-                if normalization.changes:
-                    normalized_rows += 1
-                    for change in normalization.changes:
-                        all_normalizations.append(
-                            EquipmentNormalizationExample(
-                                row=row_number,
-                                field=change.field,
-                                original=change.original,
-                                normalized=change.normalized,
-                                method=change.method,
-                            )
-                        )
-
                 equipment = Equipment(
                     inventory_id=await _next_inventory_id(),
                     patrimonial_code=code,
@@ -872,6 +859,18 @@ async def import_equipment_xlsx(
                     notes=_cell_text(value_at(row, "notas")) or None,
                 )
                 await equipment.insert()
+                if normalization.changes:
+                    normalized_rows += 1
+                    for change in normalization.changes:
+                        all_normalizations.append(
+                            EquipmentNormalizationExample(
+                                row=row_number,
+                                field=change.field,
+                                original=change.original,
+                                normalized=change.normalized,
+                                method=change.method,
+                            )
+                        )
                 existing_codes.add(code)
                 imported += 1
             except (ValueError, ValidationError, DuplicateKeyError) as exc:
