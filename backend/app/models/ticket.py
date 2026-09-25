@@ -20,6 +20,7 @@ from app.models.enums import (
 class ResolutionType(StrEnum):
     SOLUCIONADO = "SOLUCIONADO"
     REPARADO = "REPARADO"
+    REQUIERE_REPUESTO = "REQUIERE_REPUESTO"
     REEMPLAZADO = "REEMPLAZADO"
     OBSOLETO = "OBSOLETO"
     IRREPARABLE = "IRREPARABLE"
@@ -106,6 +107,8 @@ class Resolution(BaseModel):
         mapping = {
             "Resuelto": ResolutionType.SOLUCIONADO,
             "Resuelto - Reparado": ResolutionType.REPARADO,
+            "Resuelto - Requiere repuesto": ResolutionType.REQUIERE_REPUESTO,
+            "Resuelto - Requiere compra de repuesto": ResolutionType.REQUIERE_REPUESTO,
             "Resuelto - Reemplazado": ResolutionType.REEMPLAZADO,
             "Resuelto - Obsoleto": ResolutionType.OBSOLETO,
             "Resuelto - Baja patrimonial": ResolutionType.BAJA_PATRIMONIAL,
