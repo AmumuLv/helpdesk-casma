@@ -41,6 +41,7 @@ type RetirementReport = {
 export function EquipmentPage() {
   const offices = useOfficeLookup();
   const isAdmin = useIsAdmin();
+  const toast = useToast();
   const [zoneName, setZoneName] = useState("");
   const [officeId, setOfficeId] = useState("");
   const [area, setArea] = useState("");
