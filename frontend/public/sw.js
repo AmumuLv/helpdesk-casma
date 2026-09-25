@@ -315,6 +315,7 @@ function isPrivateReadableGet(request, url) {
   if (request.method !== "GET" || url.origin !== self.location.origin) return false;
 
   const path = url.pathname;
+  if (path === "/api/equipment/export-xlsx") return false;
   return (
     path === "/api/auth/me"
     || path === "/api/technicians"
