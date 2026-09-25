@@ -11,6 +11,7 @@ import { useIsAdmin, useTechnicians, useTicketAction } from "./hooks";
 const RESOLUTION_LABEL: Record<ResolutionType, string> = {
   SOLUCIONADO: "Solucionado",
   REPARADO: "Reparado",
+  REQUIERE_REPUESTO: "Requiere compra de repuesto",
   REEMPLAZADO: "Reemplazado",
   OBSOLETO: "Obsoleto",
   IRREPARABLE: "Irreparable",
