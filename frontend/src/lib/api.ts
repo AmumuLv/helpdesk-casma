@@ -46,6 +46,41 @@ export async function api<T>(path: string, { method, json, form, signal }: Optio
   return data as T;
 }
 
+export async function downloadApiFile(path: string, fallbackName: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      method: "GET",
+      headers: { "X-Requested-With": "HelpDeskCasma" },
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, "No hay conexión con el servidor. Revise su internet.");
+  }
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    const detail = data?.detail;
+    throw new ApiError(
+      response.status,
+      typeof detail === "string" ? detail : "No se pudo descargar el archivo.",
+    );
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = match?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Ocurrió un error.";
 }
