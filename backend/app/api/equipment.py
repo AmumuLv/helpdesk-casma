@@ -116,8 +116,8 @@ _HEADER_ALIASES = {
     "zona_id": "zona_id",
     "id_zona": "zona_id",
     "oficina": "oficina",
-    "oficina_codigo": "oficina",
-    "codigo_oficina": "oficina",
+    "oficina_codigo": "oficina_codigo",
+    "codigo_oficina": "oficina_codigo",
     "codigo_patrimonial": "codigo_patrimonial",
     "cod_patrimonial": "codigo_patrimonial",
     "patrimonial_code": "codigo_patrimonial",
@@ -152,8 +152,8 @@ _HEADER_ALIASES = {
     "responsable": "responsable",
     "usuario": "responsable",
     "usuario_responsable": "responsable",
-    "codigo_responsable": "responsable",
-    "responsable_codigo": "responsable",
+    "codigo_responsable": "responsable_codigo",
+    "responsable_codigo": "responsable_codigo",
     "responsable_tipo": "responsable_tipo",
     "tipo_responsable": "responsable_tipo",
     "criticidad": "criticidad",
@@ -706,13 +706,15 @@ async def import_equipment_xlsx(
         if canonical and canonical not in headers:
             headers[canonical] = index
 
-    required = {"oficina", "codigo_patrimonial", "tipo"}
+    required = {"codigo_patrimonial", "tipo"}
     missing = sorted(required - set(headers))
-    if missing or ("zona_id" not in headers and "zona" not in headers):
+    missing_office = "oficina" not in headers and "oficina_codigo" not in headers
+    if missing or missing_office or ("zona_id" not in headers and "zona" not in headers):
         workbook.close()
         missing_text = ", ".join(missing) if missing else ""
+        office_text = "oficina o codigo_oficina" if missing_office else ""
         zone_text = "zona o zona_id" if "zona_id" not in headers and "zona" not in headers else ""
-        detail = ", ".join(x for x in (missing_text, zone_text) if x)
+        detail = ", ".join(x for x in (missing_text, office_text, zone_text) if x)
         raise HTTPException(status_code=422, detail="Faltan columnas obligatorias: " + detail + ".")
 
     offices = await Office.find({"active": True}).to_list()
@@ -770,14 +772,17 @@ async def import_equipment_xlsx(
                 zone_name_text = _cell_text(value_at(row, "zona"))
                 zone_id = parse_id(zone_id_text) if zone_id_text else None
 
+                office_code_text = _cell_text(value_at(row, "oficina_codigo"))
                 office_text = _cell_text(value_at(row, "oficina"))
-                office = by_code.get(_normal(office_text))
-                if not office:
+                office = by_code.get(_normal(office_code_text)) if office_code_text else None
+                if not office and office_text:
+                    office = by_code.get(_normal(office_text))
+                if not office and office_text:
                     matches = by_name.get(_normal(office_text), [])
                     if len(matches) == 1:
                         office = matches[0]
                     elif len(matches) > 1:
-                        raise ValueError("El nombre de oficina es ambiguo; use su código.")
+                        raise ValueError("El nombre de oficina es ambiguo; use Código Oficina.")
                 if not office:
                     raise ValueError("La oficina indicada no existe o está inactiva.")
                 if zone_id:
@@ -799,6 +804,7 @@ async def import_equipment_xlsx(
                     raise ValueError("Criticidad: use 1, 2 o 3.")
 
                 responsible_type = (_cell_text(value_at(row, "responsable_tipo")) or "OFICINA").upper()
+                responsible_code = _cell_text(value_at(row, "responsable_codigo"))
                 responsible_name = _cell_text(value_at(row, "responsable"))
                 responsable_id = None
                 if responsible_type == "OFICINA":
@@ -806,16 +812,22 @@ async def import_equipment_xlsx(
                 elif responsible_type == "JEFE":
                     responsible_name = responsible_name or office.head_name or office.name
                 elif responsible_type == "USUARIO":
-                    if not responsible_name:
+                    if not responsible_code and not responsible_name:
                         raise ValueError("Responsable: indique el código o nombre del usuario.")
                     office_key = str(office.id)
-                    municipal_user = users_by_office_code.get((office_key, _normal(responsible_name)))
-                    if not municipal_user:
+                    municipal_user = (
+                        users_by_office_code.get((office_key, _normal(responsible_code)))
+                        if responsible_code
+                        else None
+                    )
+                    if not municipal_user and responsible_name:
+                        municipal_user = users_by_office_code.get((office_key, _normal(responsible_name)))
+                    if not municipal_user and responsible_name:
                         matches = users_by_office_name.get((office_key, _normal(responsible_name)), [])
                         if len(matches) == 1:
                             municipal_user = matches[0]
                         elif len(matches) > 1:
-                            raise ValueError("Responsable ambiguo: use el código de trabajador.")
+                            raise ValueError("Responsable ambiguo: use Código Responsable.")
                     if not municipal_user:
                         raise ValueError("El responsable no está registrado como usuario de esa oficina.")
                     responsable_id = municipal_user.id
