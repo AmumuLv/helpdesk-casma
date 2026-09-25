@@ -970,6 +970,10 @@ async def equipment_retirement_report(
         indicators.append(f"{resolution_counts['BAJA_PATRIMONIAL']} incidencia(s) registran baja patrimonial como resultado.")
     if resolution_counts.get("REPARADO", 0) >= 2:
         indicators.append(f"El equipo registra {resolution_counts['REPARADO']} reparaciones documentadas.")
+    if resolution_counts.get("REQUIERE_REPUESTO", 0):
+        indicators.append(
+            f"{resolution_counts['REQUIERE_REPUESTO']} incidencia(s) fueron cerradas indicando necesidad de repuesto."
+        )
     if incidents_365d >= 4:
         indicators.append(f"Alta recurrencia: {incidents_365d} incidencias en los últimos 365 días.")
     if risk is not None and risk >= 0.6:
