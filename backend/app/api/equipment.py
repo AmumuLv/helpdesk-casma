@@ -20,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 from pymongo.errors import DuplicateKeyError
 
 from app.ai.engine import equipment_row, get_engine, load_ticket_rows
+from app.ai.inventory_normalizer import normalize_inventory_fields
 from app.api.deps import parse_id, require_admin, require_staff
 from app.core.config import get_settings
 from app.core.timeutil import utcnow
@@ -48,10 +49,21 @@ class EquipmentImportError(BaseModel):
     message: str
 
 
+class EquipmentNormalizationExample(BaseModel):
+    row: int
+    field: str
+    original: str
+    normalized: str
+    method: str
+
+
 class EquipmentImportResult(BaseModel):
     processed: int
     imported: int
     rejected: int
+    normalized: int = 0
+    normalizations: list[EquipmentNormalizationExample] = []
+    more_normalizations: int = 0
     errors: list[EquipmentImportError]
     more_errors: int = 0
 
@@ -724,8 +736,9 @@ async def import_equipment_xlsx(
         ).to_list(None)
     }
     seen_codes: set[str] = set()
-    processed = imported = rejected = 0
+    processed = imported = rejected = normalized_rows = 0
     all_errors: list[EquipmentImportError] = []
+    all_normalizations: list[EquipmentNormalizationExample] = []
 
     def value_at(row, key: str):
         idx = headers.get(key)
@@ -809,14 +822,33 @@ async def import_equipment_xlsx(
                 else:
                     raise ValueError("responsable_tipo debe ser USUARIO, JEFE u OFICINA.")
 
+                normalization = normalize_inventory_fields(
+                    raw_type=_cell_text(value_at(row, "tipo")),
+                    device=_cell_text(value_at(row, "dispositivo")),
+                    brand=_cell_text(value_at(row, "marca")),
+                    model=_cell_text(value_at(row, "modelo")),
+                )
+                if normalization.changes:
+                    normalized_rows += 1
+                    for change in normalization.changes:
+                        all_normalizations.append(
+                            EquipmentNormalizationExample(
+                                row=row_number,
+                                field=change.field,
+                                original=change.original,
+                                normalized=change.normalized,
+                                method=change.method,
+                            )
+                        )
+
                 equipment = Equipment(
                     inventory_id=await _next_inventory_id(),
                     patrimonial_code=code,
                     codigo_patrimonial=code,
-                    type=_equipment_type(value_at(row, "tipo")),
+                    type=normalization.equipment_type,
                     area=_cell_text(value_at(row, "area")) or office.name,
-                    device_label=_cell_text(value_at(row, "dispositivo")) or _cell_text(value_at(row, "tipo")),
-                    brand=_cell_text(value_at(row, "marca")) or None,
+                    device_label=normalization.device_label,
+                    brand=normalization.brand,
                     model=_cell_text(value_at(row, "modelo")) or None,
                     hostname=_cell_text(value_at(row, "nombre_equipo")) or _cell_text(value_at(row, "hostname")) or None,
                     ip_address=ip_value,
@@ -871,14 +903,20 @@ async def import_equipment_xlsx(
         processed=processed,
         imported=imported,
         rejected=rejected,
+        normalized=normalized_rows,
+        normalization_changes=len(all_normalizations),
         filename=(file.filename or "")[:120],
     )
 
     visible_errors = all_errors[:200]
+    visible_normalizations = all_normalizations[:200]
     return EquipmentImportResult(
         processed=processed,
         imported=imported,
         rejected=rejected,
+        normalized=normalized_rows,
+        normalizations=visible_normalizations,
+        more_normalizations=max(0, len(all_normalizations) - len(visible_normalizations)),
         errors=visible_errors,
         more_errors=max(0, len(all_errors) - len(visible_errors)),
     )
