@@ -1,5 +1,5 @@
 export type TicketStatus = "PENDIENTE" | "EN_PROCESO" | "RESUELTO";
-export type ResolutionType = "SOLUCIONADO" | "REPARADO" | "REEMPLAZADO" | "OBSOLETO" | "IRREPARABLE" | "BAJA_PATRIMONIAL" | "DERIVADO";
+export type ResolutionType = "SOLUCIONADO" | "REPARADO" | "REQUIERE_REPUESTO" | "REEMPLAZADO" | "OBSOLETO" | "IRREPARABLE" | "BAJA_PATRIMONIAL" | "DERIVADO";
 export type TicketPriority = "BAJA" | "MEDIA" | "ALTA";
 export type TicketCategory =
   | "HARDWARE" | "RED_INTERNET" | "IMPRESORA" | "SOFTWARE" | "SISTEMAS_MUNICIPALES"
@@ -157,10 +157,21 @@ export interface EquipmentImportError {
   message: string;
 }
 
+export interface EquipmentNormalizationExample {
+  row: number;
+  field: string;
+  original: string;
+  normalized: string;
+  method: string;
+}
+
 export interface EquipmentImportResult {
   processed: number;
   imported: number;
   rejected: number;
+  normalized: number;
+  normalizations: EquipmentNormalizationExample[];
+  more_normalizations: number;
   errors: EquipmentImportError[];
   more_errors: number;
 }
