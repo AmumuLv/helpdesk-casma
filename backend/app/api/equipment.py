@@ -16,7 +16,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from pymongo.errors import DuplicateKeyError
 
 from app.ai.engine import equipment_row, get_engine, load_ticket_rows
@@ -62,7 +62,7 @@ class EquipmentImportResult(BaseModel):
     imported: int
     rejected: int
     normalized: int = 0
-    normalizations: list[EquipmentNormalizationExample] = []
+    normalizations: list[EquipmentNormalizationExample] = Field(default_factory=list)
     more_normalizations: int = 0
     errors: list[EquipmentImportError]
     more_errors: int = 0
@@ -139,6 +139,7 @@ _HEADER_ALIASES = {
     "procesador": "cpu",
     "ram_gb": "ram_gb",
     "ram": "ram_gb",
+    "memoria_ram_gb": "ram_gb",
     "almacenamiento_gb": "almacenamiento_gb",
     "almacenamiento": "almacenamiento_gb",
     "disco_gb": "almacenamiento_gb",
