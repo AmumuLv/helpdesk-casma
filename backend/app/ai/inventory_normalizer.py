@@ -125,8 +125,11 @@ def _normalize_brand(raw_brand: str | None, context: str) -> tuple[str | None, s
         return None, None
 
     for canonical, aliases in _BRAND_ALIASES.items():
-        if raw == _fold(canonical) or raw in {_fold(alias) for alias in aliases}:
+        alias_values = {_fold(canonical), *(_fold(alias) for alias in aliases)}
+        if raw in alias_values:
             return canonical, "alias"
+        if any(re.search(rf"\b{re.escape(alias)}\b", raw) for alias in alias_values if alias):
+            return canonical, "contexto"
 
     candidates: list[tuple[float, str]] = []
     for canonical, aliases in _BRAND_ALIASES.items():
