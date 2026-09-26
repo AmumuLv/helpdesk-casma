@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app import db
 from app.ai.engine import get_engine
-from app.api import admin, ai, auth, equipment, events, office_portal, tickets
+from app.api import admin, ai, auth, equipment, events, office_portal, organization, tickets
 from app.core.config import get_settings
 from app.core.ratelimit import limiter
 
@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.model_dir).mkdir(parents=True, exist_ok=True)
+    Path(settings.backup_dir).mkdir(parents=True, exist_ok=True)
     await db.connect()
     warmup = asyncio.create_task(get_engine().ensure_ready())
     scheduler = None
@@ -81,7 +82,7 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok", "ai_ready": get_engine().state is not None}
 
-    for module in (auth, office_portal, tickets, admin, equipment, ai, events):
+    for module in (auth, office_portal, tickets, admin, organization, equipment, ai, events):
         api.include_router(module.router)
     api.include_router(tickets.tech_router)
     api.include_router(tickets.lookup_router)

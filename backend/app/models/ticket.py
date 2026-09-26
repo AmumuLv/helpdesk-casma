@@ -1,8 +1,9 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated
 
 from beanie import Document, Indexed, PydanticObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.timeutil import utcnow
 from app.models.enums import (
@@ -14,6 +15,17 @@ from app.models.enums import (
     TicketStatus,
     TimelineKind,
 )
+
+
+class ResolutionType(StrEnum):
+    SOLUCIONADO = "SOLUCIONADO"
+    REPARADO = "REPARADO"
+    REQUIERE_REPUESTO = "REQUIERE_REPUESTO"
+    REEMPLAZADO = "REEMPLAZADO"
+    OBSOLETO = "OBSOLETO"
+    IRREPARABLE = "IRREPARABLE"
+    BAJA_PATRIMONIAL = "BAJA_PATRIMONIAL"
+    DERIVADO = "DERIVADO"
 
 
 class AttachmentMeta(BaseModel):
@@ -55,6 +67,10 @@ class AIAnalysis(BaseModel):
     equipment_risk: float | None = None
     equipment_risk_factors: list[str] = Field(default_factory=list)
     equipment_incidents_90d: int = 0
+    historical_summary: str | None = None
+    historical_patterns: list[str] = Field(default_factory=list)
+    historical_recommendations: list[str] = Field(default_factory=list)
+    historical_evidence: list[str] = Field(default_factory=list)
     related_alert: str | None = None
     briefing: str = ""
     user_message: str = ""
@@ -76,15 +92,42 @@ class Resolution(BaseModel):
     notes: str
     resolved_by_id: str
     resolved_by_name: str
+    tipo_resolucion: ResolutionType = ResolutionType.SOLUCIONADO
     resolved_at: datetime = Field(default_factory=utcnow)
     confirmed_by_user: bool | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_resolution_status(cls, data):
+        """Convierte el campo temporal 'status' usado en versiones anteriores."""
+        if not isinstance(data, dict) or "tipo_resolucion" in data or "status" not in data:
+            return data
+        values = dict(data)
+        legacy = values.pop("status")
+        mapping = {
+            "Resuelto": ResolutionType.SOLUCIONADO,
+            "Resuelto - Reparado": ResolutionType.REPARADO,
+            "Resuelto - Requiere repuesto": ResolutionType.REQUIERE_REPUESTO,
+            "Resuelto - Requiere compra de repuesto": ResolutionType.REQUIERE_REPUESTO,
+            "Resuelto - Reemplazado": ResolutionType.REEMPLAZADO,
+            "Resuelto - Obsoleto": ResolutionType.OBSOLETO,
+            "Resuelto - Baja patrimonial": ResolutionType.BAJA_PATRIMONIAL,
+            "Resuelto - Derivado": ResolutionType.DERIVADO,
+        }
+        values["tipo_resolucion"] = mapping.get(legacy, ResolutionType.SOLUCIONADO)
+        return values
 
 
 class Ticket(Document):
     number: Annotated[str, Indexed(unique=True)]
+    # La zona se conserva en el ticket para mantener trazabilidad histórica
+    # aunque posteriormente cambie la oficina de zona.
+    zone_id: Annotated[PydanticObjectId | None, Indexed()] = None
     office_id: Annotated[PydanticObjectId, Indexed()]
     office_name: str
     office_location: str | None = None
+    # Usuario que reporta/posee el ticket dentro de la oficina.
+    user_id: Annotated[PydanticObjectId | None, Indexed()] = None
     device_id: PydanticObjectId | None = None
     equipment_id: Annotated[PydanticObjectId | None, Indexed()] = None
     equipment: EquipmentSnapshot | None = None
@@ -110,6 +153,12 @@ class Ticket(Document):
     deleted_at: datetime | None = None
     created_at: Annotated[datetime, Indexed()] = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @model_validator(mode="after")
+    def _validate_hierarchy(self):
+        if self.user_id is not None and self.office_id is None:
+            raise ValueError("Un ticket con user_id debe pertenecer a una oficina.")
+        return self
 
     class Settings:
         name = "tickets"

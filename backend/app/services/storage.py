@@ -54,3 +54,11 @@ def attachment_path(meta: AttachmentMeta) -> Path:
     if base not in path.parents:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return path
+
+
+def stored_image_path(relative_path: str) -> Path:
+    base = Path(get_settings().upload_dir).resolve()
+    path = (base / relative_path).resolve()
+    if base not in path.parents:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return path

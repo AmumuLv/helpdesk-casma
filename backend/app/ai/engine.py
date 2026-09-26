@@ -21,12 +21,12 @@ from app.ai.seed import seed_samples
 from app.ai.similarity import CaseDoc, SimilarityIndex
 from app.ai.taxonomy import CATEGORY_LABELS, QUICK_ISSUES
 from app.ai.text import normalize
-from app.ai.triage import CategoryClassifier, PriorityContext, PriorityModel, score_priority
+from app.ai.triage import CategoryClassifier, PriorityContext, PriorityModel, score_priority, summarize_equipment_history
 from app.core.config import get_settings
 from app.core.timeutil import aware, utcnow
 from app.models import AIModelRecord, Announcement, Equipment, Office, StaffUser, Ticket
-from app.models.enums import QuickIssue, StaffRole, TicketCategory, TicketStatus
-from app.models.ticket import AIAnalysis, SimilarCase
+from app.models.enums import QuickIssue, StaffRole, TicketCategory, TicketStatus, TimelineKind
+from app.models.ticket import AIAnalysis, SimilarCase, TimelineEntry
 
 log = logging.getLogger("helpdesk.ai")
 ARTIFACT = "engine.joblib"
@@ -192,6 +192,123 @@ class AIEngine:
         candidates = await self._candidates()
         return await asyncio.to_thread(self._analyze_sync, req, self.state, history, alerts, candidates, now)
 
+    async def load_equipment_history_summary(
+        self,
+        equipment: Equipment,
+        exclude_ticket_id: str | None = None,
+        current_text: str = "",
+    ) -> str:
+        """Lee el historial real del equipo y devuelve una nota predictiva explicable."""
+        now = utcnow()
+        history = await load_ticket_rows(now - timedelta(days=365), {"equipment_id": equipment.id})
+        if exclude_ticket_id:
+            history = [item for item in history if item.id != exclude_ticket_id]
+        return summarize_equipment_history(
+            history,
+            now,
+            current_text=current_text,
+            equipment_type=equipment.type.value,
+        ).note
+
+    async def analyze_ticket_background(self, ticket_id: str) -> None:
+        """Enriquece un ticket ya guardado; pensado para FastAPI BackgroundTasks."""
+        try:
+            tid = PydanticObjectId(ticket_id)
+            ticket = await Ticket.get(tid)
+            if not ticket or ticket.deleted_at:
+                return
+
+            office = await Office.get(ticket.office_id)
+            if not office:
+                log.warning("No se pudo enriquecer %s: oficina inexistente", ticket_id)
+                return
+
+            equipment = await Equipment.get(ticket.equipment_id) if ticket.equipment_id else None
+            analysis = await self.analyze(
+                TriageRequest(
+                    subject=ticket.subject,
+                    description=ticket.description,
+                    quick_issue=ticket.quick_issue,
+                    office=office,
+                    equipment=equipment,
+                    exclude_ticket_id=ticket_id,
+                    category_hint=ticket.category if ticket.category_source == "TECNICO" else None,
+                )
+            )
+
+            predictive_note = analysis.historical_summary if equipment else None
+
+            # Recargar para no sobrescribir cambios hechos por un técnico mientras corría la IA.
+            current = await Ticket.get(tid)
+            if not current or current.deleted_at:
+                return
+
+            current.ai = analysis
+            if current.category_source != "TECNICO":
+                current.category = analysis.category
+                current.category_source = "IA"
+
+            # La prioridad inicial sigue siendo la del triaje local del Prompt 2.
+            current.timeline.append(
+                TimelineEntry(
+                    kind=TimelineKind.IA,
+                    actor="Asistente IA",
+                    text=analysis.briefing,
+                    internal=True,
+                )
+            )
+            if predictive_note:
+                existing_note = next(
+                    (
+                        entry
+                        for entry in current.timeline
+                        if entry.internal
+                        and entry.actor == "IA predictiva"
+                        and entry.text.startswith("Contexto histórico predictivo:")
+                    ),
+                    None,
+                )
+                if existing_note:
+                    existing_note.text = predictive_note
+                    existing_note.at = utcnow()
+                else:
+                    current.timeline.append(
+                        TimelineEntry(
+                            kind=TimelineKind.NOTA,
+                            actor="IA predictiva",
+                            text=predictive_note,
+                            internal=True,
+                        )
+                    )
+
+            settings = get_settings()
+            if (
+                settings.ai_auto_assign_urgent
+                and current.priority.value == "ALTA"
+                and not current.assigned_to_id
+                and analysis.suggested_technician_id
+            ):
+                tech = await StaffUser.get(PydanticObjectId(analysis.suggested_technician_id))
+                if tech and tech.active:
+                    current.assigned_to_id = tech.id
+                    current.assigned_to_name = tech.full_name
+                    current.status = TicketStatus.EN_PROCESO
+                    current.first_response_at = current.first_response_at or utcnow()
+                    current.timeline.append(
+                        TimelineEntry(
+                            kind=TimelineKind.ASIGNADO,
+                            actor="Asistente IA",
+                            text=f"{tech.full_name} fue sugerido y asignado automáticamente.",
+                            internal=True,
+                        )
+                    )
+
+            current.updated_at = utcnow()
+            await current.save()
+            log.info("Análisis IA asíncrono completado para %s", current.number)
+        except Exception:
+            log.exception("Falló el análisis IA asíncrono del ticket %s", ticket_id)
+
     def _analyze_sync(self, req, st, history, alerts, candidates, now) -> AIAnalysis:
         text = f"{req.subject}. {req.description}".strip()
         info = QUICK_ISSUES.get(req.quick_issue) if req.quick_issue else None
@@ -209,12 +326,19 @@ class AIEngine:
             category, confidence = pred.category, pred.confidence
 
         risk, factors, incidents_90d, eq_desc = None, [], 0, None
+        history_summary = None
         if req.equipment:
             eq = req.equipment
             risk, factors = st["risk"].score(equipment_row(eq), history, st["model_rates"], now)
             incidents_90d = sum(1 for h in history if h.created_at > now - timedelta(days=90))
             name = " ".join(x for x in (eq.brand, eq.model) if x) or eq.type.value
             eq_desc = f"{name} ({eq.patrimonial_code})" + (f", IP {eq.ip_address}" if eq.ip_address else "")
+            history_summary = summarize_equipment_history(
+                history,
+                now,
+                current_text=text,
+                equipment_type=eq.type.value,
+            )
 
         alert = next((a for a in alerts if a.category in (None, category)), None)
         prio = score_priority(
@@ -240,6 +364,10 @@ class AIEngine:
             equipment_risk=risk,
             equipment_risk_factors=factors,
             equipment_incidents_90d=incidents_90d,
+            historical_summary=history_summary.note if history_summary else None,
+            historical_patterns=history_summary.patterns if history_summary else [],
+            historical_recommendations=history_summary.recommendations if history_summary else [],
+            historical_evidence=history_summary.evidence if history_summary else [],
             related_alert=alert.staff_message if alert else None,
             briefing=briefing(category, confidence, eq_desc, incidents_90d, risk, similar[0][0].resolution if similar else None, alert.staff_message if alert else None),
             user_message=user_message(prio.priority, alert.message if alert else None),

@@ -22,6 +22,7 @@ export function useMe() {
 export function useLogout() {
   const qc = useQueryClient();
   return async () => {
+    navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_OFFLINE_CACHE" });
     await api("/auth/logout", { method: "POST" }).catch(() => undefined);
     qc.clear();
     qc.setQueryData(["me"], null);

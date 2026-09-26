@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     upload_dir: str = "./storage/uploads"
     model_dir: str = "./storage/models"
+    backup_dir: str = "./storage/backups"
+    backup_retention_days: int = Field(default=14, ge=1, le=365)
     max_upload_mb: int = 8
 
     public_base_url: str = "http://localhost:5173"

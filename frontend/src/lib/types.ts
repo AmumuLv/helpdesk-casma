@@ -1,4 +1,5 @@
 export type TicketStatus = "PENDIENTE" | "EN_PROCESO" | "RESUELTO";
+export type ResolutionType = "SOLUCIONADO" | "REPARADO" | "REQUIERE_REPUESTO" | "REEMPLAZADO" | "OBSOLETO" | "IRREPARABLE" | "BAJA_PATRIMONIAL" | "DERIVADO";
 export type TicketPriority = "BAJA" | "MEDIA" | "ALTA";
 export type TicketCategory =
   | "HARDWARE" | "RED_INTERNET" | "IMPRESORA" | "SOFTWARE" | "SISTEMAS_MUNICIPALES"
@@ -7,8 +8,10 @@ export type QuickIssue = "NO_ENCIENDE" | "SIN_INTERNET" | "IMPRESORA" | "LENTA" 
 export type DeviceStatus = "PENDIENTE" | "APROBADO" | "RECHAZADO" | "REVOCADO";
 export type DeviceKind = "PC" | "LAPTOP" | "CELULAR" | "TABLET" | "OTRO";
 export type StaffRole = "ADMIN" | "TECNICO";
+export type OfficeServiceLevel = "NORMAL" | "ATENCION_PUBLICO" | "SERVICIO_CRITICO";
 export type EquipmentType =
-  | "PC" | "LAPTOP" | "IMPRESORA" | "MONITOR" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
+  | "CPU" | "MONITOR" | "MOUSE" | "TECLADO" | "IMPRESORA" | "LAPTOP"
+  | "PC" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
 export type EquipmentStatus = "OPERATIVO" | "EN_REPARACION" | "BAJA";
 
 export interface Me {
@@ -34,6 +37,10 @@ export interface AIAnalysis {
   equipment_risk: number | null;
   equipment_risk_factors: string[];
   equipment_incidents_90d: number;
+  historical_summary: string | null;
+  historical_patterns: string[];
+  historical_recommendations: string[];
+  historical_evidence: string[];
   related_alert: string | null;
   briefing: string;
   user_message: string;
@@ -49,9 +56,9 @@ export interface Ticket {
   id: string; number: string; office_id: string; office_name: string; office_location: string | null;
   equipment: EquipmentSnapshot | null; channel: string; quick_issue: QuickIssue | null; subject: string; description: string;
   reporter_name: string | null; contact_phone: string | null; category: TicketCategory; category_source: string;
-  priority: TicketPriority; status: TicketStatus; assigned_to_id: string | null; assigned_to_name: string | null;
+  priority: TicketPriority; priority_source: string; status: TicketStatus; assigned_to_id: string | null; assigned_to_name: string | null;
   attachments: Attachment[]; ai: AIAnalysis | null;
-  resolution: { notes: string; resolved_by_name: string; resolved_at: string; confirmed_by_user: boolean | null } | null;
+  resolution: { notes: string; resolved_by_name: string; tipo_resolucion: ResolutionType; resolved_at: string; confirmed_by_user: boolean | null } | null;
   timeline: TimelineEntry[]; first_response_at: string | null; created_at: string; updated_at: string;
 }
 
@@ -83,8 +90,48 @@ export interface StaffMember {
 }
 
 export interface Office {
-  id: string; code: string; name: string; username: string; location: string | null; head_name: string | null;
-  head_phone: string | null; priority_weight: number; active: boolean; devices_approved: number; devices_pending: number; created_at: string;
+  id: string; code: string; name: string; username: string; zone_id: string | null; zone_name: string | null;
+  location: string | null; head_name: string | null; head_phone: string | null;
+  service_level: OfficeServiceLevel; service_reason: string | null; priority_weight: number;
+  active: boolean; devices_approved: number; devices_pending: number; created_at: string;
+}
+
+export interface Zone {
+  id: string; code: string; name: string; description: string | null; active: boolean;
+  office_count: number; user_count: number; equipment_count: number; created_at: string; updated_at: string;
+}
+
+export interface MunicipalUser {
+  id: string; employee_code: string | null; full_name: string; office_id: string; office_name: string;
+  zone_id: string | null; zone_name: string | null; job_title: string | null; email: string | null; phone: string | null;
+  photo_url: string | null; active: boolean; equipment_count: number; created_at: string; updated_at: string;
+}
+
+export interface OrganizationOfficeSummary {
+  id: string; code: string; name: string; location: string | null; head_name: string | null;
+  service_level: OfficeServiceLevel; service_reason: string | null; active: boolean;
+  user_count: number; equipment_count: number; ticket_count: number;
+}
+
+export interface ZoneProfile {
+  zone: Zone;
+  offices: OrganizationOfficeSummary[];
+  recent_tickets: Ticket[];
+}
+
+export interface OfficeProfile {
+  office: Office;
+  users: MunicipalUser[];
+  equipment: Equipment[];
+  recent_tickets: Ticket[];
+  ticket_count: number;
+}
+
+export interface MunicipalUserProfile {
+  user: MunicipalUser;
+  equipment: Equipment[];
+  recent_tickets: Ticket[];
+  ticket_count: number;
 }
 
 export interface Device {
@@ -94,11 +141,48 @@ export interface Device {
 }
 
 export interface Equipment {
-  id: string; patrimonial_code: string; type: EquipmentType; brand: string | null; model: string | null; serial_number: string | null;
-  hostname: string | null; ip_address: string | null; mac_address: string | null; office_id: string | null; office_name: string | null;
-  specs: { cpu: string | null; ram_gb: number | null; storage_gb: number | null; os: string | null };
+  id: string; inventory_id: string | null; patrimonial_code: string; type: EquipmentType;
+  area: string | null; device_label: string | null; brand: string | null; model: string | null;
+  hostname: string | null; ip_address: string | null; mac_address: string | null;
+  office_id: string | null; office_name: string | null; zone_id: string | null; zone_name: string | null;
+  responsable_id: string | null; responsible_name: string | null; responsible_type: "USUARIO" | "JEFE" | "OFICINA"; property_type: string | null;
+  specs: { cpu: string | null; ram_gb: number | null; storage_gb: number | null; screen_size_inches: number | null; os: string | null };
   acquired_on: string | null; warranty_until: string | null; status: EquipmentStatus; criticality: number; notes: string | null;
   created_at: string; updated_at: string;
+}
+
+export interface EquipmentImportError {
+  row: number;
+  patrimonial_code: string | null;
+  message: string;
+}
+
+export interface EquipmentNormalizationExample {
+  row: number;
+  field: string;
+  original: string;
+  normalized: string;
+  method: string;
+}
+
+export interface EquipmentImportResult {
+  processed: number;
+  imported: number;
+  rejected: number;
+  normalized: number;
+  normalizations: EquipmentNormalizationExample[];
+  more_normalizations: number;
+  errors: EquipmentImportError[];
+  more_errors: number;
+}
+
+export interface EquipmentImportOfficeRef {
+  office_code: string;
+  office_name: string;
+  zone_id: string | null;
+  zone_name: string | null;
+  head_name: string | null;
+  import_enabled: boolean;
 }
 
 export interface Insights {

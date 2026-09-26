@@ -23,7 +23,7 @@ services:
     depends_on:
       - mongo
     volumes:
-      - ./backend/storage:/app/storage
+      - ./backend/storage:/data
 
   # 🌐 FRONTEND (React/Vite)
   frontend:

@@ -1,9 +1,10 @@
 from datetime import timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from app.ai.engine import get_engine
 from app.ai.taxonomy import QUICK_ISSUES
 from app.api.deps import OfficePrincipal, parse_id, require_office
 from app.core.ratelimit import limiter
@@ -11,6 +12,7 @@ from app.core.timeutil import utcnow
 from app.models import Announcement, Equipment, Ticket
 from app.models.enums import DeviceKind, EquipmentStatus, EquipmentType, QuickIssue, TicketChannel, TicketStatus
 from app.schemas.ticket import ConfirmIn, OfficeTicketCreatedOut, OfficeTicketOut
+from app.services import audit
 from app.services import tickets as ticket_service
 from app.services.serializers import office_ticket_out
 
@@ -90,6 +92,7 @@ async def equipment_by_code(code: str, p: OfficePrincipal = Depends(require_offi
 @limiter.limit("20/hour")
 async def create_ticket(
     request: Request,
+    background_tasks: BackgroundTasks,
     quick_issue: QuickIssue = Form(...),
     description: str = Form("", max_length=2000),
     equipment_id: str | None = Form(None),
@@ -99,6 +102,11 @@ async def create_ticket(
     photo: UploadFile | None = File(None),
     p: OfficePrincipal = Depends(require_office),
 ):
+    if replayed_id := await audit.replayed_target_id(request, "ticket"):
+        replayed = await Ticket.get(parse_id(replayed_id)) if parse_id(replayed_id) else None
+        if replayed and not replayed.deleted_at and replayed.office_id == p.office.id:
+            return OfficeTicketCreatedOut(ticket=office_ticket_out(replayed), duplicated=False)
+
     equipment = None
     if equipment_id:
         eid = parse_id(equipment_id)
@@ -113,6 +121,15 @@ async def create_ticket(
         device=p.device, reporter_name=(reporter_name or "").strip() or None, contact_phone=(contact_phone or "").strip() or None,
         photo=photo if photo and photo.filename else None,
     ))
+    if not duplicated:
+        background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
+        await audit.record(
+            request, "office", "ticket.created",
+            actor_id=str(p.office.id), actor_name=p.office.name,
+            target_type="ticket", target_id=str(ticket.id),
+            channel=channel.value,
+            **audit.offline_request_details(request),
+        )
     return OfficeTicketCreatedOut(ticket=office_ticket_out(ticket), duplicated=duplicated)
 
 
