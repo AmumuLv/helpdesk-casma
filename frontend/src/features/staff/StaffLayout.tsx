@@ -1,13 +1,29 @@
-import { Bell, BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, KeyRound, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, Settings, UserRound, Users, WifiOff, X, type LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Bell, BrainCircuit, Building2, CheckCheck, ClipboardList, Clock3, CloudUpload, Headset, KeyRound, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, Settings, Trash2, UserCheck, UserRound, Users, WifiOff, X, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
 import { cx, Input } from "../../components/ui";
+import { api } from "../../lib/api";
 import { useLiveEvents, useLogout, useMe, type LiveEvent } from "../../lib/session";
-import { useDevices } from "./hooks";
+import type { Page, Ticket } from "../../lib/types";
+import { useDevices, useKpis } from "./hooks";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; admin?: boolean; end?: boolean; section: "Operación" | "Administración" };
-type PanelNotification = { id: string; title: string; body?: string; tone: "info" | "danger" | "success"; createdAt: number };
+type NotificationTone = "info" | "danger" | "success";
+type NotificationAudience = "all" | "mine" | "pending" | "system";
+type NotificationFilter = "all" | "mine" | "pending";
+type PanelNotification = {
+  id: string;
+  title: string;
+  body?: string;
+  tone: NotificationTone;
+  audience: NotificationAudience;
+  createdAt: number;
+  read: boolean;
+  target?: string;
+  ticketId?: string;
+};
 
 const NAV: NavItem[] = [
   { to: "/soporte", label: "Incidencias", icon: ClipboardList, end: true, section: "Operación" },
@@ -20,17 +36,46 @@ const NAV: NavItem[] = [
   { to: "/soporte/auditoria", label: "Auditoría", icon: ScrollText, admin: true, section: "Administración" },
 ];
 
+const MAX_NOTIFICATIONS = 30;
+const NOTIFICATION_STORAGE_PREFIX = "helpdesk_staff_notifications_";
+
 const readSetting = (key: string, fallback = true) => {
   const value = localStorage.getItem(key);
   if (value === null) return fallback;
   return value !== "false";
 };
 
+const readStoredNotifications = (staffId: string): PanelNotification[] => {
+  try {
+    const raw = localStorage.getItem(`${NOTIFICATION_STORAGE_PREFIX}${staffId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is PanelNotification => (
+        !!item
+        && typeof item.id === "string"
+        && typeof item.title === "string"
+        && typeof item.createdAt === "number"
+        && typeof item.read === "boolean"
+      ))
+      .slice(0, MAX_NOTIFICATIONS);
+  } catch {
+    return [];
+  }
+};
+
 export function StaffLayout() {
   const { data: me } = useMe();
   const isAdmin = me?.staff?.role === "ADMIN";
-  const pending = useDevices("PENDIENTE", isAdmin);
-  const pendingCount = isAdmin ? pending.data?.length ?? 0 : 0;
+  const pendingDevices = useDevices("PENDIENTE", isAdmin);
+  const pendingDeviceCount = isAdmin ? pendingDevices.data?.length ?? 0 : 0;
+  const kpis = useKpis();
+  const myActiveTickets = useQuery<Page<Ticket>>({
+    queryKey: ["tickets", "notification-summary", "mine-active"],
+    queryFn: () => api<Page<Ticket>>("/tickets?active=true&assigned=me&page=1&page_size=1"),
+    enabled: !!me?.staff,
+    staleTime: 20_000,
+  });
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,18 +94,30 @@ export function StaffLayout() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [panelNotifications, setPanelNotifications] = useState<PanelNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsHydrated, setNotificationsHydrated] = useState(false);
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => readSetting("helpdesk_notifications_enabled"));
   const [showConnection, setShowConnection] = useState(() => readSetting("helpdesk_show_connection"));
 
-  const addPanelNotification = useCallback((notification: Omit<PanelNotification, "id" | "createdAt">) => {
+  useEffect(() => {
+    if (!me?.staff?.id) return;
+    setPanelNotifications(readStoredNotifications(me.staff.id));
+    setNotificationsHydrated(true);
+  }, [me?.staff?.id]);
+
+  useEffect(() => {
+    if (!notificationsHydrated || !me?.staff?.id) return;
+    localStorage.setItem(`${NOTIFICATION_STORAGE_PREFIX}${me.staff.id}`, JSON.stringify(panelNotifications.slice(0, MAX_NOTIFICATIONS)));
+  }, [panelNotifications, notificationsHydrated, me?.staff?.id]);
+
+  const addPanelNotification = useCallback((notification: Omit<PanelNotification, "id" | "createdAt" | "read">) => {
     const item: PanelNotification = {
       ...notification,
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       createdAt: Date.now(),
+      read: false,
     };
-    setPanelNotifications((current) => [item, ...current].slice(0, 6));
-    setUnreadCount((current) => Math.min(current + 1, 99));
+    setPanelNotifications((current) => [item, ...current].slice(0, MAX_NOTIFICATIONS));
   }, []);
 
   const onEvent = useCallback((e: LiveEvent) => {
@@ -68,20 +125,40 @@ export function StaffLayout() {
 
     if (e.type === "ticket.created") {
       const tone = e.priority === "ALTA" ? "danger" : "info";
+      const target = e.ticket_id
+        ? `/soporte?source=notifications&ticket=${encodeURIComponent(e.ticket_id)}`
+        : `/soporte?q=${encodeURIComponent(e.number ?? "")}`;
       toast({ tone, title: `Nueva incidencia ${e.number ?? ""}`, body: `${e.office}: ${e.subject}` });
-      addPanelNotification({ tone, title: `Nueva incidencia ${e.number ?? ""}`, body: `${e.office}: ${e.subject}` });
+      addPanelNotification({
+        tone,
+        audience: e.status === "PENDIENTE" ? "pending" : "all",
+        title: `Nueva incidencia ${e.number ?? ""}`,
+        body: `${e.office}: ${e.subject}`,
+        target,
+        ticketId: e.ticket_id,
+      });
     }
     if (e.type === "ticket.assigned") {
+      const target = e.ticket_id
+        ? `/soporte?source=notifications&ticket=${encodeURIComponent(e.ticket_id)}`
+        : "/soporte?source=notifications&mine=1&status=ACTIVAS";
       toast({ tone: "info", title: `Se le asignó ${e.number}`, body: `${e.office}: ${e.subject}` });
-      addPanelNotification({ tone: "info", title: `Incidencia asignada ${e.number}`, body: `${e.office}: ${e.subject}` });
+      addPanelNotification({
+        tone: "info",
+        audience: "mine",
+        title: `Incidencia asignada ${e.number}`,
+        body: `${e.office}: ${e.subject}`,
+        target,
+        ticketId: e.ticket_id,
+      });
     }
     if (e.type === "device.pending" && isAdmin) {
       toast({ tone: "info", title: "Equipo esperando autorización", body: `${e.office} con el código ${e.pair_code}` });
-      addPanelNotification({ tone: "info", title: "Dispositivo pendiente", body: `${e.office} · código ${e.pair_code}` });
+      addPanelNotification({ tone: "info", audience: "system", title: "Dispositivo pendiente", body: `${e.office} · código ${e.pair_code}`, target: "/soporte/dispositivos" });
     }
     if (e.type === "alert.created") {
       toast({ tone: "danger", title: e.title ?? "Alerta", body: e.message });
-      addPanelNotification({ tone: "danger", title: e.title ?? "Alerta", body: e.message });
+      addPanelNotification({ tone: "danger", audience: "system", title: e.title ?? "Alerta", body: e.message, target: "/soporte/ia" });
     }
   }, [toast, isAdmin, notificationsEnabled, addPanelNotification]);
   useLiveEvents(true, onEvent);
@@ -165,6 +242,18 @@ export function StaffLayout() {
     ? me.staff.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
     : "TI";
 
+  const unreadCount = panelNotifications.filter((notification) => !notification.read).length;
+  const myNotificationCount = panelNotifications.filter((notification) => notification.audience === "mine").length;
+  const pendingNotificationCount = panelNotifications.filter((notification) => notification.audience === "pending").length;
+  const filteredNotifications = panelNotifications.filter((notification) => {
+    if (notificationFilter === "mine") return notification.audience === "mine";
+    if (notificationFilter === "pending") return notification.audience === "pending";
+    return true;
+  });
+  const readCount = panelNotifications.length - unreadCount;
+  const myActiveCount = myActiveTickets.data?.total ?? 0;
+  const pendingTicketCount = kpis.data?.pendientes ?? 0;
+
   const openNewTicket = () => navigate("/soporte?new=1");
   const groups = ["Operación", "Administración"] as const;
   const closeSession = async () => {
@@ -176,7 +265,24 @@ export function StaffLayout() {
     const term = headerSearch.trim();
     navigate(term ? `/soporte?q=${encodeURIComponent(term)}` : "/soporte");
   };
-  const notificationBadge = Math.min(99, unreadCount + pendingCount + (offlinePending > 0 ? 1 : 0));
+  const goFromNotifications = (target: string) => {
+    setNotificationsOpen(false);
+    navigate(target);
+  };
+  const openPanelNotification = (notification: PanelNotification) => {
+    setPanelNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+    if (notification.target) goFromNotifications(notification.target);
+  };
+  const removePanelNotification = (id: string) => {
+    setPanelNotifications((current) => current.filter((notification) => notification.id !== id));
+  };
+  const markAllRead = () => {
+    setPanelNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
+  };
+  const removeReadNotifications = () => {
+    setPanelNotifications((current) => current.filter((notification) => !notification.read));
+  };
+  const notificationBadge = Math.min(99, unreadCount + pendingDeviceCount + (offlinePending > 0 ? 1 : 0));
 
   return (
     <div className="min-h-dvh bg-papel text-tinta">
@@ -229,8 +335,8 @@ export function StaffLayout() {
                           {isActive && <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-[#D97706]" aria-hidden />}
                           <Icon className={cx("size-5 shrink-0 transition-colors", isActive ? "text-[#F59E0B]" : "text-[#94A3B8] group-hover:text-white")} aria-hidden />
                           <span className="min-w-0 flex-1 truncate">{label}</span>
-                          {to === "/soporte/dispositivos" && pendingCount > 0 && (
-                            <span className="rounded-full bg-[#EAB308] px-2 py-1 text-xs font-bold leading-none text-[#111827]">{pendingCount}</span>
+                          {to === "/soporte/dispositivos" && pendingDeviceCount > 0 && (
+                            <span className="rounded-full bg-[#EAB308] px-2 py-1 text-xs font-bold leading-none text-[#111827]">{pendingDeviceCount}</span>
                           )}
                         </>
                       )}
@@ -315,10 +421,8 @@ export function StaffLayout() {
                   aria-controls="notifications-menu"
                   title="Notificaciones"
                   onClick={() => {
-                    const next = !notificationsOpen;
-                    setNotificationsOpen(next);
+                    setNotificationsOpen((current) => !current);
                     setSettingsOpen(false);
-                    if (next) setUnreadCount(0);
                   }}
                 >
                   <Bell className="size-5" aria-hidden />
@@ -345,62 +449,164 @@ export function StaffLayout() {
                 </button>
 
                 {notificationsOpen && (
-                  <div id="notifications-menu" className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_55px_rgba(15,23,42,0.18)]">
-                    <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                      <div>
-                        <p className="font-bold text-tinta">Notificaciones</p>
-                        <p className="text-xs text-tenue">Actividad importante del Help Desk</p>
-                      </div>
-                      {panelNotifications.length > 0 && (
-                        <button type="button" className="text-xs font-bold text-casma-oscuro hover:underline" onClick={() => setPanelNotifications([])}>
-                          Limpiar
+                  <div id="notifications-menu" className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-[min(29rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_65px_rgba(15,23,42,0.22)]">
+                    <div className="border-b border-slate-200 bg-gradient-to-r from-white to-slate-50 px-4 py-3.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-tinta">Centro de notificaciones</p>
+                            {unreadCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">{unreadCount} nuevas</span>}
+                          </div>
+                          <p className="mt-0.5 text-xs text-tenue">Incidencias asignadas, pendientes y avisos del sistema</p>
+                        </div>
+                        <button type="button" className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={() => setNotificationsOpen(false)} aria-label="Cerrar notificaciones">
+                          <X className="size-4" />
                         </button>
-                      )}
-                    </div>
-                    <div className="max-h-[26rem] overflow-y-auto p-2">
-                      {pendingCount > 0 && (
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => navigate("/soporte/dispositivos")}
-                          className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-amber-50"
+                          onClick={() => goFromNotifications("/soporte?source=notifications&mine=1&status=ACTIVAS")}
+                          className="flex min-h-16 items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
                         >
-                          <span className="mt-1.5 size-2.5 shrink-0 rounded-full bg-amber-500" />
-                          <span>
-                            <span className="block text-sm font-bold text-tinta">{pendingCount} dispositivo{pendingCount === 1 ? "" : "s"} pendiente{pendingCount === 1 ? "" : "s"}</span>
-                            <span className="mt-0.5 block text-xs leading-5 text-tenue">Requiere autorización del administrador.</span>
+                          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><UserCheck className="size-4" /></span>
+                          <span className="min-w-0">
+                            <span className="block text-xl font-extrabold leading-none text-slate-900">{myActiveCount}</span>
+                            <span className="mt-1 block truncate text-[11px] font-bold uppercase tracking-[0.05em] text-emerald-800">Mis casos activos</span>
                           </span>
                         </button>
-                      )}
-                      {offlinePending > 0 && (
-                        <div className="flex items-start gap-3 rounded-xl px-3 py-3">
-                          <span className="mt-1.5 size-2.5 shrink-0 rounded-full bg-sky-500" />
-                          <span>
-                            <span className="block text-sm font-bold text-tinta">{offlinePending} cambio{offlinePending === 1 ? "" : "s"} por sincronizar</span>
-                            <span className="mt-0.5 block text-xs leading-5 text-tenue">Se enviará al servidor cuando haya conexión.</span>
-                          </span>
-                        </div>
-                      )}
-                      {panelNotifications.map((notification) => (
-                        <div key={notification.id} className="flex items-start gap-3 rounded-xl px-3 py-3 hover:bg-slate-50">
-                          <span className={cx("mt-1.5 size-2.5 shrink-0 rounded-full", notification.tone === "danger" ? "bg-red-500" : notification.tone === "success" ? "bg-emerald-500" : "bg-sky-500")} />
+                        <button
+                          type="button"
+                          onClick={() => goFromNotifications("/soporte?source=notifications&status=PENDIENTE")}
+                          className="flex min-h-16 items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-3 text-left transition hover:border-amber-300 hover:bg-amber-50"
+                        >
+                          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-800"><Clock3 className="size-4" /></span>
                           <span className="min-w-0">
-                            <span className="block text-sm font-bold text-tinta">{notification.title}</span>
-                            {notification.body && <span className="mt-0.5 block text-xs leading-5 text-tenue">{notification.body}</span>}
-                            <span className="mt-1 block text-[11px] font-medium text-slate-400">{new Date(notification.createdAt).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</span>
+                            <span className="block text-xl font-extrabold leading-none text-slate-900">{pendingTicketCount}</span>
+                            <span className="mt-1 block truncate text-[11px] font-bold uppercase tracking-[0.05em] text-amber-800">Pendientes</span>
                           </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {(pendingDeviceCount > 0 || offlinePending > 0) && (
+                      <div className="border-b border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                        {pendingDeviceCount > 0 && (
+                          <button type="button" onClick={() => goFromNotifications("/soporte/dispositivos")} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-xs transition hover:bg-white">
+                            <span className="size-2 shrink-0 rounded-full bg-amber-500" />
+                            <span className="font-bold text-slate-800">{pendingDeviceCount} dispositivo{pendingDeviceCount === 1 ? "" : "s"} por autorizar</span>
+                          </button>
+                        )}
+                        {offlinePending > 0 && (
+                          <div className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs">
+                            <span className="size-2 shrink-0 rounded-full bg-sky-500" />
+                            <span className="font-bold text-slate-800">{offlinePending} cambio{offlinePending === 1 ? "" : "s"} por sincronizar</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
+                      <div className="flex min-w-0 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Filtrar notificaciones">
+                        {([
+                          ["all", "Todas", panelNotifications.length],
+                          ["mine", "Para mí", myNotificationCount],
+                          ["pending", "Pendientes", pendingNotificationCount],
+                        ] as const).map(([value, label, count]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            role="tab"
+                            aria-selected={notificationFilter === value}
+                            onClick={() => setNotificationFilter(value)}
+                            className={cx(
+                              "min-h-8 rounded-lg px-2.5 text-xs font-bold transition",
+                              notificationFilter === value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                            )}
+                          >
+                            {label}{count > 0 ? ` ${count}` : ""}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {unreadCount > 0 && (
+                          <button type="button" onClick={markAllRead} className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-casma-oscuro" title="Marcar todas como leídas" aria-label="Marcar todas como leídas">
+                            <CheckCheck className="size-4" />
+                          </button>
+                        )}
+                        {readCount > 0 && (
+                          <button type="button" onClick={removeReadNotifications} className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-red-50 hover:text-red-700" title="Borrar notificaciones leídas" aria-label="Borrar notificaciones leídas">
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="max-h-[24rem] overflow-y-auto p-2">
+                      {filteredNotifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={cx(
+                            "group mb-1 flex items-start gap-1 rounded-xl border transition",
+                            notification.read ? "border-transparent bg-white hover:bg-slate-50" : "border-sky-100 bg-sky-50/60 hover:bg-sky-50",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => openPanelNotification(notification)}
+                            className="flex min-w-0 flex-1 items-start gap-3 px-3 py-3 text-left"
+                          >
+                            <span className={cx(
+                              "mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl",
+                              notification.tone === "danger" ? "bg-red-100 text-red-700" : notification.audience === "mine" ? "bg-emerald-100 text-emerald-700" : notification.audience === "pending" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-700",
+                            )}>
+                              {notification.audience === "mine" ? <UserCheck className="size-4" /> : notification.audience === "pending" ? <Clock3 className="size-4" /> : <Bell className="size-4" />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-1.5">
+                                <span className="block text-sm font-bold leading-5 text-tinta">{notification.title}</span>
+                                {!notification.read && <span className="size-2 rounded-full bg-sky-500" aria-label="No leída" />}
+                              </span>
+                              {notification.body && <span className="mt-0.5 block line-clamp-2 text-xs leading-5 text-tenue">{notification.body}</span>}
+                              <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-400">
+                                <span>{new Date(notification.createdAt).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                                {notification.audience === "mine" && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">Asignada a ti</span>}
+                                {notification.audience === "pending" && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-800">Pendiente</span>}
+                              </span>
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePanelNotification(notification.id)}
+                            className="mr-2 mt-2 grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 opacity-80 transition hover:bg-red-50 hover:text-red-700 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                            aria-label={`Eliminar ${notification.title}`}
+                            title="Eliminar notificación"
+                          >
+                            <X className="size-4" />
+                          </button>
                         </div>
                       ))}
-                      {pendingCount === 0 && offlinePending === 0 && panelNotifications.length === 0 && (
+
+                      {filteredNotifications.length === 0 && (
                         <div className="px-4 py-8 text-center">
-                          <Bell className="mx-auto size-6 text-slate-400" aria-hidden />
-                          <p className="mt-2 text-sm font-bold text-tinta">Sin novedades</p>
-                          <p className="mt-1 text-xs leading-5 text-tenue">Las nuevas incidencias y alertas aparecerán aquí.</p>
+                          <Bell className="mx-auto size-7 text-slate-300" aria-hidden />
+                          <p className="mt-2 text-sm font-bold text-tinta">
+                            {notificationFilter === "mine" ? "No hay avisos asignados a ti" : notificationFilter === "pending" ? "No hay avisos pendientes" : "Sin notificaciones recientes"}
+                          </p>
+                          <p className="mx-auto mt-1 max-w-64 text-xs leading-5 text-tenue">
+                            {notificationFilter === "all" ? "Las nuevas incidencias y alertas aparecerán aquí y se conservarán en este navegador." : "Puede usar los accesos superiores para consultar las incidencias actuales directamente."}
+                          </p>
                         </div>
                       )}
                     </div>
-                    <div className="border-t border-slate-200 p-2">
-                      <button type="button" onClick={() => navigate("/soporte")} className="min-h-10 w-full rounded-lg text-sm font-bold text-casma-oscuro transition hover:bg-casma-claro">
-                        Ver incidencias
+
+                    <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50/60 p-2.5">
+                      <button type="button" onClick={() => goFromNotifications("/soporte?source=notifications&mine=1&status=ACTIVAS")} className="min-h-10 rounded-xl bg-white px-3 text-xs font-bold text-casma-oscuro shadow-sm ring-1 ring-slate-200 transition hover:bg-casma-claro">
+                        Ver mis casos
+                      </button>
+                      <button type="button" onClick={() => goFromNotifications("/soporte?source=notifications&status=PENDIENTE")} className="min-h-10 rounded-xl bg-white px-3 text-xs font-bold text-amber-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-amber-50">
+                        Ver pendientes
                       </button>
                     </div>
                   </div>
