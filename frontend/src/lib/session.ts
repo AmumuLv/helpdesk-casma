@@ -40,7 +40,18 @@ const INVALIDATIONS: Record<string, string[][]> = {
   "alert.created": [["insights"], ["office-home"]],
 };
 
-export type LiveEvent = { type: string; title?: string; message?: string; number?: string; subject?: string; office?: string; priority?: string; pair_code?: string };
+export type LiveEvent = {
+  type: string;
+  title?: string;
+  message?: string;
+  ticket_id?: string;
+  number?: string;
+  subject?: string;
+  office?: string;
+  status?: string;
+  priority?: string;
+  pair_code?: string;
+};
 
 export function useLiveEvents(enabled: boolean, onEvent?: (e: LiveEvent) => void) {
   const qc = useQueryClient();
