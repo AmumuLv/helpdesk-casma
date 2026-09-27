@@ -54,15 +54,9 @@ export function StaffLayout() {
         payload?: { number?: string };
       }>).detail;
 
-      if (detail?.type === "OFFLINE_QUEUE_CHANGED") {
-        setOfflinePending(Number(detail.pending ?? 0));
-      }
-      if ((detail?.type === "OFFLINE_READ_USED" || detail?.type === "OFFLINE_READ_CACHE_READY") && detail.cachedAt) {
-        setOfflineCachedAt(Number(detail.cachedAt));
-      }
-      if (detail?.type === "OFFLINE_READ_CACHE_CLEARED") {
-        setOfflineCachedAt(null);
-      }
+      if (detail?.type === "OFFLINE_QUEUE_CHANGED") setOfflinePending(Number(detail.pending ?? 0));
+      if ((detail?.type === "OFFLINE_READ_USED" || detail?.type === "OFFLINE_READ_CACHE_READY") && detail.cachedAt) setOfflineCachedAt(Number(detail.cachedAt));
+      if (detail?.type === "OFFLINE_READ_CACHE_CLEARED") setOfflineCachedAt(null);
       if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_SENT") {
         toast({
           tone: "success",
@@ -71,25 +65,13 @@ export function StaffLayout() {
         });
       }
       if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_REJECTED") {
-        toast({
-          tone: "danger",
-          title: "No se pudo sincronizar un cambio",
-          body: "El servidor rechazó una acción guardada sin conexión. Revise el ticket.",
-        });
+        toast({ tone: "danger", title: "No se pudo sincronizar un cambio", body: "El servidor rechazó una acción guardada sin conexión. Revise el ticket." });
       }
       if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_AUTH_REQUIRED") {
-        toast({
-          tone: "danger",
-          title: "Sincronización detenida",
-          body: "Debe volver a iniciar sesión para enviar los cambios pendientes.",
-        });
+        toast({ tone: "danger", title: "Sincronización detenida", body: "Debe volver a iniciar sesión para enviar los cambios pendientes." });
       }
       if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_USER_MISMATCH") {
-        toast({
-          tone: "danger",
-          title: "Cambios pendientes de otro técnico",
-          body: "Estas acciones solo se sincronizarán cuando vuelva a iniciar sesión el técnico que las realizó.",
-        });
+        toast({ tone: "danger", title: "Cambios pendientes de otro técnico", body: "Estas acciones solo se sincronizarán cuando vuelva a iniciar sesión el técnico que las realizó." });
       }
     };
 
@@ -97,9 +79,7 @@ export function StaffLayout() {
     window.addEventListener("offline", onOffline);
     window.addEventListener("helpdesk-offline-sync", onSync);
     navigator.serviceWorker?.controller?.postMessage({ type: "GET_OFFLINE_QUEUE_COUNT" });
-    if (navigator.onLine) {
-      navigator.serviceWorker?.controller?.postMessage({ type: "WARM_OFFLINE_DATA" });
-    }
+    if (navigator.onLine) navigator.serviceWorker?.controller?.postMessage({ type: "WARM_OFFLINE_DATA" });
 
     return () => {
       window.removeEventListener("online", onOnline);
@@ -108,28 +88,36 @@ export function StaffLayout() {
     };
   }, [toast]);
 
+  const initials = me?.staff?.full_name
+    ? me.staff.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+    : "TI";
+
   return (
-    <div className="min-h-dvh bg-papel/70">
-      <header className="sticky top-0 z-30 border-b border-casma-oscuro bg-casma-oscuro text-white shadow-[0_10px_30px_rgba(20,83,45,0.16)]">
-        <div className="border-b border-white/10">
+    <div className="min-h-dvh bg-papel/75">
+      <header className="sticky top-0 z-30 border-b border-casma-oscuro bg-casma-oscuro text-white shadow-[0_12px_34px_rgba(20,83,45,0.18)]">
+        <div className="border-b border-white/10 bg-gradient-to-r from-casma-oscuro via-[#176333] to-casma-oscuro">
           <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-4 py-3 sm:px-5">
             <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10 shadow-inner">
+              <span className="grid size-11 place-items-center rounded-2xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <Headset className="size-5 text-sol" aria-hidden />
               </span>
               <div className="leading-tight">
-                <p className="text-base font-bold tracking-tight">Help Desk Municipal</p>
-                <p className="mt-0.5 text-xs text-white/70">Municipalidad Provincial de Casma</p>
+                <p className="text-base font-extrabold tracking-[-0.02em]">Help Desk Municipal</p>
+                <p className="mt-0.5 text-xs font-medium text-white/68">Municipalidad Provincial de Casma</p>
               </div>
             </div>
+
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
-              <div className="hidden text-right leading-tight sm:block">
-                <p className="font-bold">{me?.staff?.full_name}</p>
-                <p className="mt-0.5 text-xs text-white/65">{isAdmin ? "Administrador" : "Técnico"}</p>
+              <div className="hidden items-center gap-2.5 rounded-2xl border border-white/10 bg-black/10 px-3 py-2 sm:flex">
+                <span className="grid size-8 place-items-center rounded-xl bg-white/12 text-xs font-extrabold text-sol">{initials}</span>
+                <div className="text-right leading-tight">
+                  <p className="max-w-48 truncate text-sm font-bold">{me?.staff?.full_name}</p>
+                  <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/55">{isAdmin ? "Administrador" : "Técnico"}</p>
+                </div>
               </div>
               <button
                 onClick={async () => { await logout(); navigate("/soporte/ingresar"); }}
-                className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-bold text-white/85 transition hover:border-white/15 hover:bg-white/10 hover:text-white"
+                className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-bold text-white/82 transition hover:border-white/15 hover:bg-white/10 hover:text-white focus-visible:ring-4 focus-visible:ring-sol/25"
                 aria-label="Cerrar sesión"
               >
                 <LogOut className="size-4" /> <span className="hidden md:inline">Salir</span>
@@ -138,22 +126,33 @@ export function StaffLayout() {
           </div>
         </div>
 
-        <nav className="mx-auto flex max-w-[1500px] gap-1.5 overflow-x-auto px-3 py-2 sm:px-5" aria-label="Secciones">
+        <nav className="mx-auto flex max-w-[1500px] gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-5" aria-label="Secciones">
           {NAV.filter((n) => !n.admin || isAdmin).map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) => cx(
-                "flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-all",
+                "group relative flex shrink-0 items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-bold transition-all duration-150",
                 isActive
-                  ? "bg-white text-casma-oscuro shadow-sm ring-1 ring-black/5"
-                  : "text-white/78 hover:bg-white/10 hover:text-white",
+                  ? "bg-white text-casma-oscuro shadow-[0_5px_14px_rgba(0,0,0,0.13)] ring-1 ring-black/5"
+                  : "text-white/72 hover:bg-white/10 hover:text-white",
               )}
             >
-              <Icon className="size-4" aria-hidden /> {label}
-              {to === "/soporte/dispositivos" && pendingCount > 0 && (
-                <span className="rounded-full bg-sol px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-tinta">{pendingCount}</span>
+              {({ isActive }) => (
+                <>
+                  <span className={cx(
+                    "grid size-7 place-items-center rounded-lg transition-all",
+                    isActive ? "bg-casma-claro text-casma-oscuro" : "bg-white/7 text-white/75 group-hover:bg-white/12 group-hover:text-white",
+                  )}>
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                  <span>{label}</span>
+                  {to === "/soporte/dispositivos" && pendingCount > 0 && (
+                    <span className="rounded-full bg-sol px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-tinta">{pendingCount}</span>
+                  )}
+                  {isActive && <span className="absolute inset-x-3 -bottom-2.5 h-0.5 rounded-full bg-sol" aria-hidden />}
+                </>
               )}
             </NavLink>
           ))}
@@ -163,9 +162,7 @@ export function StaffLayout() {
           <div className="border-t border-white/10 bg-black/10">
             <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-sm sm:px-5">
               {!online ? <WifiOff className="size-4 text-sol" /> : <CloudUpload className="size-4 text-sol" />}
-              <span className="font-bold">
-                {!online ? "Modo offline" : "Sincronizando cambios"}
-              </span>
+              <span className="font-bold">{!online ? "Modo offline" : "Sincronizando cambios"}</span>
               <span className="text-white/70">
                 {offlinePending > 0
                   ? `· ${offlinePending} acción${offlinePending === 1 ? "" : "es"} pendiente${offlinePending === 1 ? "" : "s"}`
@@ -174,17 +171,16 @@ export function StaffLayout() {
                     : ""}
               </span>
               {!online && offlineCachedAt && (
-                <span className="text-white/60">
-                  · mostrando copia local de {new Date(offlineCachedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}
-                </span>
+                <span className="text-white/60">· mostrando copia local de {new Date(offlineCachedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</span>
               )}
             </div>
           </div>
         )}
 
-        <div className="h-1 bg-sol" aria-hidden />
+        <div className="h-1 bg-gradient-to-r from-sol via-[#f6cf45] to-sol" aria-hidden />
       </header>
-      <main className="mx-auto max-w-[1500px] px-3 py-6 sm:px-5 sm:py-7">
+
+      <main className="mx-auto max-w-[1500px] px-3 py-6 sm:px-5 sm:py-7 lg:py-8">
         <Outlet />
       </main>
     </div>
