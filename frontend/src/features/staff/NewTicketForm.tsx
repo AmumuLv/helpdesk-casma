@@ -221,9 +221,65 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
     </div>
   ) : (
     <form onSubmit={submit} className="flex flex-col gap-5">
-      <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sm leading-6 text-slate-700">
-        <p className="font-bold text-slate-900">Registro manual asistido</p>
-        <p className="mt-1">Úselo cuando el reporte llega por teléfono, presencialmente o cuando TI detecta el problema. La ubicación se selecciona respetando la jerarquía institucional: zona, oficina y finalmente usuario.</p>
+      <div
+        role="note"
+        className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 shadow-[0_10px_30px_rgba(217,119,6,0.08)]"
+      >
+        <div className="flex items-start gap-3 border-b border-amber-100/80 px-4 py-4 sm:px-5">
+          <span className="mt-0.5 grid size-11 shrink-0 place-items-center rounded-2xl bg-amber-500 text-white shadow-sm">
+            <ClipboardCheck className="size-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800">
+                Aviso importante
+              </span>
+              <span className="text-xs font-medium text-slate-500">Registro asistido por el Área TI</span>
+            </div>
+            <h3 className="text-sm font-extrabold text-slate-900 sm:text-base">Registro manual asistido</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-700">
+              Use este formulario cuando la incidencia se reporte por teléfono, de forma presencial o cuando el equipo de TI detecte el problema directamente.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-700">¿Cuándo usar este formulario?</p>
+            <ul className="space-y-2 text-sm text-slate-700">
+              <li className="flex items-start gap-2">
+                <PhoneCall className="mt-0.5 size-4 shrink-0 text-casma-oscuro" aria-hidden />
+                <span>Cuando el reporte llega por teléfono.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <UserRound className="mt-0.5 size-4 shrink-0 text-casma-oscuro" aria-hidden />
+                <span>Cuando el usuario informa el problema presencialmente.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Wrench className="mt-0.5 size-4 shrink-0 text-casma-oscuro" aria-hidden />
+                <span>Cuando el personal TI detecta la incidencia por cuenta propia.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-700">Regla de registro</p>
+            <p className="text-sm leading-6 text-slate-700">
+              Para mantener el orden institucional, la ubicación debe seleccionarse respetando la jerarquía oficial del sistema:
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-slate-800">1. Zona</span>
+              <span className="text-amber-500" aria-hidden>→</span>
+              <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-slate-800">2. Oficina</span>
+              <span className="text-amber-500" aria-hidden>→</span>
+              <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-slate-800">3. Usuario</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-amber-100/80 bg-amber-50/60 px-4 py-3 text-xs leading-5 text-slate-600 sm:px-5">
+          <strong className="text-slate-800">Importante:</strong> si el trabajador ya está registrado, selecciónelo desde la jerarquía para asociar correctamente la incidencia y evitar errores en la trazabilidad.
+        </div>
       </div>
 
       <SectionBlock icon={<MapPin className="size-4" />} title="1. Ubicación y solicitante" subtitle="Siga el orden Zona → Oficina → Usuario para evitar registros en áreas equivocadas">
