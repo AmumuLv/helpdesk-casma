@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowRight, CircleCheckBig, Clock3, FileClock, ListTodo, LoaderCircle, Search, TriangleAlert } from "lucide-react";
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { ArrowRight, Check, CircleCheckBig, Clock3, FileClock, ListTodo, LoaderCircle, Search, TriangleAlert } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { Badge, Button, Card, CategoryBadge, cx, EmptyState, ErrorBox, Input, Modal, PriorityBadge, Spinner, StatusBadge } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -20,22 +20,24 @@ const FILTERS: { value: DashboardFilter; label: string }[] = [
 
 type KpiTone = "active" | "pending" | "progress" | "closed";
 
+const SELECTED_KPI = "border-[#D97706] bg-[#FFFBEB] ring-2 ring-[#F59E0B]/20 shadow-[0_16px_34px_rgba(217,119,6,0.14)]";
+
 const KPI_TONE: Record<KpiTone, { iconWrap: string; active: string }> = {
   active: {
     iconWrap: "bg-casma-claro text-casma-oscuro",
-    active: "border-casma/30 ring-2 ring-casma/10 shadow-[0_16px_34px_rgba(21,128,61,0.13)]",
+    active: SELECTED_KPI,
   },
   pending: {
     iconWrap: "bg-sol-claro text-[#713f12]",
-    active: "border-amber-300 ring-2 ring-sol/15 shadow-[0_16px_34px_rgba(234,179,8,0.12)]",
+    active: SELECTED_KPI,
   },
   progress: {
     iconWrap: "bg-sky-50 text-sky-800",
-    active: "border-sky-200 ring-2 ring-sky-100 shadow-[0_16px_34px_rgba(14,165,233,0.10)]",
+    active: SELECTED_KPI,
   },
   closed: {
     iconWrap: "bg-emerald-50 text-emerald-800",
-    active: "border-emerald-200 ring-2 ring-emerald-100 shadow-[0_16px_34px_rgba(16,185,129,0.10)]",
+    active: SELECTED_KPI,
   },
 };
 
@@ -68,6 +70,12 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const createOpen = searchParams.get("new") === "1";
+  const urlQuery = searchParams.get("q") ?? "";
+
+  useEffect(() => {
+    setQ(urlQuery);
+  }, [urlQuery]);
+
   const closeCreate = () => {
     const next = new URLSearchParams(searchParams);
     next.delete("new");
@@ -345,18 +353,26 @@ function Kpi({
       onClick={onClick}
       aria-pressed={active}
       className={cx(
-        "rounded-2xl border border-transparent bg-white p-4 text-left shadow-[0_10px_26px_rgba(15,23,42,0.05)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)] sm:rounded-3xl sm:p-5",
+        "rounded-2xl border border-transparent bg-white p-4 text-left shadow-[0_10px_26px_rgba(15,23,42,0.05)] transition-all duration-150 hover:-translate-y-0.5 hover:border-[#F59E0B]/50 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)] sm:p-5",
         active && style.active,
       )}
     >
       <div className="flex items-start justify-between gap-2 sm:gap-4">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-tenue">{label}</p>
+          <p className={cx("truncate text-sm font-semibold", active ? "text-[#92400E]" : "text-tenue")}>{label}</p>
           <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-tinta sm:mt-3 sm:text-4xl">{value ?? "–"}</p>
         </div>
-        <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl sm:size-10 sm:rounded-2xl", style.iconWrap)}>{icon}</span>
+        <span className={cx("relative grid size-10 shrink-0 place-items-center rounded-xl", style.iconWrap)}>
+          {icon}
+          {active && (
+            <span className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-[#D97706] text-white shadow-sm ring-2 ring-[#FFFBEB]" aria-hidden>
+              <Check className="size-4 stroke-[3]" />
+            </span>
+          )}
+        </span>
       </div>
-      <p className="mt-4 line-clamp-2 text-xs font-medium leading-4 text-tenue sm:mt-6 sm:text-sm sm:leading-5">{detail ?? "Información en actualización"}</p>
+      <p className={cx("mt-4 line-clamp-2 text-xs font-medium leading-4 sm:mt-6 sm:text-sm sm:leading-5", active ? "text-[#78350F]" : "text-tenue")}>{detail ?? "Información en actualización"}</p>
+      {active && <span className="sr-only">Filtro seleccionado</span>}
     </button>
   );
 }
