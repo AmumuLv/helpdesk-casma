@@ -3,10 +3,10 @@
 @import "@fontsource/atkinson-hyperlegible-next/700.css";
 
 @theme {
-  --font-sans: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --font-sans: "Segoe UI Variable", "Segoe UI", "Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --color-tinta: #1f2937;
   --color-tinta-2: #374151;
-  --color-papel: #f8fafc;
+  --color-papel: #f7f9fb;
   --color-casma: #1e7a3b;
   --color-casma-oscuro: #14532d;
   --color-casma-claro: #eaf6ee;
@@ -16,23 +16,40 @@
   --color-alerta-claro: #fee2e2;
   --color-hecho: #15803d;
   --color-hecho-claro: #dcfce7;
-  --color-linea: #e5e7eb;
-  --color-tenue: #6b7280;
+  --color-linea: #e2e7ec;
+  --color-tenue: #667085;
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
     background: var(--color-papel);
+    scroll-behavior: smooth;
   }
 
   body {
     @apply bg-papel text-tinta font-sans antialiased;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at 12% 0%, rgb(30 122 59 / 0.035), transparent 30rem),
-      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 26rem);
+      radial-gradient(circle at 10% -5%, rgb(30 122 59 / 0.055), transparent 28rem),
+      radial-gradient(circle at 92% 0%, rgb(234 179 8 / 0.04), transparent 22rem),
+      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 29rem);
     min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 
   ::selection {
@@ -41,14 +58,38 @@
   }
 
   :focus-visible {
-    outline: 3px solid var(--color-sol);
+    outline: 3px solid rgb(234 179 8 / 0.72);
     outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #b8c1cc transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: #b8c1cc;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #8f9baa;
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }
@@ -57,16 +98,17 @@
   .tecla {
     @apply relative flex w-full items-center gap-5 rounded-2xl border border-linea bg-white px-5 py-5 text-left text-tinta;
     box-shadow: 0 8px 22px rgb(31 41 55 / 0.06);
-    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
   }
 
   .tecla:hover {
-    border-color: rgb(30 122 59 / 0.45);
-    box-shadow: 0 12px 28px rgb(31 41 55 / 0.09);
+    border-color: rgb(30 122 59 / 0.42);
+    box-shadow: 0 14px 30px rgb(31 41 55 / 0.09);
+    transform: translateY(-1px);
   }
 
   .tecla:active {
-    transform: translateY(1px);
+    transform: translateY(0);
     box-shadow: 0 5px 14px rgb(31 41 55 / 0.06);
   }
 }
