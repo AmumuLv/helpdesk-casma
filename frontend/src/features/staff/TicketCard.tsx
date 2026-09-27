@@ -33,7 +33,7 @@ export function TicketCard({ ticket: t, onOpen }: { ticket: Ticket; onOpen: () =
 
       <div className="flex min-w-0 flex-1 flex-col gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-md bg-papel px-2 py-1 font-mono text-[11px] font-bold tracking-wide text-tenue ring-1 ring-linea">{t.number}</span>
+          <span className="rounded-md bg-papel px-2 py-1 font-mono text-xs font-bold tracking-wide text-tenue ring-1 ring-linea">{t.number}</span>
           <Badge className="border-casma/20 bg-casma text-white shadow-sm">{t.office_name}</Badge>
           <PriorityBadge priority={t.priority} />
           <StatusBadge status={t.status} />
@@ -71,15 +71,15 @@ export function TicketCard({ ticket: t, onOpen }: { ticket: Ticket; onOpen: () =
         {t.status !== "RESUELTO" ? (
           <>
             <div className="flex items-center gap-2">
-              <span className="grid size-7 place-items-center rounded-lg bg-casma-claro text-casma-oscuro"><Wrench className="size-3.5" /></span>
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-tenue">Técnico asignado</p>
+              <span className="grid size-8 place-items-center rounded-lg bg-casma-claro text-casma-oscuro"><Wrench className="size-4" /></span>
+              <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-tenue">Técnico asignado</p>
             </div>
             <Select
               aria-label="Asignar técnico"
               value={t.assigned_to_id ?? ""}
               disabled={assign.isPending}
               onChange={(e) => assign.mutate({ id: t.id, body: { technician_id: e.target.value || null } })}
-              className="h-10 bg-white text-sm"
+              className="h-11 bg-white text-sm"
             >
               <option value="">Sin asignar</option>
               {techs.data?.filter((s) => s.active).map((s) => (

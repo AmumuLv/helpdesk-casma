@@ -11,14 +11,14 @@ const VARIANTS: Record<Variant, string> = {
   primary: "border border-casma-oscuro bg-casma text-white shadow-[0_7px_18px_rgba(21,128,61,0.20)] hover:-translate-y-0.5 hover:bg-casma-oscuro hover:shadow-[0_10px_22px_rgba(22,101,52,0.24)]",
   secondary: "border border-linea bg-white text-tinta shadow-sm hover:-translate-y-0.5 hover:border-casma/35 hover:bg-casma-claro/70 hover:text-casma-oscuro hover:shadow-md",
   danger: "border border-alerta/25 bg-white text-alerta shadow-sm hover:-translate-y-0.5 hover:border-alerta/45 hover:bg-alerta-claro",
-  ghost: "border border-transparent text-tenue hover:bg-slate-100 hover:text-tinta",
+  ghost: "border border-transparent text-tenue hover:bg-casma-claro/65 hover:text-casma-oscuro",
   success: "border border-hecho bg-hecho text-white shadow-[0_7px_18px_rgba(4,120,87,0.18)] hover:-translate-y-0.5 hover:bg-emerald-800 hover:shadow-[0_10px_22px_rgba(4,120,87,0.22)]",
 };
 
 export function Button({ variant = "primary", loading, className, children, disabled, size = "md", ...props }:
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; loading?: boolean; size?: "sm" | "md" | "lg" | "xl" }) {
   const sizes = {
-    sm: "min-h-10 px-3 text-sm gap-1.5",
+    sm: "min-h-11 px-3 text-sm gap-1.5",
     md: "min-h-11 px-4 text-sm gap-2",
     lg: "min-h-12 px-5 text-base gap-2.5",
     xl: "min-h-14 px-6 text-lg sm:text-xl gap-3",
@@ -62,7 +62,7 @@ export function Card({ children, className }: { children: ReactNode; className?:
   return (
     <section
       className={cx(
-        "rounded-2xl border border-linea/90 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)] sm:rounded-3xl",
+        "rounded-2xl border border-linea/90 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]",
         className,
       )}
     >
@@ -118,7 +118,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
       className={cx(
-        "m-auto w-[calc(100%-1rem)] overflow-hidden rounded-2xl border border-linea bg-white p-0 text-tinta shadow-[0_32px_100px_rgba(15,23,42,0.28)] backdrop:bg-slate-950/55 backdrop:backdrop-blur-[3px] sm:w-[calc(100%-1.5rem)] sm:rounded-3xl",
+        "m-auto w-[calc(100%-1rem)] overflow-hidden rounded-2xl border border-linea bg-white p-0 text-tinta shadow-[0_32px_100px_rgba(15,23,42,0.28)] backdrop:bg-slate-950/55 backdrop:backdrop-blur-[3px] sm:w-[calc(100%-1.5rem)]",
         wide ? "max-w-4xl" : "max-w-lg",
       )}
     >

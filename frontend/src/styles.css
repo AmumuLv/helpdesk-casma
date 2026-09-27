@@ -68,6 +68,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  button,
+  a {
+    touch-action: manipulation;
+  }
+
   ::selection {
     background: rgb(21 128 61 / 0.22);
     color: var(--color-tinta);
@@ -158,6 +163,24 @@
   }
 }
 
+/* Controles de estado: en móvil usan una cuadrícula 2x2 en lugar de scroll horizontal. */
+@media (max-width: 639px) {
+  [role="tablist"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100% !important;
+  }
+
+  [role="tablist"] > button {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  [aria-label="Resumen de incidencias"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
 /*
  * Adaptación móvil de tablas administrativas que todavía conservan una tabla
  * completa en escritorio. En pantallas pequeñas cada fila se convierte en una
@@ -197,6 +220,7 @@
 
   table.min-w-\[1080px\] td {
     min-width: 0;
+    overflow-wrap: anywhere;
     padding: 0.7rem 0.85rem !important;
     border: 0 !important;
   }
@@ -205,9 +229,9 @@
     display: block;
     margin-bottom: 0.2rem;
     color: var(--color-tenue);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.055em;
     line-height: 1rem;
     text-transform: uppercase;
   }
@@ -270,6 +294,8 @@
   }
 
   table.min-w-\[620px\] td {
+    min-width: 0;
+    overflow-wrap: anywhere;
     padding: 0.65rem 0.75rem !important;
   }
 
@@ -277,7 +303,7 @@
     display: block;
     margin-bottom: 0.15rem;
     color: var(--color-tenue);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
   }
@@ -287,4 +313,23 @@
   table.min-w-\[620px\] td:nth-child(3)::before { content: "Oficina"; }
   table.min-w-\[620px\] td:nth-child(4)::before { content: "Responsable"; }
   table.min-w-\[620px\] td:nth-child(5)::before { content: "Importación"; }
+}
+
+/* 320–479 px: priorizar lectura sobre densidad; una sola columna por tarjeta. */
+@media (max-width: 479px) {
+  table.min-w-\[1080px\] tbody > tr,
+  table.min-w-\[620px\] tbody > tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  table.min-w-\[1080px\] td:nth-child(1),
+  table.min-w-\[1080px\] td:nth-child(2),
+  table.min-w-\[1080px\] td:nth-child(3),
+  table.min-w-\[1080px\] td:nth-child(4),
+  table.min-w-\[1080px\] td:nth-child(5),
+  table.min-w-\[1080px\] td:nth-child(6),
+  table.min-w-\[1080px\] td:nth-child(7),
+  table.min-w-\[1080px\] td:nth-child(8) {
+    grid-column: 1 / -1;
+  }
 }
