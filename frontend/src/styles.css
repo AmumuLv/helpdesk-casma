@@ -157,3 +157,134 @@
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
+
+/*
+ * Adaptación móvil de tablas administrativas que todavía conservan una tabla
+ * completa en escritorio. En pantallas pequeñas cada fila se convierte en una
+ * tarjeta legible para evitar el scroll horizontal de más de 1000 px.
+ */
+@media (max-width: 767px) {
+  table.min-w-\[1080px\] {
+    display: block;
+    min-width: 100% !important;
+    width: 100%;
+  }
+
+  table.min-w-\[1080px\] thead {
+    display: none;
+  }
+
+  table.min-w-\[1080px\] tbody {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  table.min-w-\[1080px\] tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem 0.75rem;
+    overflow: hidden;
+    border: 1px solid var(--color-linea);
+    border-radius: 1rem;
+    background: white;
+    box-shadow: 0 8px 24px rgb(15 23 42 / 0.045);
+  }
+
+  table.min-w-\[1080px\] tbody > tr:hover {
+    background: white;
+  }
+
+  table.min-w-\[1080px\] td {
+    min-width: 0;
+    padding: 0.7rem 0.85rem !important;
+    border: 0 !important;
+  }
+
+  table.min-w-\[1080px\] td::before {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--color-tenue);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1rem;
+    text-transform: uppercase;
+  }
+
+  table.min-w-\[1080px\] td:nth-child(1)::before { content: "ID TI"; }
+  table.min-w-\[1080px\] td:nth-child(2)::before { content: "Patrimonial"; }
+  table.min-w-\[1080px\] td:nth-child(3)::before { content: "Equipo"; }
+  table.min-w-\[1080px\] td:nth-child(4)::before { content: "Ubicación"; }
+  table.min-w-\[1080px\] td:nth-child(5)::before { content: "Responsable"; }
+  table.min-w-\[1080px\] td:nth-child(6)::before { content: "Red"; }
+  table.min-w-\[1080px\] td:nth-child(7)::before { content: "Estado"; }
+
+  table.min-w-\[1080px\] td:nth-child(1),
+  table.min-w-\[1080px\] td:nth-child(2),
+  table.min-w-\[1080px\] td:nth-child(3),
+  table.min-w-\[1080px\] td:nth-child(4),
+  table.min-w-\[1080px\] td:nth-child(5),
+  table.min-w-\[1080px\] td:nth-child(6),
+  table.min-w-\[1080px\] td:nth-child(7) {
+    grid-column: span 1;
+  }
+
+  table.min-w-\[1080px\] td:nth-child(8) {
+    grid-column: 1 / -1;
+    padding-top: 0.35rem !important;
+    border-top: 1px solid var(--color-linea) !important;
+    text-align: left !important;
+  }
+
+  table.min-w-\[1080px\] td:nth-child(8)::before {
+    display: none;
+  }
+
+  table.min-w-\[1080px\] td:nth-child(8) button {
+    width: 100%;
+  }
+
+  table.min-w-\[620px\] {
+    display: block;
+    min-width: 100% !important;
+    width: 100%;
+  }
+
+  table.min-w-\[620px\] thead {
+    display: none;
+  }
+
+  table.min-w-\[620px\] tbody {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.65rem;
+  }
+
+  table.min-w-\[620px\] tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid var(--color-linea);
+    border-radius: 0.875rem;
+    background: white;
+  }
+
+  table.min-w-\[620px\] td {
+    padding: 0.65rem 0.75rem !important;
+  }
+
+  table.min-w-\[620px\] td::before {
+    display: block;
+    margin-bottom: 0.15rem;
+    color: var(--color-tenue);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  table.min-w-\[620px\] td:nth-child(1)::before { content: "Zona"; }
+  table.min-w-\[620px\] td:nth-child(2)::before { content: "Código"; }
+  table.min-w-\[620px\] td:nth-child(3)::before { content: "Oficina"; }
+  table.min-w-\[620px\] td:nth-child(4)::before { content: "Responsable"; }
+  table.min-w-\[620px\] td:nth-child(5)::before { content: "Importación"; }
+}
