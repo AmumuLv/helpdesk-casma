@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ClipboardList, Search, TriangleAlert } from "lucide-react";
-import { useDeferredValue, useState } from "react";
+import { CircleCheckBig, ClipboardList, Clock3, ListTodo, LoaderCircle, Search, TriangleAlert } from "lucide-react";
+import { useDeferredValue, useState, type ReactNode } from "react";
 import { Button, Card, cx, EmptyState, ErrorBox, Input, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import type { Page, Ticket, TicketStatus } from "../../lib/types";
@@ -13,8 +13,37 @@ const FILTERS: { value: TicketStatus | ""; label: string }[] = [
   { value: "", label: "Todos" },
   { value: "PENDIENTE", label: "Pendientes" },
   { value: "EN_PROCESO", label: "En proceso" },
-  { value: "RESUELTO", label: "Resueltos" },
+  { value: "RESUELTO", label: "Cerrados" },
 ];
+
+type KpiTone = "active" | "pending" | "progress" | "closed";
+
+const KPI_TONE: Record<KpiTone, { card: string; icon: string; value: string; ring: string }> = {
+  active: {
+    card: "border-linea bg-white hover:border-tinta/30",
+    icon: "bg-papel text-tinta",
+    value: "text-tinta",
+    ring: "ring-tinta/20",
+  },
+  pending: {
+    card: "border-sol/40 bg-gradient-to-br from-white to-sol-claro/60 hover:border-sol",
+    icon: "bg-sol-claro text-[#7a5200]",
+    value: "text-[#7a5200]",
+    ring: "ring-sol/35",
+  },
+  progress: {
+    card: "border-casma/30 bg-gradient-to-br from-white to-casma-claro/70 hover:border-casma",
+    icon: "bg-casma-claro text-casma-oscuro",
+    value: "text-casma-oscuro",
+    ring: "ring-casma/30",
+  },
+  closed: {
+    card: "border-hecho/30 bg-gradient-to-br from-white to-hecho-claro/60 hover:border-hecho",
+    icon: "bg-hecho-claro text-hecho",
+    value: "text-hecho",
+    ring: "ring-hecho/25",
+  },
+};
 
 export function Dashboard() {
   const kpis = useKpis();
@@ -41,15 +70,51 @@ export function Dashboard() {
   });
   const tickets = list.data?.pages.flatMap((p) => p.items) ?? [];
   const k = kpis.data;
+  const activeTotal = k ? k.pendientes + k.en_proceso : undefined;
 
   return (
     <div className="flex flex-col gap-5">
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Indicadores">
-        <Kpi label="Total" value={k?.total} accent="border-tinta" onClick={() => setStatus("")} active={status === ""} />
-        <Kpi label="Pendientes" value={k?.pendientes} accent="border-sol" onClick={() => setStatus("PENDIENTE")} active={status === "PENDIENTE"} extra={k ? `${k.sin_asignar} sin asignar` : undefined} />
-        <Kpi label="En proceso" value={k?.en_proceso} accent="border-casma" onClick={() => setStatus("EN_PROCESO")} active={status === "EN_PROCESO"} extra={k ? `${k.urgentes_abiertos} urgentes` : undefined} />
-        <Kpi label="Resueltos" value={k?.resueltos} accent="border-hecho" onClick={() => setStatus("RESUELTO")} active={status === "RESUELTO"}
-          extra={k?.horas_primera_respuesta_30d != null ? `1.ª respuesta: ${k.horas_primera_respuesta_30d} h` : undefined} />
+        <Kpi
+          label="Total"
+          value={activeTotal}
+          icon={<ListTodo className="size-5" />}
+          tone="active"
+          description="Trabajo activo"
+          extra="Pendientes + en proceso"
+          onClick={() => setStatus("")}
+          active={status === ""}
+        />
+        <Kpi
+          label="Pendientes"
+          value={k?.pendientes}
+          icon={<Clock3 className="size-5" />}
+          tone="pending"
+          description="Esperando atención"
+          extra={k ? `${k.sin_asignar} sin asignar` : undefined}
+          onClick={() => setStatus("PENDIENTE")}
+          active={status === "PENDIENTE"}
+        />
+        <Kpi
+          label="En proceso"
+          value={k?.en_proceso}
+          icon={<LoaderCircle className="size-5" />}
+          tone="progress"
+          description="Siendo atendidas"
+          extra={k ? `${k.urgentes_abiertos} urgentes` : undefined}
+          onClick={() => setStatus("EN_PROCESO")}
+          active={status === "EN_PROCESO"}
+        />
+        <Kpi
+          label="Cerrados"
+          value={k?.resueltos}
+          icon={<CircleCheckBig className="size-5" />}
+          tone="closed"
+          description="Histórico finalizado"
+          extra={k?.horas_primera_respuesta_30d != null ? `1.ª respuesta: ${k.horas_primera_respuesta_30d} h` : undefined}
+          onClick={() => setStatus("RESUELTO")}
+          active={status === "RESUELTO"}
+        />
       </section>
 
       {insights.data?.active_alerts.map((a) => (
@@ -104,12 +169,49 @@ export function Dashboard() {
   );
 }
 
-function Kpi({ label, value, accent, extra, onClick, active }: { label: string; value?: number; accent: string; extra?: string; onClick: () => void; active: boolean }) {
+function Kpi({
+  label,
+  value,
+  icon,
+  tone,
+  description,
+  extra,
+  onClick,
+  active,
+}: {
+  label: string;
+  value?: number;
+  icon: ReactNode;
+  tone: KpiTone;
+  description: string;
+  extra?: string;
+  onClick: () => void;
+  active: boolean;
+}) {
+  const style = KPI_TONE[tone];
   return (
-    <button onClick={onClick} className={cx("rounded-2xl border border-l-[6px] bg-white p-4 text-left transition-shadow hover:shadow-md", accent, active ? "ring-2 ring-casma/40" : "border-y-linea border-r-linea")}>
-      <p className="text-sm font-bold text-tenue">{label}</p>
-      <p className="text-3xl font-bold sm:text-4xl">{value ?? "–"}</p>
-      {extra && <p className="mt-0.5 text-xs text-tenue">{extra}</p>}
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cx(
+        "group min-h-36 rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        style.card,
+        active && `ring-2 ${style.ring}`,
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className={cx("flex size-10 items-center justify-center rounded-xl transition-transform group-hover:scale-105", style.icon)} aria-hidden>
+          {icon}
+        </div>
+        <span className="rounded-full border border-current/10 bg-white/70 px-2 py-1 text-[11px] font-bold text-tenue">
+          {description}
+        </span>
+      </div>
+      <div className="mt-4">
+        <p className="text-sm font-bold text-tenue">{label}</p>
+        <p className={cx("mt-0.5 text-3xl font-extrabold tracking-tight sm:text-4xl", style.value)}>{value ?? "–"}</p>
+        {extra && <p className="mt-1 text-xs font-medium text-tenue">{extra}</p>}
+      </div>
     </button>
   );
 }
