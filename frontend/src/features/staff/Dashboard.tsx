@@ -20,30 +20,30 @@ const FILTERS: { value: DashboardFilter; label: string }[] = [
 
 type KpiTone = "active" | "pending" | "progress" | "closed";
 
-const KPI_TONE: Record<KpiTone, { card: string; icon: string; value: string; ring: string }> = {
+const KPI_TONE: Record<KpiTone, { accent: string; icon: string; value: string; selected: string }> = {
   active: {
-    card: "border-linea bg-white hover:border-tinta/30",
+    accent: "bg-tinta",
     icon: "bg-papel text-tinta",
     value: "text-tinta",
-    ring: "ring-tinta/20",
+    selected: "border-tinta/30 ring-2 ring-tinta/10",
   },
   pending: {
-    card: "border-sol/40 bg-gradient-to-br from-white to-sol-claro/60 hover:border-sol",
+    accent: "bg-sol",
     icon: "bg-sol-claro text-[#7a5200]",
     value: "text-[#7a5200]",
-    ring: "ring-sol/35",
+    selected: "border-sol/60 ring-2 ring-sol/15",
   },
   progress: {
-    card: "border-casma/30 bg-gradient-to-br from-white to-casma-claro/70 hover:border-casma",
+    accent: "bg-casma",
     icon: "bg-casma-claro text-casma-oscuro",
     value: "text-casma-oscuro",
-    ring: "ring-casma/30",
+    selected: "border-casma/50 ring-2 ring-casma/15",
   },
   closed: {
-    card: "border-hecho/30 bg-gradient-to-br from-white to-hecho-claro/60 hover:border-hecho",
+    accent: "bg-hecho",
     icon: "bg-hecho-claro text-hecho",
     value: "text-hecho",
-    ring: "ring-hecho/25",
+    selected: "border-hecho/40 ring-2 ring-hecho/10",
   },
 };
 
@@ -77,14 +77,14 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Indicadores">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Resumen de incidencias">
         <Kpi
-          label="Total"
+          label="Activos"
           value={activeTotal}
           icon={<ListTodo className="size-5" />}
           tone="active"
-          description="Trabajo activo"
-          extra="Pendientes + en proceso"
+          description="Carga de trabajo actual"
+          extra={k ? `${k.pendientes} pendientes · ${k.en_proceso} en proceso` : undefined}
           onClick={() => setStatus("ACTIVAS")}
           active={status === "ACTIVAS"}
         />
@@ -93,7 +93,7 @@ export function Dashboard() {
           value={k?.pendientes}
           icon={<Clock3 className="size-5" />}
           tone="pending"
-          description="Esperando atención"
+          description="Aún sin iniciar"
           extra={k ? `${k.sin_asignar} sin asignar` : undefined}
           onClick={() => setStatus("PENDIENTE")}
           active={status === "PENDIENTE"}
@@ -103,8 +103,8 @@ export function Dashboard() {
           value={k?.en_proceso}
           icon={<LoaderCircle className="size-5" />}
           tone="progress"
-          description="Siendo atendidas"
-          extra={k ? `${k.urgentes_abiertos} urgentes` : undefined}
+          description="Atención en curso"
+          extra={k ? `${k.urgentes_abiertos} urgentes abiertos` : undefined}
           onClick={() => setStatus("EN_PROCESO")}
           active={status === "EN_PROCESO"}
         />
@@ -114,7 +114,7 @@ export function Dashboard() {
           icon={<CircleCheckBig className="size-5" />}
           tone="closed"
           description="Histórico finalizado"
-          extra={k?.horas_primera_respuesta_30d != null ? `1.ª respuesta: ${k.horas_primera_respuesta_30d} h` : undefined}
+          extra={k?.horas_primera_respuesta_30d != null ? `Respuesta inicial promedio: ${k.horas_primera_respuesta_30d} h` : "Sin datos de respuesta"}
           onClick={() => setStatus("RESUELTO")}
           active={status === "RESUELTO"}
         />
@@ -197,23 +197,27 @@ function Kpi({
       onClick={onClick}
       aria-pressed={active}
       className={cx(
-        "group min-h-36 rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        style.card,
-        active && `ring-2 ${style.ring}`,
+        "group relative min-h-40 overflow-hidden rounded-2xl border border-linea bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-tinta/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-casma/30",
+        active && style.selected,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className={cx("flex size-10 items-center justify-center rounded-xl transition-transform group-hover:scale-105", style.icon)} aria-hidden>
-          {icon}
+      <div className={cx("absolute inset-x-0 top-0 h-1", style.accent)} aria-hidden />
+      <div className="flex h-full flex-col p-5 pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-bold tracking-tight text-tinta">{label}</p>
+            <p className="mt-1 text-xs font-medium text-tenue">{description}</p>
+          </div>
+          <div className={cx("flex size-10 shrink-0 items-center justify-center rounded-xl", style.icon)} aria-hidden>
+            {icon}
+          </div>
         </div>
-        <span className="rounded-full border border-current/10 bg-white/70 px-2 py-1 text-[11px] font-bold text-tenue">
-          {description}
-        </span>
-      </div>
-      <div className="mt-4">
-        <p className="text-sm font-bold text-tenue">{label}</p>
-        <p className={cx("mt-0.5 text-3xl font-extrabold tracking-tight sm:text-4xl", style.value)}>{value ?? "–"}</p>
-        {extra && <p className="mt-1 text-xs font-medium text-tenue">{extra}</p>}
+
+        <p className={cx("mt-4 text-4xl font-extrabold leading-none tracking-tight", style.value)}>{value ?? "–"}</p>
+
+        <div className="mt-auto border-t border-linea/80 pt-3">
+          <p className="truncate text-xs font-medium text-tenue" title={extra}>{extra ?? "Sin información adicional"}</p>
+        </div>
       </div>
     </button>
   );
