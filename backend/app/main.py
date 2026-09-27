@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok", "ai_ready": get_engine().state is not None}
 
-    for module in (auth, office_portal, tickets, staff_ticket_entry, admin, organization, equipment, ai, events):
+    for module in (auth, office_portal, staff_ticket_entry, tickets, admin, organization, equipment, ai, events):
         api.include_router(module.router)
     api.include_router(tickets.tech_router)
     api.include_router(tickets.lookup_router)
