@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build:
-    name: Typecheck and build
+    name: Vite production build
     runs-on: ubuntu-latest
 
     defaults:
@@ -38,5 +38,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build frontend bundle
+        run: npx vite build
