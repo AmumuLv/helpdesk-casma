@@ -1,4 +1,4 @@
-import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, ShieldCheck, Users, WifiOff, X, type LucideIcon } from "lucide-react";
+import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, ShieldCheck, Users, WifiOff, X, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
@@ -112,37 +112,44 @@ export function StaffLayout() {
 
   const openNewTicket = () => navigate("/soporte?new=1");
   const groups = ["Operación", "Administración"] as const;
+  const closeSession = async () => {
+    await logout();
+    navigate("/soporte/ingresar");
+  };
 
   return (
     <div className="min-h-dvh bg-papel text-tinta">
-      <div className={cx("fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm transition lg:hidden", sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0")} onClick={() => setSidebarOpen(false)} />
+      <div
+        className={cx("fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm transition lg:hidden", sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0")}
+        onClick={() => setSidebarOpen(false)}
+      />
 
       <aside className={cx(
-        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-[#111827] text-white shadow-2xl transition-transform duration-200 lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-casma-oscuro text-white shadow-2xl transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}>
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-5">
-          <div className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-2xl bg-white/10 text-[#5eead4] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <div className="flex items-center justify-between border-b-2 border-sol/70 px-5 py-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sol text-tinta shadow-[0_6px_16px_rgba(15,23,42,0.18)]">
               <Headset className="size-5" aria-hidden />
             </span>
-            <div>
-              <p className="text-base font-extrabold tracking-[-0.02em]">Help Desk Municipal</p>
-              <p className="mt-0.5 text-xs text-white/55">Municipalidad Provincial de Casma</p>
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold tracking-[-0.02em]">Help Desk Municipal</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-white/75">Municipalidad Provincial de Casma</p>
             </div>
           </div>
-          <button className="rounded-xl p-2 text-white/70 hover:bg-white/10 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">
+          <button className="grid size-11 shrink-0 place-items-center rounded-xl text-white/80 hover:bg-white/10 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">
             <X className="size-5" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-4 py-5" aria-label="Navegación principal">
+        <nav className="flex-1 overflow-y-auto px-3 py-5 xl:px-4" aria-label="Navegación principal">
           {groups.map((group) => {
             const items = NAV.filter((item) => item.section === group && (!item.admin || isAdmin));
             if (!items.length) return null;
             return (
               <div key={group} className="mb-6">
-                <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-white/35">{group}</p>
+                <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.12em] text-white/65">{group}</p>
                 <div className="space-y-1.5">
                   {items.map(({ to, label, icon: Icon, end }) => (
                     <NavLink
@@ -150,23 +157,26 @@ export function StaffLayout() {
                       to={to}
                       end={end}
                       className={({ isActive }) => cx(
-                        "group flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition-all duration-150",
+                        "group flex min-h-12 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-150",
                         isActive
-                          ? "bg-casma text-white shadow-[0_10px_22px_rgba(13,148,136,0.25)]"
-                          : "text-white/70 hover:bg-white/[0.07] hover:text-white",
+                          ? "bg-white text-casma-oscuro shadow-[0_8px_20px_rgba(15,23,42,0.18)]"
+                          : "text-white/85 hover:bg-white/10 hover:text-white",
                       )}
                     >
                       {({ isActive }) => (
                         <>
                           <span className={cx(
-                            "grid size-9 shrink-0 place-items-center rounded-xl transition-all",
-                            isActive ? "bg-white/[0.14] text-white" : "bg-white/[0.08] text-white/75 group-hover:bg-white/10 group-hover:text-white",
+                            "grid size-9 shrink-0 place-items-center rounded-lg transition-all",
+                            isActive ? "bg-casma-claro text-casma-oscuro" : "bg-white/10 text-white/90 group-hover:bg-white/15 group-hover:text-white",
                           )}>
-                            <Icon className="size-4" aria-hidden />
+                            <Icon className="size-4.5" aria-hidden />
                           </span>
                           <span className="min-w-0 flex-1 truncate">{label}</span>
                           {to === "/soporte/dispositivos" && pendingCount > 0 && (
-                            <span className="rounded-full bg-white/[0.16] px-2 py-0.5 text-[11px] font-extrabold leading-none text-white">{pendingCount}</span>
+                            <span className={cx(
+                              "rounded-full px-2 py-1 text-xs font-bold leading-none",
+                              isActive ? "bg-sol text-tinta" : "bg-sol text-tinta",
+                            )}>{pendingCount}</span>
                           )}
                         </>
                       )}
@@ -178,44 +188,59 @@ export function StaffLayout() {
           })}
         </nav>
 
-        <div className="border-t border-white/10 p-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+        <div className="border-t border-white/15 p-3 xl:p-4">
+          <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
             <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-2xl bg-casma font-extrabold text-white shadow-[0_8px_18px_rgba(13,148,136,0.24)]">{initials}</span>
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sol font-bold text-tinta">{initials}</span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-white">{me?.staff?.full_name ?? "Administrador TI"}</p>
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/55">
-                  <ShieldCheck className="size-3.5 text-[#5eead4]" /> {isAdmin ? "Administrador TI" : "Técnico"}
+                <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-white/75">
+                  <ShieldCheck className="size-3.5 text-yellow-300" /> {isAdmin ? "Administrador TI" : "Técnico"}
                 </div>
               </div>
             </div>
           </div>
+          <button
+            onClick={closeSession}
+            className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-bold text-white/90 transition hover:bg-white/10 hover:text-white lg:hidden"
+          >
+            <LogOut className="size-4" /> Cerrar sesión
+          </button>
         </div>
       </aside>
 
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-linea bg-white/90 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-4 sm:px-6">
-            <button className="rounded-xl border border-linea bg-white p-2 text-tinta shadow-sm hover:border-casma/25 hover:text-casma lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">
+      <div className="lg:pl-64 xl:pl-72">
+        <header className="sticky top-0 z-30 border-b border-linea bg-white/94 backdrop-blur-md">
+          <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+            <button
+              className="grid size-11 shrink-0 place-items-center rounded-xl border border-linea bg-white text-tinta shadow-sm hover:border-casma/35 hover:text-casma-oscuro lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menú"
+            >
               <Menu className="size-5" />
             </button>
 
-            <div className="hidden min-w-72 flex-1 items-center gap-3 rounded-2xl border border-linea bg-papel px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] xl:flex xl:max-w-xl">
-              <Search className="size-4 text-tenue" aria-hidden />
-              <input className="w-full border-0 bg-transparent text-sm text-tinta placeholder:text-tenue/70 focus:outline-none" placeholder="Buscar incidencias, equipos, oficinas o usuarios" aria-label="Buscar" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="hidden h-1.5 w-8 rounded-full bg-casma sm:block" aria-hidden />
+                <span className="hidden h-1.5 w-3 rounded-full bg-sol sm:block" aria-hidden />
+                <p className="truncate text-base font-bold tracking-[-0.02em] text-tinta sm:text-lg">{currentPage.title}</p>
+              </div>
+              <p className="hidden truncate text-sm text-tenue md:block">{currentPage.description}</p>
             </div>
 
-            <div className="min-w-0 flex-1 xl:hidden">
-              <p className="truncate text-lg font-extrabold tracking-[-0.02em] text-tinta">{currentPage.title}</p>
-              <p className="hidden text-sm text-tenue sm:block">{currentPage.description}</p>
-            </div>
-
-            <button onClick={openNewTicket} className="inline-flex items-center gap-2 rounded-2xl bg-casma px-4 py-3 text-sm font-bold text-white shadow-[0_12px_24px_rgba(13,148,136,0.22)] transition hover:bg-casma-oscuro hover:shadow-[0_14px_28px_rgba(15,118,110,0.28)]">
-              <Plus className="size-4" /> Nueva Incidencia
+            <button
+              onClick={openNewTicket}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-casma-oscuro bg-casma px-3 text-sm font-bold text-white shadow-[0_7px_18px_rgba(21,128,61,0.20)] transition hover:bg-casma-oscuro sm:px-4"
+              aria-label="Nueva incidencia"
+            >
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">Nueva incidencia</span>
+              <span className="sm:hidden">Nueva</span>
             </button>
 
-            <div className="hidden items-center gap-3 rounded-2xl border border-linea bg-white px-3 py-2 shadow-sm md:flex">
-              <span className="grid size-10 place-items-center rounded-2xl bg-casma-claro text-sm font-extrabold text-casma-oscuro">{initials}</span>
+            <div className="hidden items-center gap-3 rounded-xl border border-linea bg-white px-3 py-2 shadow-sm xl:flex">
+              <span className="grid size-10 place-items-center rounded-xl bg-casma-claro text-sm font-bold text-casma-oscuro">{initials}</span>
               <div className="min-w-0">
                 <p className="max-w-44 truncate text-sm font-bold text-tinta">{me?.staff?.full_name ?? "Administrador TI"}</p>
                 <p className="text-xs font-medium text-tenue">{isAdmin ? "Administrador TI" : "Técnico"}</p>
@@ -223,8 +248,8 @@ export function StaffLayout() {
             </div>
 
             <button
-              onClick={async () => { await logout(); navigate("/soporte/ingresar"); }}
-              className="inline-flex items-center gap-2 rounded-2xl border border-linea bg-white px-4 py-3 text-sm font-bold text-tinta shadow-sm transition hover:border-casma/20 hover:text-casma-oscuro"
+              onClick={closeSession}
+              className="hidden min-h-11 items-center gap-2 rounded-xl border border-linea bg-white px-3 text-sm font-bold text-tinta shadow-sm transition hover:border-casma/30 hover:bg-casma-claro/50 hover:text-casma-oscuro lg:inline-flex"
               aria-label="Cerrar sesión"
             >
               <LogOut className="size-4" /> Salir
@@ -233,9 +258,9 @@ export function StaffLayout() {
         </header>
 
         {(!online || offlinePending > 0) && (
-          <div className="border-b border-linea bg-white/75">
+          <div className="border-b border-linea bg-white/80">
             <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-4 py-3 text-sm text-tenue sm:px-6">
-              {!online ? <WifiOff className="size-4 text-casma" /> : <CloudUpload className="size-4 text-casma" />}
+              {!online ? <WifiOff className="size-4 text-casma-oscuro" /> : <CloudUpload className="size-4 text-casma-oscuro" />}
               <span className="font-bold text-tinta">{!online ? "Modo offline" : "Sincronizando cambios"}</span>
               <span>
                 {offlinePending > 0
@@ -251,7 +276,7 @@ export function StaffLayout() {
           </div>
         )}
 
-        <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:py-8">
+        <main className="mx-auto max-w-[1600px] px-3 py-5 sm:px-6 sm:py-6 lg:py-8">
           <Outlet />
         </main>
       </div>
