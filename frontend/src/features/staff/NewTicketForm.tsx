@@ -222,7 +222,6 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
   ) : (
     <form onSubmit={submit} className="flex flex-col gap-5">
       <details
-        open
         className="group overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 shadow-[0_10px_30px_rgba(217,119,6,0.08)]"
       >
         <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
