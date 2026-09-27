@@ -1,4 +1,5 @@
 import re
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -6,7 +7,7 @@ from app.ai.engine import get_engine
 from app.api.deps import parse_id, require_staff
 from app.api.tickets import _equipment_for, _office, _replayed_ticket
 from app.models import MunicipalUser, StaffUser
-from app.models.enums import TicketCategory, TicketChannel, TicketPriority
+from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority
 from app.schemas.ticket import TicketOut
 from app.services import audit
 from app.services import tickets as ticket_service
@@ -30,12 +31,14 @@ def _clean_registered_phone(value: str | None) -> str | None:
     return digits if len(digits) == 9 else None
 
 
-@router.post("/assisted", response_model=TicketOut, status_code=201)
+@router.post("", response_model=TicketOut, status_code=201)
 async def create_assisted_ticket(
     request: Request,
     background_tasks: BackgroundTasks,
     office_id: str = Form(...),
     description: str = Form(..., min_length=3, max_length=2000),
+    subject: str | None = Form(None, max_length=160),
+    quick_issue: QuickIssue | None = Form(None),
     municipal_user_id: str | None = Form(None),
     equipment_id: str | None = Form(None),
     reporter_name: str | None = Form(None, max_length=80),
@@ -43,6 +46,14 @@ async def create_assisted_ticket(
     channel: TicketChannel = Form(TicketChannel.TELEFONO),
     category: TicketCategory | None = Form(None),
     priority: TicketPriority | None = Form(None),
+    hierarchy_level: Literal[
+        "PERSONAL",
+        "UNIDAD_ORGANIZACION",
+        "SUBGERENCIA",
+        "GERENCIA",
+        "GERENCIA_MUNICIPAL",
+        "ALCALDIA",
+    ] = Form("PERSONAL"),
     technician_id: str | None = Form(None),
     photo: UploadFile | None = File(None),
     user: StaffUser = Depends(require_staff),
@@ -67,6 +78,8 @@ async def create_assisted_ticket(
             office=office,
             channel=channel,
             description=description,
+            quick_issue=quick_issue,
+            subject=subject,
             equipment=equipment,
             reporter_name=reporter_name,
             contact_phone=contact_phone,
@@ -74,6 +87,7 @@ async def create_assisted_ticket(
             staff=user,
             category=category,
             priority=priority,
+            hierarchy_level=hierarchy_level,
         )
     )
 
