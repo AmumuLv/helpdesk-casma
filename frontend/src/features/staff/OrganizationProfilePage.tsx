@@ -11,13 +11,13 @@ import type { MunicipalUser, MunicipalUserProfile, OfficeProfile, OfficeServiceL
 import { useIsAdmin } from "./hooks";
 
 type ProfileKind = "zona" | "oficina" | "usuario";
+type OrganizationProfile = ZoneProfile | OfficeProfile | MunicipalUserProfile;
 
 const SERVICE_LEVEL_LABEL: Record<OfficeServiceLevel, string> = {
   NORMAL: "Normal",
   ATENCION_PUBLICO: "Atención al público",
   SERVICIO_CRITICO: "Servicio crítico",
 };
-
 
 export function OrganizationProfilePage({ kind }: { kind: ProfileKind }) {
   const { id } = useParams();
@@ -31,14 +31,13 @@ export function OrganizationProfilePage({ kind }: { kind: ProfileKind }) {
         ? `/organization/offices/${id}/profile`
         : `/organization/users/${id}/profile`;
 
-  const profile = useQuery({
+  const profile = useQuery<OrganizationProfile>({
     queryKey: ["organization", "profile", kind, id],
-    queryFn: () =>
-      kind === "zona"
-        ? api<ZoneProfile>(endpoint)
-        : kind === "oficina"
-          ? api<OfficeProfile>(endpoint)
-          : api<MunicipalUserProfile>(endpoint),
+    queryFn: async (): Promise<OrganizationProfile> => {
+      if (kind === "zona") return api<ZoneProfile>(endpoint);
+      if (kind === "oficina") return api<OfficeProfile>(endpoint);
+      return api<MunicipalUserProfile>(endpoint);
+    },
     enabled: !!id,
   });
 
@@ -267,7 +266,7 @@ function UserProfileView({ data, isAdmin }: { data: MunicipalUserProfile; isAdmi
 function ProfileHeader({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return (
     <Card className="flex items-center gap-4 p-5">
-      <div className="flex size-14 items-center justify-center rounded-2xl bg-casma-claro text-casma">{icon}</div>
+      <div className="flex size-14 items-center justify-center rounded-2xl bg-casma-claro text-casma-oscuro">{icon}</div>
       <div>
         <p className="text-sm font-bold uppercase tracking-wide text-tenue">{subtitle}</p>
         <h1 className="text-2xl font-bold">{title}</h1>
@@ -279,7 +278,7 @@ function ProfileHeader({ icon, title, subtitle }: { icon: ReactNode; title: stri
 function Metric({ label, value, icon }: { label: string; value: number; icon: ReactNode }) {
   return (
     <Card className="flex items-center gap-3 p-4">
-      <div className="text-casma [&_svg]:size-6">{icon}</div>
+      <div className="text-casma-oscuro [&_svg]:size-6">{icon}</div>
       <div><strong className="block text-2xl">{value}</strong><span className="text-sm text-tenue">{label}</span></div>
     </Card>
   );
@@ -299,7 +298,7 @@ function UserAvatar({ user, large = false }: { user: MunicipalUser; large?: bool
   return user.photo_url ? (
     <img src={user.photo_url} alt={`Foto de ${user.full_name}`} className={`${size} shrink-0 rounded-2xl border border-linea object-cover`} />
   ) : (
-    <div className={`${size} flex shrink-0 items-center justify-center rounded-2xl bg-casma-claro font-bold text-casma`}>
+    <div className={`${size} flex shrink-0 items-center justify-center rounded-2xl bg-casma-claro font-bold text-casma-oscuro`}>
       {initials || <UserRound className="size-6" />}
     </div>
   );
@@ -309,7 +308,28 @@ function EquipmentList({ equipment }: { equipment: OfficeProfile["equipment"] })
   return (
     <section>
       <h2 className="mb-3 text-lg font-bold">Equipos asignados ({equipment.length})</h2>
-      <Card className="overflow-hidden">
+
+      <div className="grid gap-3 md:hidden">
+        {equipment.map((item) => (
+          <Card key={item.id} className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">{item.inventory_id ?? "Sin ID TI"}</p>
+                <p className="mt-1 font-bold text-tinta">{item.patrimonial_code}</p>
+                <p className="mt-1 text-sm text-tenue">{EQUIPMENT_LABEL[item.type]}</p>
+              </div>
+              <Badge className="border-linea bg-papel">{EQUIPMENT_STATUS_LABEL[item.status]}</Badge>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <Info label="Equipo" value={item.hostname ?? item.device_label ?? ([item.brand, item.model].filter(Boolean).join(" ") || "–")} />
+              <Info label="IP" value={item.ip_address} />
+            </div>
+          </Card>
+        ))}
+        {!equipment.length && <Card className="p-6 text-center text-tenue">No hay equipos asignados.</Card>}
+      </div>
+
+      <Card className="hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-linea bg-papel text-tenue">
@@ -318,7 +338,7 @@ function EquipmentList({ equipment }: { equipment: OfficeProfile["equipment"] })
             <tbody className="divide-y divide-linea">
               {equipment.map((item) => (
                 <tr key={item.id}>
-                  <td className="p-3 font-bold text-casma">{item.inventory_id ?? "–"}</td>
+                  <td className="p-3 font-bold text-casma-oscuro">{item.inventory_id ?? "–"}</td>
                   <td className="p-3 font-bold">{item.patrimonial_code}</td>
                   <td className="p-3">{EQUIPMENT_LABEL[item.type]}</td>
                   <td className="p-3">{item.hostname ?? item.device_label ?? ([item.brand, item.model].filter(Boolean).join(" ") || "–")}</td>
