@@ -47,6 +47,19 @@ const KPI_TONE: Record<KpiTone, { accent: string; icon: string; value: string; s
   },
 };
 
+function formatResponseTime(hours: number | null | undefined) {
+  if (hours == null) return "Sin datos suficientes";
+  const totalMinutes = Math.max(1, Math.round(hours * 60));
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const wholeHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${wholeHours} h ${minutes} min` : `${wholeHours} h`;
+}
+
+function countLabel(value: number, singular: string, plural: string) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
 export function Dashboard() {
   const kpis = useKpis();
   const insights = useInsights();
@@ -84,7 +97,8 @@ export function Dashboard() {
           icon={<ListTodo className="size-5" />}
           tone="active"
           description="Carga de trabajo actual"
-          extra={k ? `${k.pendientes} pendientes · ${k.en_proceso} en proceso` : undefined}
+          detailLabel="Distribución actual"
+          detailValue={k ? `${countLabel(k.pendientes, "pendiente", "pendientes")} · ${countLabel(k.en_proceso, "en proceso", "en proceso")}` : undefined}
           onClick={() => setStatus("ACTIVAS")}
           active={status === "ACTIVAS"}
         />
@@ -94,7 +108,8 @@ export function Dashboard() {
           icon={<Clock3 className="size-5" />}
           tone="pending"
           description="Aún sin iniciar"
-          extra={k ? `${k.sin_asignar} sin asignar` : undefined}
+          detailLabel="Asignación de técnico"
+          detailValue={k ? `${countLabel(k.sin_asignar, "incidencia", "incidencias")} activa${k.sin_asignar === 1 ? "" : "s"} sin técnico asignado` : undefined}
           onClick={() => setStatus("PENDIENTE")}
           active={status === "PENDIENTE"}
         />
@@ -104,7 +119,8 @@ export function Dashboard() {
           icon={<LoaderCircle className="size-5" />}
           tone="progress"
           description="Atención en curso"
-          extra={k ? `${k.urgentes_abiertos} urgentes abiertos` : undefined}
+          detailLabel="Prioridad urgente"
+          detailValue={k ? `${countLabel(k.urgentes_abiertos, "incidencia urgente", "incidencias urgentes")} aún abierta${k.urgentes_abiertos === 1 ? "" : "s"}` : undefined}
           onClick={() => setStatus("EN_PROCESO")}
           active={status === "EN_PROCESO"}
         />
@@ -114,7 +130,8 @@ export function Dashboard() {
           icon={<CircleCheckBig className="size-5" />}
           tone="closed"
           description="Histórico finalizado"
-          extra={k?.horas_primera_respuesta_30d != null ? `Respuesta inicial promedio: ${k.horas_primera_respuesta_30d} h` : "Sin datos de respuesta"}
+          detailLabel="Primera respuesta · últimos 30 días"
+          detailValue={k ? `Promedio: ${formatResponseTime(k.horas_primera_respuesta_30d)}` : undefined}
           onClick={() => setStatus("RESUELTO")}
           active={status === "RESUELTO"}
         />
@@ -178,7 +195,8 @@ function Kpi({
   icon,
   tone,
   description,
-  extra,
+  detailLabel,
+  detailValue,
   onClick,
   active,
 }: {
@@ -187,7 +205,8 @@ function Kpi({
   icon: ReactNode;
   tone: KpiTone;
   description: string;
-  extra?: string;
+  detailLabel: string;
+  detailValue?: string;
   onClick: () => void;
   active: boolean;
 }) {
@@ -197,7 +216,7 @@ function Kpi({
       onClick={onClick}
       aria-pressed={active}
       className={cx(
-        "group relative min-h-40 overflow-hidden rounded-2xl border border-linea bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-tinta/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-casma/30",
+        "group relative min-h-44 overflow-hidden rounded-2xl border border-linea bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-tinta/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-casma/30",
         active && style.selected,
       )}
     >
@@ -216,7 +235,10 @@ function Kpi({
         <p className={cx("mt-4 text-4xl font-extrabold leading-none tracking-tight", style.value)}>{value ?? "–"}</p>
 
         <div className="mt-auto border-t border-linea/80 pt-3">
-          <p className="truncate text-xs font-medium text-tenue" title={extra}>{extra ?? "Sin información adicional"}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-tenue">{detailLabel}</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-tinta/80" title={detailValue}>
+            {detailValue ?? "Información no disponible"}
+          </p>
         </div>
       </div>
     </button>
