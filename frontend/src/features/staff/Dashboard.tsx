@@ -20,30 +20,34 @@ const FILTERS: { value: DashboardFilter; label: string }[] = [
 
 type KpiTone = "active" | "pending" | "progress" | "closed";
 
-const KPI_TONE: Record<KpiTone, { accent: string; icon: string; value: string; selected: string }> = {
+const KPI_TONE: Record<KpiTone, { accent: string; icon: string; value: string; selected: string; soft: string }> = {
   active: {
-    accent: "bg-tinta",
-    icon: "bg-papel text-tinta",
-    value: "text-tinta",
-    selected: "border-tinta/30 ring-2 ring-tinta/10",
-  },
-  pending: {
-    accent: "bg-sol",
-    icon: "bg-sol-claro text-[#7a5200]",
-    value: "text-[#7a5200]",
-    selected: "border-sol/60 ring-2 ring-sol/15",
-  },
-  progress: {
     accent: "bg-casma",
     icon: "bg-casma-claro text-casma-oscuro",
     value: "text-casma-oscuro",
-    selected: "border-casma/50 ring-2 ring-casma/15",
+    selected: "border-casma/35 ring-2 ring-casma/10",
+    soft: "from-casma-claro/45 to-white",
+  },
+  pending: {
+    accent: "bg-sol",
+    icon: "bg-sol-claro text-[#806000]",
+    value: "text-[#806000]",
+    selected: "border-sol/55 ring-2 ring-sol/15",
+    soft: "from-sol-claro/55 to-white",
+  },
+  progress: {
+    accent: "bg-casma-oscuro",
+    icon: "bg-casma-claro text-casma-oscuro",
+    value: "text-casma-oscuro",
+    selected: "border-casma/45 ring-2 ring-casma/10",
+    soft: "from-casma-claro/35 to-white",
   },
   closed: {
     accent: "bg-hecho",
     icon: "bg-hecho-claro text-hecho",
     value: "text-hecho",
-    selected: "border-hecho/40 ring-2 ring-hecho/10",
+    selected: "border-hecho/35 ring-2 ring-hecho/10",
+    soft: "from-hecho-claro/35 to-white",
   },
 };
 
@@ -89,8 +93,8 @@ export function Dashboard() {
   const activeTotal = k ? k.pendientes + k.en_proceso : undefined;
 
   return (
-    <div className="flex flex-col gap-5">
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Resumen de incidencias">
+    <div className="flex flex-col gap-6">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Resumen de incidencias">
         <Kpi
           label="Activos"
           value={activeTotal}
@@ -138,23 +142,36 @@ export function Dashboard() {
       </section>
 
       {insights.data?.active_alerts.map((a) => (
-        <div key={a.id} role="alert" className="flex items-start gap-3 rounded-2xl border border-alerta/40 bg-alerta-claro p-4">
+        <div key={a.id} role="alert" className="flex items-start gap-3 rounded-2xl border border-alerta/25 bg-alerta-claro px-4 py-3.5 shadow-sm">
           <TriangleAlert className="mt-0.5 size-5 shrink-0 text-alerta" aria-hidden />
-          <div><p className="font-bold text-alerta">{a.title}</p><p className="text-sm">{a.message}</p></div>
+          <div><p className="font-bold text-alerta">{a.title}</p><p className="mt-0.5 text-sm text-tinta/80">{a.message}</p></div>
         </div>
       ))}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(320px,380px)_1fr]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(320px,380px)_1fr] xl:gap-6">
         <NewTicketForm onCreated={setOpenId} />
 
-        <Card className="flex min-w-0 flex-col">
-          <div className="flex flex-col gap-3 border-b border-linea p-4">
+        <Card className="flex min-w-0 flex-col overflow-hidden">
+          <div className="flex flex-col gap-4 border-b border-linea bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-xl font-bold">Incidencias {k && <span className="text-tenue">({k.nuevos_hoy} {k.nuevos_hoy === 1 ? "nueva" : "nuevas"} hoy)</span>}</h2>
-              <div className="grid w-full grid-cols-4 gap-1 rounded-xl bg-papel p-1 sm:flex sm:w-auto" role="tablist">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-tinta">Incidencias</h2>
+                {k && <p className="mt-0.5 text-sm text-tenue">{k.nuevos_hoy} {k.nuevos_hoy === 1 ? "registro nuevo hoy" : "registros nuevos hoy"}</p>}
+              </div>
+              <div className="grid w-full grid-cols-4 gap-1 rounded-xl border border-linea bg-papel p-1 sm:flex sm:w-auto" role="tablist">
                 {FILTERS.map((f) => (
-                  <button key={f.label} role="tab" aria-selected={status === f.value} onClick={() => setStatus(f.value)}
-                    className={cx("rounded-lg px-1 py-1.5 text-xs font-bold sm:px-3 sm:text-sm", status === f.value ? "bg-white text-tinta shadow-sm" : "text-tenue hover:text-tinta")}>
+                  <button
+                    key={f.label}
+                    role="tab"
+                    aria-selected={status === f.value}
+                    onClick={() => setStatus(f.value)}
+                    className={cx(
+                      "rounded-lg px-2 py-2 text-xs font-bold transition sm:px-3 sm:text-sm",
+                      status === f.value
+                        ? "bg-white text-casma-oscuro shadow-sm ring-1 ring-black/5"
+                        : "text-tenue hover:bg-white/70 hover:text-tinta",
+                    )}
+                  >
                     {f.label}
                   </button>
                 ))}
@@ -173,12 +190,12 @@ export function Dashboard() {
           {list.isLoading ? <Spinner /> : list.error ? <div className="p-4"><ErrorBox message={errorMessage(list.error)} /></div> : tickets.length === 0 ? (
             <EmptyState icon={<ClipboardList />} title="No hay incidencias con estos filtros" />
           ) : (
-            <ul className="flex flex-col divide-y divide-linea">
+            <ul className="flex flex-col gap-3 bg-papel/65 p-3 sm:p-4">
               {tickets.map((t) => <li key={t.id}><TicketCard ticket={t} onOpen={() => setOpenId(t.id)} /></li>)}
             </ul>
           )}
           {list.hasNextPage && (
-            <div className="border-t border-linea p-3 text-center">
+            <div className="border-t border-linea bg-white p-3 text-center">
               <Button variant="secondary" loading={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>Cargar más</Button>
             </div>
           )}
@@ -216,18 +233,19 @@ function Kpi({
       onClick={onClick}
       aria-pressed={active}
       className={cx(
-        "group relative min-h-44 overflow-hidden rounded-2xl border border-linea bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-tinta/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-casma/30",
+        "group relative min-h-44 overflow-hidden rounded-2xl border border-linea bg-gradient-to-br text-left shadow-[0_8px_24px_rgba(31,41,55,0.045)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(31,41,55,0.075)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-casma/20",
+        style.soft,
         active && style.selected,
       )}
     >
-      <div className={cx("absolute inset-x-0 top-0 h-1", style.accent)} aria-hidden />
-      <div className="flex h-full flex-col p-5 pt-6">
+      <div className={cx("absolute inset-x-0 top-0 h-1.5", style.accent)} aria-hidden />
+      <div className="flex h-full flex-col p-4 pt-5 sm:p-5 sm:pt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-sm font-bold tracking-tight text-tinta">{label}</p>
             <p className="mt-1 text-xs font-medium text-tenue">{description}</p>
           </div>
-          <div className={cx("flex size-10 shrink-0 items-center justify-center rounded-xl", style.icon)} aria-hidden>
+          <div className={cx("flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/80 shadow-sm", style.icon)} aria-hidden>
             {icon}
           </div>
         </div>
@@ -235,7 +253,7 @@ function Kpi({
         <p className={cx("mt-4 text-4xl font-extrabold leading-none tracking-tight", style.value)}>{value ?? "–"}</p>
 
         <div className="mt-auto border-t border-linea/80 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-tenue">{detailLabel}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-tenue">{detailLabel}</p>
           <p className="mt-1 text-xs font-semibold leading-5 text-tinta/80" title={detailValue}>
             {detailValue ?? "Información no disponible"}
           </p>
@@ -247,7 +265,10 @@ function Kpi({
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+    <label className={cx(
+      "flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition",
+      checked ? "border-casma/30 bg-casma-claro text-casma-oscuro" : "border-linea bg-white text-tinta hover:border-casma/25",
+    )}>
       <input type="checkbox" className="size-4 accent-casma" checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}
     </label>
   );
