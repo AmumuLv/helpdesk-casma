@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ClipboardCheck, Layers3, PhoneCall, Sparkles, UserRound, UserRoundPlus, WifiOff, Wrench } from "lucide-react";
+import { Building2, CheckCircle2, ClipboardCheck, Layers3, MapPin, PhoneCall, Search, Sparkles, UserRound, UserRoundPlus, WifiOff, Wrench } from "lucide-react";
 import { useDeferredValue, useState, type FormEvent, type ReactNode } from "react";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
-import { Button, Card, ErrorBox, Field, Input, Select, Textarea } from "../../components/ui";
+import { Button, Card, ErrorBox, Field, Input, Select, Textarea, cx } from "../../components/ui";
 import { api, errorMessage, isOfflineQueued, type OfflineQueuedResponse } from "../../lib/api";
 import { CATEGORIES, CATEGORY_LABEL, EQUIPMENT_LABEL, pct, PRIORITY_LABEL } from "../../lib/labels";
-import type { AIAnalysis, Ticket } from "../../lib/types";
-import { useEquipmentList, useMunicipalUsers, useOfficeLookup, useTechnicians } from "./hooks";
+import type { AIAnalysis, MunicipalUser, Ticket } from "../../lib/types";
+import { useEquipmentList, useMunicipalUsers, useOfficeLookup, useTechnicians, useZones } from "./hooks";
 
 const EMPTY = {
+  zoneId: "",
   officeId: "",
   userId: "",
   equipmentId: "",
@@ -34,6 +35,10 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
   const [open, setOpen] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [reporterMode, setReporterMode] = useState<"registered" | "manual">("registered");
+  const [userSearch, setUserSearch] = useState("");
+
+  const zones = useZones();
   const offices = useOfficeLookup();
   const users = useMunicipalUsers(f.officeId);
   const equipment = useEquipmentList(f.officeId);
@@ -41,30 +46,64 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
   const qc = useQueryClient();
   const toast = useToast();
 
+  const selectedZone = zones.data?.find((zone) => zone.id === f.zoneId);
   const selectedOffice = offices.data?.find((office) => office.id === f.officeId);
   const selectedUser = users.data?.find((user) => user.id === f.userId);
   const selectedEquipment = equipment.data?.find((item) => item.id === f.equipmentId);
   const selectedTech = techs.data?.find((tech) => tech.id === f.technician);
 
+  const availableZones = (zones.data ?? []).filter((zone) => zone.active);
+  const availableOffices = (offices.data ?? []).filter((office) => office.zone_id === f.zoneId);
+  const normalizedSearch = userSearch.trim().toLocaleLowerCase("es-PE");
+  const filteredUsers = (users.data ?? []).filter((user) => {
+    if (!normalizedSearch) return true;
+    return [user.full_name, user.employee_code, user.job_title, user.email, user.phone]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("es-PE")
+      .includes(normalizedSearch);
+  });
+
   const set = (k: keyof typeof EMPTY) => (e: { target: { value: string } }) => setF((s) => ({ ...s, [k]: e.target.value }));
+
+  const setZone = (e: { target: { value: string } }) => {
+    const zoneId = e.target.value;
+    setValidationError(null);
+    setUserSearch("");
+    setReporterMode("registered");
+    setF((s) => ({ ...s, zoneId, officeId: "", userId: "", equipmentId: "", reporter: "", phone: "" }));
+  };
 
   const setOffice = (e: { target: { value: string } }) => {
     const officeId = e.target.value;
     setValidationError(null);
+    setUserSearch("");
+    setReporterMode("registered");
     setF((s) => ({ ...s, officeId, userId: "", equipmentId: "", reporter: "", phone: "" }));
   };
 
-  const setUser = (e: { target: { value: string } }) => {
-    const userId = e.target.value;
-    const user = users.data?.find((item) => item.id === userId);
-    const storedPhone = (user?.phone ?? "").replace(/\D/g, "");
+  const chooseUser = (user: MunicipalUser) => {
+    const storedPhone = (user.phone ?? "").replace(/\D/g, "");
     setValidationError(null);
     setF((s) => ({
       ...s,
-      userId,
-      reporter: user?.full_name ?? "",
+      userId: user.id,
+      reporter: user.full_name,
       phone: storedPhone.length === 9 ? storedPhone : "",
     }));
+  };
+
+  const useManualReporter = () => {
+    setReporterMode("manual");
+    setUserSearch("");
+    setValidationError(null);
+    setF((s) => ({ ...s, userId: "", reporter: "", phone: "" }));
+  };
+
+  const useRegisteredReporter = () => {
+    setReporterMode("registered");
+    setValidationError(null);
+    setF((s) => ({ ...s, userId: "", reporter: "", phone: "" }));
   };
 
   const setPhone = (e: { target: { value: string } }) => {
@@ -102,16 +141,18 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
     },
     onSuccess: (result) => {
       setReviewing(false);
+      setUserSearch("");
+      setReporterMode("registered");
       if (isOfflineQueued(result)) {
         toast({ tone: "success", title: "Incidencia guardada sin conexión", body: "Quedó pendiente de sincronización y se enviará automáticamente." });
-        setF((s) => ({ ...EMPTY, officeId: s.officeId, channel: s.channel }));
+        setF((s) => ({ ...EMPTY, zoneId: s.zoneId, officeId: s.officeId, channel: s.channel }));
         setPhoto(null);
         return;
       }
       qc.invalidateQueries({ queryKey: ["tickets"] });
       qc.invalidateQueries({ queryKey: ["kpis"] });
       toast({ tone: "success", title: `Incidencia ${result.number} registrada`, body: result.subject });
-      setF((s) => ({ ...EMPTY, officeId: s.officeId, channel: s.channel }));
+      setF((s) => ({ ...EMPTY, zoneId: s.zoneId, officeId: s.officeId, channel: s.channel }));
       setPhoto(null);
       onCreated(result.id);
     },
@@ -119,8 +160,20 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (!f.zoneId) {
+      setValidationError("Seleccione primero la zona donde se origina la incidencia.");
+      return;
+    }
+    if (!f.officeId) {
+      setValidationError("Seleccione una oficina de la zona elegida.");
+      return;
+    }
+    if (reporterMode === "registered" && !f.userId) {
+      setValidationError("Seleccione un usuario registrado o cambie a ingreso manual.");
+      return;
+    }
     if (!f.reporter.trim()) {
-      setValidationError("Indique quién reporta la incidencia o seleccione un usuario registrado.");
+      setValidationError("Indique quién reporta la incidencia.");
       return;
     }
     if (f.phone && f.phone.length !== 9) {
@@ -140,13 +193,14 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma text-white shadow-sm"><ClipboardCheck className="size-5" /></span>
           <div>
             <p className="font-bold text-tinta">Revise antes de registrar</p>
-            <p className="mt-1 text-sm leading-5 text-tenue">Este paso evita incidencias con oficina, usuario o contacto equivocados.</p>
+            <p className="mt-1 text-sm leading-5 text-tenue">Confirme la ruta Zona → Oficina → Usuario y los datos de atención antes de crear la incidencia.</p>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <ReviewItem label="Oficina" value={selectedOffice?.name ?? "—"} detail={selectedOffice?.zone_name ? `Zona: ${selectedOffice.zone_name}` : "Sin zona asignada"} />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <ReviewItem label="Zona" value={selectedZone?.name ?? "—"} detail={selectedZone?.code ? `Código: ${selectedZone.code}` : undefined} />
+        <ReviewItem label="Oficina" value={selectedOffice?.name ?? "—"} detail={selectedOffice?.location ?? undefined} />
         <ReviewItem label="Usuario que reporta" value={selectedUser?.full_name ?? f.reporter} detail={selectedUser?.job_title ?? (f.userId ? "Usuario registrado" : "Registro manual")} />
         <ReviewItem label="Canal" value={CHANNEL_LABEL[f.channel] ?? f.channel} detail={f.phone ? `Celular: ${f.phone}` : "Sin celular registrado"} />
         <ReviewItem label="Equipo" value={selectedEquipment ? `${selectedEquipment.patrimonial_code} · ${EQUIPMENT_LABEL[selectedEquipment.type]}` : "Sin equipo específico"} detail={selectedEquipment?.brand ?? undefined} />
@@ -169,52 +223,158 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
     <form onSubmit={submit} className="flex flex-col gap-5">
       <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sm leading-6 text-slate-700">
         <p className="font-bold text-slate-900">Registro manual asistido</p>
-        <p className="mt-1">Úselo cuando el reporte llega por teléfono, de forma presencial o cuando el Área TI detecta el problema. Si el usuario puede reportarlo desde su propio acceso, conviene usar ese canal para conservar el origen automáticamente.</p>
+        <p className="mt-1">Úselo cuando el reporte llega por teléfono, presencialmente o cuando TI detecta el problema. La ubicación se selecciona respetando la jerarquía institucional: zona, oficina y finalmente usuario.</p>
       </div>
 
-      <SectionBlock icon={<Building2 className="size-4" />} title="1. Oficina y solicitante" subtitle="Primero identifique dónde ocurre el problema y quién lo reporta">
+      <SectionBlock icon={<MapPin className="size-4" />} title="1. Ubicación y solicitante" subtitle="Siga el orden Zona → Oficina → Usuario para evitar registros en áreas equivocadas">
+        <div className="mb-5 grid gap-2 sm:grid-cols-3">
+          <HierarchyStep number="1" label="Zona" active={!!f.zoneId} />
+          <HierarchyStep number="2" label="Oficina" active={!!f.officeId} disabled={!f.zoneId} />
+          <HierarchyStep number="3" label="Usuario" active={!!f.userId || (reporterMode === "manual" && !!f.reporter)} disabled={!f.officeId} />
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Oficina" className="md:col-span-2">
+          <Field label="Zona" hint="Ejemplo: Complejo. Este filtro determina qué oficinas puede seleccionar.">
             {(id) => (
-              <Select id={id} value={f.officeId} onChange={setOffice} required>
-                <option value="">Seleccione la oficina</option>
-                {offices.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              <Select id={id} value={f.zoneId} onChange={setZone} required>
+                <option value="">Seleccione la zona</option>
+                {availableZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
               </Select>
             )}
           </Field>
 
-          {selectedOffice && (
+          <Field label="Oficina" hint={f.zoneId ? `${availableOffices.length} oficina${availableOffices.length === 1 ? "" : "s"} disponible${availableOffices.length === 1 ? "" : "s"} en esta zona.` : "Primero seleccione una zona."}>
+            {(id) => (
+              <Select id={id} value={f.officeId} onChange={setOffice} required disabled={!f.zoneId}>
+                <option value="">{f.zoneId ? "Seleccione la oficina" : "Seleccione primero la zona"}</option>
+                {availableOffices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
+              </Select>
+            )}
+          </Field>
+
+          {selectedZone && selectedOffice && (
             <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-700">
-              <span className="font-bold text-slate-900">Zona detectada:</span> {selectedOffice.zone_name ?? "Sin zona asignada"}
+              <span className="font-bold text-slate-900">Ruta seleccionada:</span> {selectedZone.name} <span className="px-1.5 text-slate-400">›</span> {selectedOffice.name}
               {selectedOffice.location && <span className="ml-2 text-slate-500">· {selectedOffice.location}</span>}
             </div>
           )}
 
-          <Field label="Usuario registrado" className="md:col-span-2" hint="Si el trabajador está registrado, selecciónelo para vincular la incidencia a su cuenta.">
-            {(id) => (
-              <Select id={id} value={f.userId} onChange={setUser} disabled={!f.officeId || users.isLoading}>
-                <option value="">No registrado / ingresar datos manualmente</option>
-                {users.data?.map((user) => <option key={user.id} value={user.id}>{user.full_name}{user.job_title ? ` · ${user.job_title}` : ""}</option>)}
-              </Select>
-            )}
-          </Field>
-
-          {selectedUser && (
-            <div className="md:col-span-2 flex items-start gap-3 rounded-xl border border-casma/15 bg-casma-claro/45 px-3.5 py-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-casma-oscuro shadow-sm"><UserRound className="size-4" /></span>
-              <div className="min-w-0 text-sm">
-                <p className="font-bold text-tinta">{selectedUser.full_name}</p>
-                <p className="mt-0.5 text-tenue">{selectedUser.job_title ?? "Cargo no registrado"}{selectedUser.email ? ` · ${selectedUser.email}` : ""}</p>
+          <div className="md:col-span-2">
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-bold tracking-[-0.01em] text-tinta">Usuario que reporta</p>
+                <p className="mt-1 text-xs leading-5 text-tenue">Seleccione una cuenta de la oficina o registre manualmente a quien llamó.</p>
+              </div>
+              <div className="inline-flex w-full rounded-xl border border-linea bg-slate-50 p-1 sm:w-auto">
+                <button
+                  type="button"
+                  onClick={useRegisteredReporter}
+                  disabled={!f.officeId}
+                  className={cx(
+                    "min-h-9 flex-1 rounded-lg px-3 text-xs font-bold transition sm:flex-none",
+                    reporterMode === "registered" ? "bg-white text-casma-oscuro shadow-sm" : "text-tenue hover:text-tinta",
+                    !f.officeId && "cursor-not-allowed opacity-50",
+                  )}
+                >
+                  Usuario registrado
+                </button>
+                <button
+                  type="button"
+                  onClick={useManualReporter}
+                  disabled={!f.officeId}
+                  className={cx(
+                    "min-h-9 flex-1 rounded-lg px-3 text-xs font-bold transition sm:flex-none",
+                    reporterMode === "manual" ? "bg-white text-casma-oscuro shadow-sm" : "text-tenue hover:text-tinta",
+                    !f.officeId && "cursor-not-allowed opacity-50",
+                  )}
+                >
+                  Ingreso manual
+                </button>
               </div>
             </div>
-          )}
 
-          <Field label="Quién reporta">
-            {(id) => <Input id={id} value={f.reporter} onChange={set("reporter")} maxLength={80} required readOnly={!!f.userId} placeholder="Nombre y apellido" className={f.userId ? "bg-slate-50" : undefined} />}
-          </Field>
-          <Field label="Celular" hint="Solo 9 dígitos; puede dejarlo vacío si no fue proporcionado.">
-            {(id) => <Input id={id} value={f.phone} onChange={setPhone} maxLength={9} inputMode="numeric" pattern="[0-9]{9}" placeholder="987654321" autoComplete="tel" />}
-          </Field>
+            {!f.officeId ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-tenue">
+                Seleccione una zona y una oficina para ver sus usuarios.
+              </div>
+            ) : reporterMode === "registered" ? (
+              <div className="space-y-3 rounded-2xl border border-linea bg-slate-50/60 p-3.5">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-tenue" aria-hidden />
+                  <Input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Buscar por nombre, código, cargo, correo o teléfono"
+                    className="bg-white pl-10"
+                    aria-label="Buscar usuario de la oficina"
+                  />
+                </div>
+
+                {users.isLoading ? (
+                  <p className="px-2 py-5 text-center text-sm text-tenue">Cargando usuarios de la oficina…</p>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center">
+                    <p className="text-sm font-bold text-tinta">No se encontraron usuarios</p>
+                    <p className="mt-1 text-xs leading-5 text-tenue">Puede cambiar a “Ingreso manual” si la persona aún no tiene cuenta registrada.</p>
+                  </div>
+                ) : (
+                  <div className="grid max-h-72 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                    {filteredUsers.map((user) => {
+                      const active = f.userId === user.id;
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => chooseUser(user)}
+                          className={cx(
+                            "flex min-h-20 items-start gap-3 rounded-xl border bg-white p-3 text-left transition",
+                            active
+                              ? "border-casma bg-casma-claro/45 ring-2 ring-casma/10"
+                              : "border-slate-200 hover:border-slate-300 hover:bg-white",
+                          )}
+                          aria-pressed={active}
+                        >
+                          <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", active ? "bg-casma text-white" : "bg-slate-100 text-slate-600")}>
+                            {active ? <CheckCircle2 className="size-4" /> : <UserRound className="size-4" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-tinta">{user.full_name}</span>
+                            <span className="mt-0.5 block truncate text-xs text-tenue">{user.job_title ?? "Cargo no registrado"}</span>
+                            <span className="mt-1 block truncate text-[11px] font-medium text-slate-500">
+                              {user.employee_code ? `Código ${user.employee_code}` : "Sin código"}
+                              {user.phone ? ` · ${user.phone}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedUser && (
+                  <div className="grid gap-3 rounded-xl border border-casma/15 bg-casma-claro/40 p-3.5 sm:grid-cols-[1fr_13rem] sm:items-end">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-casma-oscuro">Usuario seleccionado</p>
+                      <p className="mt-1 truncate text-sm font-bold text-tinta">{selectedUser.full_name}</p>
+                      <p className="mt-0.5 truncate text-xs text-tenue">{selectedUser.email ?? selectedUser.job_title ?? "Cuenta municipal"}</p>
+                    </div>
+                    <Field label="Celular de contacto" hint="9 dígitos; puede corregirse solo para esta incidencia.">
+                      {(id) => <Input id={id} value={f.phone} onChange={setPhone} maxLength={9} inputMode="numeric" pattern="[0-9]{9}" placeholder="987654321" className="bg-white" />}
+                    </Field>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4 rounded-2xl border border-linea bg-slate-50/60 p-3.5 md:grid-cols-2">
+                <Field label="Nombre de quien reporta" hint="Para personas que aún no cuentan con usuario registrado.">
+                  {(id) => <Input id={id} value={f.reporter} onChange={set("reporter")} maxLength={80} required placeholder="Nombre y apellido" className="bg-white" />}
+                </Field>
+                <Field label="Celular" hint="Opcional. Si se ingresa, debe tener 9 dígitos.">
+                  {(id) => <Input id={id} value={f.phone} onChange={setPhone} maxLength={9} inputMode="numeric" pattern="[0-9]{9}" placeholder="987654321" className="bg-white" />}
+                </Field>
+              </div>
+            )}
+          </div>
         </div>
       </SectionBlock>
 
@@ -361,6 +521,21 @@ function SectionBlock({ icon, title, subtitle, children }: { icon: ReactNode; ti
       </div>
       {children}
     </section>
+  );
+}
+
+function HierarchyStep({ number, label, active, disabled = false }: { number: string; label: string; active: boolean; disabled?: boolean }) {
+  return (
+    <div className={cx(
+      "flex items-center gap-2 rounded-xl border px-3 py-2.5 transition",
+      active ? "border-casma/25 bg-casma-claro/55 text-casma-oscuro" : disabled ? "border-slate-200 bg-slate-50 text-slate-400" : "border-slate-200 bg-white text-slate-600",
+    )}>
+      <span className={cx(
+        "grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold",
+        active ? "bg-casma text-white" : "bg-slate-200 text-slate-600",
+      )}>{number}</span>
+      <span className="text-xs font-bold uppercase tracking-[0.06em]">{label}</span>
+    </div>
   );
 }
 
