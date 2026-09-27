@@ -88,6 +88,8 @@ class TicketChannel(StrEnum):
     WEB = "WEB"
     MOVIL = "MOVIL"
     TELEFONO = "TELEFONO"
+    PRESENCIAL = "PRESENCIAL"
+    INTERNO = "INTERNO"
     QR = "QR"
 
 
