@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { ApiError } from "./lib/api";
 import { router } from "./App";
+import { ServerStatusBanner } from "./components/ServerStatusBanner";
 import { ToastProvider } from "./components/Toasts";
 import "./styles.css";
 
@@ -21,6 +22,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <RouterProvider router={router} />
+        <ServerStatusBanner />
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,
