@@ -9,8 +9,10 @@ import { NewTicketForm } from "./NewTicketForm";
 import { TicketCard } from "./TicketCard";
 import { TicketDetail } from "./TicketDetail";
 
-const FILTERS: { value: TicketStatus | ""; label: string }[] = [
-  { value: "", label: "Todos" },
+type DashboardFilter = TicketStatus | "ACTIVAS";
+
+const FILTERS: { value: DashboardFilter; label: string }[] = [
+  { value: "ACTIVAS", label: "Activas" },
   { value: "PENDIENTE", label: "Pendientes" },
   { value: "EN_PROCESO", label: "En proceso" },
   { value: "RESUELTO", label: "Cerrados" },
@@ -48,7 +50,7 @@ const KPI_TONE: Record<KpiTone, { card: string; icon: string; value: string; rin
 export function Dashboard() {
   const kpis = useKpis();
   const insights = useInsights();
-  const [status, setStatus] = useState<TicketStatus | "">("");
+  const [status, setStatus] = useState<DashboardFilter>("ACTIVAS");
   const [mine, setMine] = useState(false);
   const [urgent, setUrgent] = useState(false);
   const [q, setQ] = useState("");
@@ -59,7 +61,8 @@ export function Dashboard() {
     queryKey: ["tickets", { status, mine, urgent, query }],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ page: String(pageParam), page_size: "20" });
-      if (status) params.set("status", status);
+      if (status === "ACTIVAS") params.set("active", "true");
+      else params.set("status", status);
       if (mine) params.set("assigned", "me");
       if (urgent) params.set("priority", "ALTA");
       if (query) params.set("q", query);
@@ -82,8 +85,8 @@ export function Dashboard() {
           tone="active"
           description="Trabajo activo"
           extra="Pendientes + en proceso"
-          onClick={() => setStatus("")}
-          active={status === ""}
+          onClick={() => setStatus("ACTIVAS")}
+          active={status === "ACTIVAS"}
         />
         <Kpi
           label="Pendientes"
