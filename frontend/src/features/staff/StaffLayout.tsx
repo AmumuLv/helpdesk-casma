@@ -1,4 +1,4 @@
-import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, ShieldCheck, Users, WifiOff, X, type LucideIcon } from "lucide-react";
+import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, Users, WifiOff, X, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
@@ -116,25 +116,25 @@ export function StaffLayout() {
   return (
     <div className="min-h-dvh bg-papel text-tinta">
       <div
-        className={cx("fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm transition lg:hidden", sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0")}
+        className={cx("fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm transition lg:hidden", sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0")}
         onClick={() => setSidebarOpen(false)}
       />
 
       <aside className={cx(
-        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-casma-oscuro text-white shadow-2xl transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72",
+        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-[#0F172A] text-white shadow-[12px_0_35px_rgba(2,6,23,0.22)] transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}>
-        <div className="flex items-center justify-between border-b-2 border-sol/70 px-5 py-5">
+        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sol text-tinta shadow-[0_6px_16px_rgba(15,23,42,0.18)]">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] text-[#0F172A] shadow-[0_8px_20px_rgba(234,179,8,0.16)]">
               <Headset className="size-5" aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-base font-bold tracking-[-0.02em]">Help Desk Municipal</p>
-              <p className="mt-0.5 truncate text-xs font-medium text-white/75">Municipalidad Provincial de Casma</p>
+              <p className="truncate text-base font-bold tracking-[-0.02em] text-white">Help Desk Municipal</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-[#94A3B8]">Municipalidad Provincial de Casma</p>
             </div>
           </div>
-          <button className="grid size-11 shrink-0 place-items-center rounded-xl text-white/80 hover:bg-white/10 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">
+          <button className="grid size-11 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-800 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">
             <X className="size-5" />
           </button>
         </div>
@@ -145,31 +145,33 @@ export function StaffLayout() {
             if (!items.length) return null;
             return (
               <div key={group} className="mb-6">
-                <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.12em] text-white/65">{group}</p>
-                <div className="space-y-1.5">
+                <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{group}</p>
+                <div className="space-y-1">
                   {items.map(({ to, label, icon: Icon, end }) => (
                     <NavLink
                       key={to}
                       to={to}
                       end={end}
                       className={({ isActive }) => cx(
-                        "group flex min-h-12 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-150",
+                        "group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150",
                         isActive
-                          ? "bg-white text-casma-oscuro shadow-[0_8px_20px_rgba(15,23,42,0.18)]"
-                          : "text-white/85 hover:bg-white/10 hover:text-white",
+                          ? "bg-[#1F2937] pl-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                          : "text-[#94A3B8] hover:bg-white/[0.05] hover:text-white",
                       )}
                     >
                       {({ isActive }) => (
                         <>
-                          <span className={cx(
-                            "grid size-9 shrink-0 place-items-center rounded-lg transition-all",
-                            isActive ? "bg-casma-claro text-casma-oscuro" : "bg-white/10 text-white/90 group-hover:bg-white/15 group-hover:text-white",
-                          )}>
-                            <Icon className="size-4.5" aria-hidden />
-                          </span>
+                          {isActive && <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-[#D97706]" aria-hidden />}
+                          <Icon
+                            className={cx(
+                              "size-5 shrink-0 transition-colors",
+                              isActive ? "text-[#F59E0B]" : "text-[#94A3B8] group-hover:text-white",
+                            )}
+                            aria-hidden
+                          />
                           <span className="min-w-0 flex-1 truncate">{label}</span>
                           {to === "/soporte/dispositivos" && pendingCount > 0 && (
-                            <span className="rounded-full bg-sol px-2 py-1 text-xs font-bold leading-none text-tinta">{pendingCount}</span>
+                            <span className="rounded-full bg-[#EAB308] px-2 py-1 text-xs font-bold leading-none text-[#0F172A]">{pendingCount}</span>
                           )}
                         </>
                       )}
@@ -181,21 +183,17 @@ export function StaffLayout() {
           })}
         </nav>
 
-        <div className="border-t border-white/15 p-3 xl:p-4">
-          <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sol font-bold text-tinta">{initials}</span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-white">{me?.staff?.full_name ?? "Administrador TI"}</p>
-                <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-white/75">
-                  <ShieldCheck className="size-3.5 text-yellow-300" /> {isAdmin ? "Administrador TI" : "Técnico"}
-                </div>
-              </div>
+        <div className="mt-auto border-t border-slate-800 px-4 py-4 xl:px-5">
+          <div className="flex items-center gap-3 px-1 py-1">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] font-bold text-[#0F172A] shadow-sm">{initials}</span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{me?.staff?.full_name ?? "Administrador TI"}</p>
+              <p className="mt-0.5 text-xs font-medium text-[#94A3B8]">{isAdmin ? "Administrador TI" : "Técnico"}</p>
             </div>
           </div>
           <button
             onClick={closeSession}
-            className="mt-3 flex min-h-11 w-full items-center justify-start gap-2 rounded-xl border border-white/10 bg-black/5 px-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="mt-4 flex min-h-11 w-full items-center justify-start gap-2 rounded-xl border border-slate-900 bg-[#030712] px-3.5 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-red-900/60 hover:bg-red-950/80 hover:text-white focus-visible:outline-red-400"
             aria-label="Cerrar sesión"
           >
             <LogOut className="size-4" aria-hidden /> Cerrar sesión
