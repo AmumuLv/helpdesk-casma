@@ -1,6 +1,6 @@
 import type { DeviceKind, EquipmentStatus, EquipmentType, TicketCategory, TicketPriority, TicketStatus } from "./types";
 
-export const STATUS_LABEL: Record<TicketStatus, string> = { PENDIENTE: "Pendiente", EN_PROCESO: "En atención", RESUELTO: "Resuelto" };
+export const STATUS_LABEL: Record<TicketStatus, string> = { PENDIENTE: "Pendiente", EN_PROCESO: "En atención", RESUELTO: "Cerrado" };
 export const PRIORITY_LABEL: Record<TicketPriority, string> = { BAJA: "Baja", MEDIA: "Media", ALTA: "Urgente" };
 export const CATEGORY_LABEL: Record<TicketCategory, string> = {
   HARDWARE: "Hardware", RED_INTERNET: "Red e internet", IMPRESORA: "Impresoras", SOFTWARE: "Software",
