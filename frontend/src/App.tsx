@@ -17,6 +17,8 @@ import { EquipmentPage } from "./features/staff/EquipmentPage";
 import { OfficesPage } from "./features/staff/OfficesPage";
 import { OrganizationPage } from "./features/staff/OrganizationPage";
 import { OrganizationProfilePage } from "./features/staff/OrganizationProfilePage";
+import { ProfilePage } from "./features/staff/ProfilePage";
+import { SettingsPage } from "./features/staff/SettingsPage";
 import { StaffLayout } from "./features/staff/StaffLayout";
 import { StaffPage } from "./features/staff/StaffPage";
 
@@ -75,6 +77,8 @@ export const router = createBrowserRouter([
           { path: "/soporte", element: <Dashboard /> },
           { path: "/soporte/equipos", element: <EquipmentPage /> },
           { path: "/soporte/ia", element: <AIInsightsPage /> },
+          { path: "/soporte/perfil", element: <ProfilePage /> },
+          { path: "/soporte/configuracion", element: <SettingsPage /> },
           { path: "/soporte/organizacion", element: <OrganizationPage /> },
           { path: "/soporte/organizacion/zona/:id", element: <OrganizationProfilePage kind="zona" /> },
           { path: "/soporte/organizacion/oficina/:id", element: <OrganizationProfilePage kind="oficina" /> },
