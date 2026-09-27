@@ -134,6 +134,7 @@ async def kpis(_: StaffUser = Depends(require_staff)):
 @router.get("", response_model=Page[TicketOut])
 async def list_tickets(
     status: TicketStatus | None = None,
+    active: bool | None = Query(None, description="true = pendientes + en proceso"),
     priority: TicketPriority | None = None,
     category: TicketCategory | None = None,
     office_id: str | None = None,
@@ -147,6 +148,8 @@ async def list_tickets(
     query: dict = {"deleted_at": None}
     if status:
         query["status"] = status.value
+    elif active is True:
+        query["status"] = {"$ne": TicketStatus.RESUELTO.value}
     if priority:
         query["priority"] = priority.value
     if category:
@@ -218,47 +221,21 @@ async def create_by_staff(
     return ticket_out(ticket)
 
 
-@router.post("/triage-preview", response_model=AIAnalysis)
-async def triage_preview(body: TriagePreviewIn, _: StaffUser = Depends(require_staff)):
-    office = await _office(body.office_id)
-    equipment = await _equipment_for(office, body.equipment_id)
-    return await get_engine().analyze(TriageRequest(
-        subject=body.subject or "", description=body.description, quick_issue=body.quick_issue, office=office, equipment=equipment
-    ))
-
-
 @router.get("/{ticket_id}", response_model=TicketOut)
-async def get_ticket(
-    request: Request,
-    ticket_id: str,
-    user: StaffUser = Depends(require_staff),
-):
-    ticket = await _get(ticket_id)
-    already_viewed = await AuditLog.find_one({
-        "target_type": "ticket",
-        "target_id": str(ticket.id),
-        "action": "ticket.viewed",
-        "actor_id": str(user.id),
-    })
-    if not already_viewed:
-        await audit.record(
-            request,
-            "staff",
-            "ticket.viewed",
-            actor_id=str(user.id),
-            actor_name=user.full_name,
-            target_type="ticket",
-            target_id=str(ticket.id),
-        )
-    return ticket_out(ticket)
+async def get_ticket(ticket_id: str, _: StaffUser = Depends(require_staff)):
+    return ticket_out(await _get(ticket_id))
 
 
 @router.get("/{ticket_id}/audit", response_model=list[TicketAuditOut])
 async def ticket_audit(ticket_id: str, _: StaffUser = Depends(require_staff)):
-    await _get(ticket_id)
-    logs = await AuditLog.find(
-        {"target_type": "ticket", "target_id": ticket_id}
-    ).sort("at").limit(300).to_list()
+    ticket = await _get(ticket_id)
+    target_id = str(ticket.id)
+    cursor = (
+        AuditLog.find({"target_type": "ticket", "target_id": target_id})
+        .sort(-AuditLog.at)
+        .limit(300)
+    )
+    logs = await cursor.to_list()
     return [
         TicketAuditOut(
             at=log.at,
@@ -272,170 +249,115 @@ async def ticket_audit(ticket_id: str, _: StaffUser = Depends(require_staff)):
 
 
 @router.patch("/{ticket_id}", response_model=TicketOut)
-async def patch_ticket(request: Request, ticket_id: str, body: TicketPatch, user: StaffUser = Depends(require_staff)):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-    ticket = await ticket_service.update_classification(await _get(ticket_id), user, body.category, body.priority)
-    await audit.record(
-        request, "staff", "ticket.classification_updated",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-        category=body.category.value if body.category else None,
-        priority=body.priority.value if body.priority else None,
-        **audit.offline_request_details(request),
-    )
-    return ticket_out(ticket)
+async def patch_ticket(request: Request, ticket_id: str, data: TicketPatch, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    updates: dict = {}
+    details: dict = {}
+    if data.category is not None and data.category.value != t.category:
+        updates["category"] = data.category.value
+        updates["category_source"] = "TECNICO"
+        details["category"] = data.category.value
+    if data.priority is not None and data.priority.value != t.priority:
+        updates["priority"] = data.priority.value
+        updates["priority_source"] = "TECNICO"
+        details["priority"] = data.priority.value
+    if updates:
+        await t.set(updates)
+        await audit.record(request, "staff", "ticket.classification.updated", actor_id=str(user.id), actor_name=user.full_name,
+                           target_type="ticket", target_id=str(t.id), **details)
+    return ticket_out(t)
 
 
 @router.post("/{ticket_id}/apply-ai-priority", response_model=TicketOut)
-async def apply_ai_priority(
-    request: Request,
-    ticket_id: str,
-    body: ApplyAiPriorityIn,
-    user: StaffUser = Depends(require_staff),
-):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-
-    ticket = await _get(ticket_id)
-    if not ticket.ai:
-        raise HTTPException(status_code=409, detail="El ticket todavía no tiene análisis de IA.")
-    if ticket.ai.priority != body.priority or ticket.ai.model_version != body.model_version:
-        raise HTTPException(
-            status_code=409,
-            detail="La recomendación de IA cambió desde que fue revisada. Actualice el ticket antes de aplicarla.",
-        )
-
-    previous_priority = ticket.priority
-    ai_priority = ticket.ai.priority
-    ai_score = ticket.ai.priority_score
-    ai_reasons = list(ticket.ai.priority_reasons)
-    ai_model_version = ticket.ai.model_version
-
-    ticket = await ticket_service.apply_ai_priority(ticket, user)
+async def apply_ai_priority(request: Request, ticket_id: str, data: ApplyAiPriorityIn, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    if not t.ai or t.ai.model_version != data.model_version:
+        raise HTTPException(status_code=409, detail="La sugerencia IA ya cambió; vuelva a analizar antes de aplicarla.")
+    updates = {
+        "priority": data.priority.value,
+        "priority_source": "IA_SUPERVISADA",
+        "priority_model_version": data.model_version,
+        "priority_applied_at": utcnow(),
+        "priority_applied_by": str(user.id),
+    }
+    await t.set(updates)
     await audit.record(
-        request,
-        "staff",
-        "ticket.ai_priority_applied",
-        actor_id=str(user.id),
-        actor_name=user.full_name,
-        target_type="ticket",
-        target_id=str(ticket.id),
-        previous_priority=previous_priority.value,
-        applied_priority=ai_priority.value,
-        ai_score=ai_score,
-        ai_reasons=ai_reasons,
-        ai_model_version=ai_model_version,
-        **audit.offline_request_details(request),
+        request, "staff", "ticket.ai_priority.applied", actor_id=str(user.id), actor_name=user.full_name,
+        target_type="ticket", target_id=str(t.id), priority=data.priority.value, model_version=data.model_version,
     )
-    return ticket_out(ticket)
-
-
-@router.post("/{ticket_id}/assign", response_model=TicketOut)
-async def assign(request: Request, ticket_id: str, body: AssignIn, user: StaffUser = Depends(require_staff)):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-    tech_id = parse_id(body.technician_id) if body.technician_id else None
-    if body.technician_id and not tech_id:
-        raise HTTPException(status_code=422, detail="Técnico no válido.")
-    ticket = await ticket_service.assign(await _get(ticket_id), user, tech_id)
-    await audit.record(
-        request, "staff", "ticket.assigned",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-        technician_id=str(ticket.assigned_to_id) if ticket.assigned_to_id else None,
-        technician_name=ticket.assigned_to_name,
-        **audit.offline_request_details(request),
-    )
-    return ticket_out(ticket)
-
-
-@router.post("/{ticket_id}/notes", response_model=TicketOut)
-async def add_note(request: Request, ticket_id: str, body: NoteIn, user: StaffUser = Depends(require_staff)):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-    ticket = await ticket_service.add_note(await _get(ticket_id), user, body.text, body.visible_to_office)
-    await audit.record(
-        request, "staff", "ticket.note_added",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-        visible_to_office=body.visible_to_office,
-        **audit.offline_request_details(request),
-    )
-    return ticket_out(ticket)
-
-
-@router.post("/{ticket_id}/resolve", response_model=TicketOut)
-async def resolve(request: Request, ticket_id: str, body: ResolveIn, user: StaffUser = Depends(require_staff)):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-    ticket = await ticket_service.resolve(
-        await _get(ticket_id),
-        user,
-        body.notes,
-        body.tipo_resolucion,
-    )
-    await audit.record(
-        request, "staff", "ticket.resolved",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-        resolution_type=body.tipo_resolucion.value,
-        **audit.offline_request_details(request),
-    )
-    return ticket_out(ticket)
-
-
-@router.post("/{ticket_id}/reopen", response_model=TicketOut)
-async def reopen(request: Request, ticket_id: str, user: StaffUser = Depends(require_staff)):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-    ticket = await ticket_service.reopen(await _get(ticket_id), user.full_name, by_user=False)
-    await audit.record(
-        request, "staff", "ticket.reopened",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-        **audit.offline_request_details(request),
-    )
-    return ticket_out(ticket)
-
-
-@router.post("/{ticket_id}/reanalyze", response_model=TicketOut)
-async def reanalyze(
-    request: Request,
-    ticket_id: str,
-    background_tasks: BackgroundTasks,
-    user: StaffUser = Depends(require_staff),
-):
-    ticket = await _get(ticket_id)
-    background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
-    await audit.record(
-        request, "staff", "ticket.reanalysis_requested",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-    )
-    return ticket_out(ticket)
+    return ticket_out(t)
 
 
 @router.delete("/{ticket_id}", response_model=Message)
 async def delete_ticket(request: Request, ticket_id: str, user: StaffUser = Depends(require_admin)):
-    ticket = await _get(ticket_id)
-    ticket.deleted_at = utcnow()
-    await ticket.save()
-    await audit.record(request, "staff", "ticket.deleted", actor_id=str(user.id), actor_name=user.full_name, target_type="ticket", target_id=str(ticket.id), number=ticket.number)
+    t = await _get(ticket_id)
+    await t.set({"deleted_at": utcnow()})
+    await audit.record(request, "staff", "ticket.deleted", actor_id=str(user.id), actor_name=user.full_name,
+                       target_type="ticket", target_id=str(t.id), number=t.number)
     return Message(message="Incidencia eliminada.")
 
 
-@router.get("/{ticket_id}/attachments/{attachment_id}")
-async def attachment(request: Request, ticket_id: str, attachment_id: str):
-    principal = await resolve_principal(request)
-    ticket = await _get(ticket_id)
-    allowed = isinstance(principal, StaffPrincipal) or (
-        isinstance(principal, OfficePrincipal) and principal.approved and principal.office.id == ticket.office_id
-    )
-    meta = next((a for a in ticket.attachments if a.id == attachment_id), None)
-    if not allowed or not meta:
-        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
-    path = attachment_path(meta)
+@router.post("/{ticket_id}/assign", response_model=TicketOut)
+async def assign_ticket(request: Request, ticket_id: str, data: AssignIn, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    technician_id = parse_id(data.technician_id) if data.technician_id else None
+    t = await ticket_service.assign(t, user, technician_id)
+    await audit.record(request, "staff", "ticket.assigned", actor_id=str(user.id), actor_name=user.full_name,
+                       target_type="ticket", target_id=str(t.id), technician_id=data.technician_id)
+    return ticket_out(t)
+
+
+@router.post("/{ticket_id}/notes", response_model=TicketOut)
+async def add_note(request: Request, ticket_id: str, data: NoteIn, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    t.timeline.append({"at": utcnow(), "actor": user.full_name, "text": data.text, "internal": not data.visible_to_office})
+    await t.save()
+    await audit.record(request, "staff", "ticket.note.added", actor_id=str(user.id), actor_name=user.full_name,
+                       target_type="ticket", target_id=str(t.id), visible_to_office=data.visible_to_office)
+    return ticket_out(t)
+
+
+@router.post("/{ticket_id}/resolve", response_model=TicketOut)
+async def resolve_ticket(request: Request, ticket_id: str, data: ResolveIn, background_tasks: BackgroundTasks, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    t = await ticket_service.resolve(t, user, data.notes, data.tipo_resolucion)
+    background_tasks.add_task(get_engine().retrain)
+    await audit.record(request, "staff", "ticket.resolved", actor_id=str(user.id), actor_name=user.full_name,
+                       target_type="ticket", target_id=str(t.id), resolution_type=data.tipo_resolucion.value)
+    return ticket_out(t)
+
+
+@router.post("/{ticket_id}/reopen", response_model=TicketOut)
+async def reopen_ticket(request: Request, ticket_id: str, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    await t.set({"status": TicketStatus.EN_PROCESO.value, "resolution": None})
+    t.timeline.append({"at": utcnow(), "actor": user.full_name, "text": "Incidencia reabierta", "internal": False})
+    await t.save()
+    await audit.record(request, "staff", "ticket.reopened", actor_id=str(user.id), actor_name=user.full_name,
+                       target_type="ticket", target_id=str(t.id))
+    return ticket_out(t)
+
+
+@router.post("/{ticket_id}/reanalyze", response_model=TicketOut)
+async def reanalyze_ticket(request: Request, ticket_id: str, background_tasks: BackgroundTasks, user: StaffUser = Depends(require_staff)):
+    t = await _get(ticket_id)
+    analysis = get_engine().analyze_ticket(t)
+    await t.set({"ai": analysis})
+    await audit.record(request, "staff", "ticket.ai.reanalyzed", actor_id=str(user.id), actor_name=user.full_name,
+                       target_type="ticket", target_id=str(t.id), model_version=analysis.model_version)
+    background_tasks.add_task(get_engine().retrain)
+    return ticket_out(t)
+
+
+@router.get("/{ticket_id}/attachment/{attachment_id}")
+async def ticket_attachment(ticket_id: str, attachment_id: str, principal: StaffPrincipal | OfficePrincipal = Depends(resolve_principal)):
+    t = await _get(ticket_id)
+    if isinstance(principal, OfficePrincipal) and t.office_id != principal.office.id:
+        raise HTTPException(status_code=403, detail="No autorizado.")
+    attachment = next((a for a in t.attachments if a.id == attachment_id), None)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Adjunto no encontrado.")
+    path = attachment_path(attachment.stored_name)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+    return FileResponse(path, media_type=attachment.content_type, filename=attachment.original_name)
