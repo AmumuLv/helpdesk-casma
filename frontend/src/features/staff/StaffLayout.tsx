@@ -109,38 +109,59 @@ export function StaffLayout() {
   }, [toast]);
 
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 bg-tinta text-white shadow">
-        <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-4 py-2.5">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-casma"><Headset className="size-5" aria-hidden /></span>
-            <div className="leading-tight">
-              <p className="font-bold">Help Desk Municipal</p>
-              <p className="text-xs text-white/60">Municipalidad Provincial de Casma</p>
+    <div className="min-h-dvh bg-papel/70">
+      <header className="sticky top-0 z-30 border-b border-casma-oscuro bg-casma-oscuro text-white shadow-[0_10px_30px_rgba(20,83,45,0.16)]">
+        <div className="border-b border-white/10">
+          <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-4 py-3 sm:px-5">
+            <div className="flex items-center gap-3">
+              <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10 shadow-inner">
+                <Headset className="size-5 text-sol" aria-hidden />
+              </span>
+              <div className="leading-tight">
+                <p className="text-base font-bold tracking-tight">Help Desk Municipal</p>
+                <p className="mt-0.5 text-xs text-white/70">Municipalidad Provincial de Casma</p>
+              </div>
             </div>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <div className="hidden text-right leading-tight sm:block">
-              <p className="font-bold">{me?.staff?.full_name}</p>
-              <p className="text-xs text-white/60">{isAdmin ? "Administrador" : "Técnico"}</p>
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              <div className="hidden text-right leading-tight sm:block">
+                <p className="font-bold">{me?.staff?.full_name}</p>
+                <p className="mt-0.5 text-xs text-white/65">{isAdmin ? "Administrador" : "Técnico"}</p>
+              </div>
+              <button
+                onClick={async () => { await logout(); navigate("/soporte/ingresar"); }}
+                className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-bold text-white/85 transition hover:border-white/15 hover:bg-white/10 hover:text-white"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut className="size-4" /> <span className="hidden md:inline">Salir</span>
+              </button>
             </div>
-            <button onClick={async () => { await logout(); navigate("/soporte/ingresar"); }} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/10" aria-label="Cerrar sesión">
-              <LogOut className="size-4" /> <span className="hidden md:inline">Salir</span>
-            </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-[1500px] gap-1 overflow-x-auto px-3 pb-2" aria-label="Secciones">
+
+        <nav className="mx-auto flex max-w-[1500px] gap-1.5 overflow-x-auto px-3 py-2 sm:px-5" aria-label="Secciones">
           {NAV.filter((n) => !n.admin || isAdmin).map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end}
-              className={({ isActive }) => cx("flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold", isActive ? "bg-white text-tinta" : "text-white/75 hover:bg-white/10 hover:text-white")}>
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => cx(
+                "flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-all",
+                isActive
+                  ? "bg-white text-casma-oscuro shadow-sm ring-1 ring-black/5"
+                  : "text-white/78 hover:bg-white/10 hover:text-white",
+              )}
+            >
               <Icon className="size-4" aria-hidden /> {label}
-              {to === "/soporte/dispositivos" && pendingCount > 0 && <span className="rounded-full bg-sol px-1.5 text-xs text-tinta">{pendingCount}</span>}
+              {to === "/soporte/dispositivos" && pendingCount > 0 && (
+                <span className="rounded-full bg-sol px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-tinta">{pendingCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>
+
         {(!online || offlinePending > 0) && (
-          <div className="border-t border-white/10 bg-white/10">
-            <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-sm">
+          <div className="border-t border-white/10 bg-black/10">
+            <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-sm sm:px-5">
               {!online ? <WifiOff className="size-4 text-sol" /> : <CloudUpload className="size-4 text-sol" />}
               <span className="font-bold">
                 {!online ? "Modo offline" : "Sincronizando cambios"}
@@ -160,8 +181,10 @@ export function StaffLayout() {
             </div>
           </div>
         )}
+
+        <div className="h-1 bg-sol" aria-hidden />
       </header>
-      <main className="mx-auto max-w-[1500px] px-3 py-5 sm:px-5">
+      <main className="mx-auto max-w-[1500px] px-3 py-6 sm:px-5 sm:py-7">
         <Outlet />
       </main>
     </div>
