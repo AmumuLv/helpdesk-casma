@@ -6,13 +6,15 @@ import type { TicketCategory, TicketPriority, TicketStatus } from "../lib/types"
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 export { cx };
 
-type Variant = "primary" | "secondary" | "danger" | "ghost" | "success";
+type Variant = "primary" | "secondary" | "danger" | "ghost" | "success" | "info" | "selected";
 const VARIANTS: Record<Variant, string> = {
   primary: "border border-casma-oscuro bg-casma text-white shadow-[0_7px_18px_rgba(21,128,61,0.20)] hover:-translate-y-0.5 hover:bg-casma-oscuro hover:shadow-[0_10px_22px_rgba(22,101,52,0.24)]",
-  secondary: "border border-linea bg-white text-tinta shadow-sm hover:-translate-y-0.5 hover:border-casma/35 hover:bg-casma-claro/70 hover:text-casma-oscuro hover:shadow-md",
+  secondary: "border border-slate-300 bg-white text-slate-700 shadow-sm hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950 hover:shadow-md",
   danger: "border border-alerta/25 bg-white text-alerta shadow-sm hover:-translate-y-0.5 hover:border-alerta/45 hover:bg-alerta-claro",
-  ghost: "border border-transparent text-tenue hover:bg-casma-claro/65 hover:text-casma-oscuro",
+  ghost: "border border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-950",
   success: "border border-hecho bg-hecho text-white shadow-[0_7px_18px_rgba(4,120,87,0.18)] hover:-translate-y-0.5 hover:bg-emerald-800 hover:shadow-[0_10px_22px_rgba(4,120,87,0.22)]",
+  info: "border border-sky-300 bg-sky-50 text-sky-800 shadow-sm hover:-translate-y-0.5 hover:border-sky-400 hover:bg-sky-100 hover:shadow-md",
+  selected: "border border-amber-400 bg-amber-50 text-amber-900 shadow-[0_7px_18px_rgba(217,119,6,0.14)] hover:-translate-y-0.5 hover:border-amber-500 hover:bg-amber-100",
 };
 
 export function Button({ variant = "primary", loading, className, children, disabled, size = "md", ...props }:
