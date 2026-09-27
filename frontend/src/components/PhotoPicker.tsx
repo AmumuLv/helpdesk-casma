@@ -101,9 +101,9 @@ export function PhotoPicker({ value, onChange, large, patrimonialOcr = false, on
       <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => pick(e.target.files?.[0])} />
       <input ref={galleryInput} type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files?.[0])} />
       {!preview && !stream && (
-        <div className="grid grid-cols-2 gap-3">
-          <Button type="button" variant="secondary" size={size} className="whitespace-nowrap px-3" onClick={openCamera}><Camera className="size-6" /> Tomar foto</Button>
-          <Button type="button" variant="secondary" size={size} className="whitespace-nowrap px-3" onClick={() => galleryInput.current?.click()}><ImagePlus className="size-6" /> Elegir foto</Button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+          <Button type="button" variant="secondary" size={size} className="w-full px-3" onClick={openCamera}><Camera className="size-5 sm:size-6" /> Tomar foto</Button>
+          <Button type="button" variant="secondary" size={size} className="w-full px-3" onClick={() => galleryInput.current?.click()}><ImagePlus className="size-5 sm:size-6" /> Elegir foto</Button>
         </div>
       )}
       {stream && (
@@ -119,7 +119,7 @@ export function PhotoPicker({ value, onChange, large, patrimonialOcr = false, on
         <>
           <div className={cx("relative overflow-hidden rounded-xl border border-linea", large ? "h-56" : "h-40")}>
             <img src={preview} alt={patrimonialOcr ? "Foto de etiqueta patrimonial" : "Foto adjunta"} className="size-full object-cover" />
-            <button type="button" onClick={() => { onChange(null); setOcrMessage(null); }} className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-tinta/85 px-3 py-1.5 font-bold text-white">
+            <button type="button" onClick={() => { onChange(null); setOcrMessage(null); }} className="absolute right-2 top-2 flex min-h-10 items-center gap-1 rounded-full bg-tinta/90 px-3 py-1.5 text-sm font-bold text-white shadow-md">
               <X className="size-4" /> Quitar
             </button>
           </div>
@@ -130,7 +130,7 @@ export function PhotoPicker({ value, onChange, large, patrimonialOcr = false, on
           )}
         </>
       )}
-      {ocrMessage && <p className="text-sm font-bold text-casma">{ocrMessage}</p>}
+      {ocrMessage && <p className="text-sm font-bold text-casma-oscuro">{ocrMessage}</p>}
       {error && <p className="text-sm font-bold text-alerta">{error}</p>}
     </div>
   );
