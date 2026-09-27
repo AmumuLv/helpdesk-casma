@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, CheckCircle2, ClipboardCheck, Layers3, MapPin, PhoneCall, Search, Sparkles, UserRound, UserRoundPlus, WifiOff, Wrench } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Layers3, MapPin, PhoneCall, Search, Sparkles, UserRound, UserRoundPlus, WifiOff, Wrench } from "lucide-react";
 import { useDeferredValue, useState, type FormEvent, type ReactNode } from "react";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
