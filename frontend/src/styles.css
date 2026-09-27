@@ -3,21 +3,21 @@
 @import "@fontsource/atkinson-hyperlegible-next/700.css";
 
 @theme {
-  --font-sans: "Segoe UI Variable", "Segoe UI", "Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --color-tinta: #172033;
-  --color-tinta-2: #2b3648;
-  --color-papel: #f4f6f8;
-  --color-casma: #2f6f4e;
-  --color-casma-oscuro: #214f39;
-  --color-casma-claro: #eaf3ee;
-  --color-sol: #d3a620;
-  --color-sol-claro: #fbf3d6;
-  --color-alerta: #b42318;
-  --color-alerta-claro: #feecea;
-  --color-hecho: #2f7d53;
-  --color-hecho-claro: #e8f5ed;
-  --color-linea: #dde3ea;
-  --color-tenue: #667085;
+  --font-sans: "Inter", "Segoe UI Variable", "Segoe UI", "Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-tinta: #111827;
+  --color-tinta-2: #1f2937;
+  --color-papel: #f3f4f6;
+  --color-casma: #0d9488;
+  --color-casma-oscuro: #0f766e;
+  --color-casma-claro: #ecfdf5;
+  --color-sol: #f59e0b;
+  --color-sol-claro: #fef3c7;
+  --color-alerta: #b91c1c;
+  --color-alerta-claro: #fee2e2;
+  --color-hecho: #15803d;
+  --color-hecho-claro: #dcfce7;
+  --color-linea: #e5e7eb;
+  --color-tenue: #6b7280;
 }
 
 @layer base {
@@ -32,9 +32,9 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at 8% -8%, rgb(47 111 78 / 0.045), transparent 30rem),
-      radial-gradient(circle at 94% 2%, rgb(211 166 32 / 0.03), transparent 24rem),
-      linear-gradient(to bottom, #ffffff 0, #f8fafb 18rem, var(--color-papel) 34rem);
+      radial-gradient(circle at 0% 0%, rgb(13 148 136 / 0.05), transparent 24rem),
+      radial-gradient(circle at 100% 0%, rgb(17 24 39 / 0.035), transparent 24rem),
+      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 30rem);
     min-height: 100dvh;
   }
 
@@ -53,34 +53,34 @@
   }
 
   ::selection {
-    background: var(--color-sol-claro);
+    background: rgb(13 148 136 / 0.18);
     color: var(--color-tinta);
   }
 
   :focus-visible {
-    outline: 3px solid rgb(47 111 78 / 0.28);
+    outline: 3px solid rgb(13 148 136 / 0.24);
     outline-offset: 2px;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #b8c1cc transparent;
+    scrollbar-color: #cbd5e1 transparent;
   }
 
   *::-webkit-scrollbar {
-    width: 9px;
-    height: 9px;
+    width: 10px;
+    height: 10px;
   }
 
   *::-webkit-scrollbar-thumb {
-    background: #b8c1cc;
+    background: #cbd5e1;
     border: 2px solid transparent;
     border-radius: 999px;
     background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: #8f9baa;
+    background: #94a3b8;
     border: 2px solid transparent;
     background-clip: content-box;
   }
@@ -97,18 +97,18 @@
 @layer components {
   .tecla {
     @apply relative flex w-full items-center gap-5 rounded-2xl border border-linea bg-white px-5 py-5 text-left text-tinta;
-    box-shadow: 0 8px 22px rgb(23 32 51 / 0.055);
-    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    box-shadow: 0 10px 28px rgb(17 24 39 / 0.06);
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
   }
 
   .tecla:hover {
-    border-color: rgb(47 111 78 / 0.34);
-    box-shadow: 0 14px 30px rgb(23 32 51 / 0.085);
+    border-color: rgb(13 148 136 / 0.25);
+    box-shadow: 0 16px 34px rgb(17 24 39 / 0.09);
     transform: translateY(-1px);
   }
 
   .tecla:active {
     transform: translateY(0);
-    box-shadow: 0 5px 14px rgb(23 32 51 / 0.055);
+    box-shadow: 0 7px 18px rgb(17 24 39 / 0.06);
   }
 }
