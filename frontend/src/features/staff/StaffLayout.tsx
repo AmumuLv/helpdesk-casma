@@ -1,4 +1,4 @@
-import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, MonitorSmartphone, Monitor, ScrollText, Users, WifiOff, type LucideIcon } from "lucide-react";
+import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, MonitorSmartphone, Monitor, ScrollText, ShieldCheck, Users, WifiOff, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
@@ -93,77 +93,88 @@ export function StaffLayout() {
     : "TI";
 
   return (
-    <div className="min-h-dvh bg-papel/75">
-      <header className="sticky top-0 z-30 border-b border-casma-oscuro bg-casma-oscuro text-white shadow-[0_12px_34px_rgba(20,83,45,0.18)]">
-        <div className="border-b border-white/10 bg-gradient-to-r from-casma-oscuro via-[#176333] to-casma-oscuro">
-          <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-4 py-3 sm:px-5">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-2xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                <Headset className="size-5 text-sol" aria-hidden />
+    <div className="min-h-dvh bg-papel">
+      <header className="sticky top-0 z-30 shadow-[0_10px_30px_rgba(23,32,51,0.08)]">
+        <div className="bg-tinta text-white">
+          <div className="mx-auto flex max-w-[1540px] items-center gap-4 px-4 py-3.5 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3.5">
+              <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <Headset className="size-5 text-white" aria-hidden />
+                <span className="absolute -bottom-1 -right-1 size-3 rounded-full border-2 border-tinta bg-sol" aria-hidden />
               </span>
-              <div className="leading-tight">
-                <p className="text-base font-extrabold tracking-[-0.02em]">Help Desk Municipal</p>
-                <p className="mt-0.5 text-xs font-medium text-white/68">Municipalidad Provincial de Casma</p>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-[15px] font-extrabold tracking-[-0.02em] sm:text-base">Help Desk Municipal</p>
+                <p className="mt-1 truncate text-[11px] font-medium text-white/58 sm:text-xs">Municipalidad Provincial de Casma</p>
               </div>
             </div>
 
-            <div className="ml-auto flex items-center gap-2 sm:gap-3">
-              <div className="hidden items-center gap-2.5 rounded-2xl border border-white/10 bg-black/10 px-3 py-2 sm:flex">
-                <span className="grid size-8 place-items-center rounded-xl bg-white/12 text-xs font-extrabold text-sol">{initials}</span>
-                <div className="text-right leading-tight">
-                  <p className="max-w-48 truncate text-sm font-bold">{me?.staff?.full_name}</p>
-                  <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/55">{isAdmin ? "Administrador" : "Técnico"}</p>
+            <div className="ml-auto flex items-center gap-2.5">
+              <div className="hidden items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.055] px-3 py-2 shadow-sm sm:flex">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-casma text-xs font-extrabold text-white shadow-sm">{initials}</span>
+                <div className="min-w-0 leading-tight">
+                  <p className="max-w-52 truncate text-sm font-bold text-white">{me?.staff?.full_name}</p>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <ShieldCheck className="size-3 text-sol" aria-hidden />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">{isAdmin ? "Administrador" : "Técnico"}</span>
+                  </div>
                 </div>
               </div>
+
               <button
                 onClick={async () => { await logout(); navigate("/soporte/ingresar"); }}
-                className="flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-bold text-white/82 transition hover:border-white/15 hover:bg-white/10 hover:text-white focus-visible:ring-4 focus-visible:ring-sol/25"
+                className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-bold text-white/78 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white focus-visible:ring-4 focus-visible:ring-casma/20"
                 aria-label="Cerrar sesión"
+                title="Cerrar sesión"
               >
-                <LogOut className="size-4" /> <span className="hidden md:inline">Salir</span>
+                <LogOut className="size-4" />
+                <span className="hidden md:inline">Salir</span>
               </button>
             </div>
           </div>
         </div>
 
-        <nav className="mx-auto flex max-w-[1500px] gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-5" aria-label="Secciones">
-          {NAV.filter((n) => !n.admin || isAdmin).map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) => cx(
-                "group relative flex shrink-0 items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-bold transition-all duration-150",
-                isActive
-                  ? "bg-white text-casma-oscuro shadow-[0_5px_14px_rgba(0,0,0,0.13)] ring-1 ring-black/5"
-                  : "text-white/72 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  <span className={cx(
-                    "grid size-7 place-items-center rounded-lg transition-all",
-                    isActive ? "bg-casma-claro text-casma-oscuro" : "bg-white/7 text-white/75 group-hover:bg-white/12 group-hover:text-white",
-                  )}>
-                    <Icon className="size-4" aria-hidden />
-                  </span>
-                  <span>{label}</span>
-                  {to === "/soporte/dispositivos" && pendingCount > 0 && (
-                    <span className="rounded-full bg-sol px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-tinta">{pendingCount}</span>
-                  )}
-                  {isActive && <span className="absolute inset-x-3 -bottom-2.5 h-0.5 rounded-full bg-sol" aria-hidden />}
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
+        <div className="border-b border-linea bg-white/95 backdrop-blur-sm">
+          <nav className="mx-auto flex max-w-[1540px] gap-1 overflow-x-auto px-3 py-2.5 sm:px-5" aria-label="Secciones">
+            {NAV.filter((n) => !n.admin || isAdmin).map(({ to, label, icon: Icon, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) => cx(
+                  "group relative flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-bold transition-all duration-150",
+                  isActive
+                    ? "border-casma/20 bg-casma-claro text-casma-oscuro shadow-[0_3px_10px_rgba(23,32,51,0.06)]"
+                    : "border-transparent text-tenue hover:border-linea hover:bg-papel hover:text-tinta",
+                )}
+              >
+                {({ isActive }) => (
+                  <>
+                    <span className={cx(
+                      "grid size-7 place-items-center rounded-lg transition-all",
+                      isActive
+                        ? "bg-white text-casma-oscuro shadow-sm ring-1 ring-casma/10"
+                        : "bg-papel text-tenue group-hover:bg-white group-hover:text-casma-oscuro",
+                    )}>
+                      <Icon className="size-4" aria-hidden />
+                    </span>
+                    <span>{label}</span>
+                    {to === "/soporte/dispositivos" && pendingCount > 0 && (
+                      <span className="rounded-full bg-sol-claro px-1.5 py-0.5 text-[11px] font-extrabold leading-none text-[#765b00] ring-1 ring-sol/20">{pendingCount}</span>
+                    )}
+                    {isActive && <span className="absolute inset-x-3 -bottom-2.5 h-0.5 rounded-full bg-casma" aria-hidden />}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
 
         {(!online || offlinePending > 0) && (
-          <div className="border-t border-white/10 bg-black/10">
-            <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-sm sm:px-5">
-              {!online ? <WifiOff className="size-4 text-sol" /> : <CloudUpload className="size-4 text-sol" />}
+          <div className="border-b border-linea bg-sol-claro/80 text-tinta">
+            <div className="mx-auto flex max-w-[1540px] flex-wrap items-center gap-2 px-4 py-2 text-sm sm:px-6">
+              {!online ? <WifiOff className="size-4 text-[#806000]" /> : <CloudUpload className="size-4 text-[#806000]" />}
               <span className="font-bold">{!online ? "Modo offline" : "Sincronizando cambios"}</span>
-              <span className="text-white/70">
+              <span className="text-tenue">
                 {offlinePending > 0
                   ? `· ${offlinePending} acción${offlinePending === 1 ? "" : "es"} pendiente${offlinePending === 1 ? "" : "s"}`
                   : !online
@@ -171,16 +182,16 @@ export function StaffLayout() {
                     : ""}
               </span>
               {!online && offlineCachedAt && (
-                <span className="text-white/60">· mostrando copia local de {new Date(offlineCachedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</span>
+                <span className="text-tenue">· mostrando copia local de {new Date(offlineCachedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</span>
               )}
             </div>
           </div>
         )}
 
-        <div className="h-1 bg-gradient-to-r from-sol via-[#f6cf45] to-sol" aria-hidden />
+        <div className="h-[3px] bg-gradient-to-r from-casma via-casma to-sol" aria-hidden />
       </header>
 
-      <main className="mx-auto max-w-[1500px] px-3 py-6 sm:px-5 sm:py-7 lg:py-8">
+      <main className="mx-auto max-w-[1540px] px-3 py-6 sm:px-5 sm:py-7 lg:px-6 lg:py-8">
         <Outlet />
       </main>
     </div>
