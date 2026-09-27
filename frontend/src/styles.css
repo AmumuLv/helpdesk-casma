@@ -4,19 +4,19 @@
 
 @theme {
   --font-sans: "Segoe UI Variable", "Segoe UI", "Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --color-tinta: #1f2937;
-  --color-tinta-2: #374151;
-  --color-papel: #f7f9fb;
-  --color-casma: #1e7a3b;
-  --color-casma-oscuro: #14532d;
-  --color-casma-claro: #eaf6ee;
-  --color-sol: #eab308;
-  --color-sol-claro: #fef3c7;
-  --color-alerta: #b91c1c;
-  --color-alerta-claro: #fee2e2;
-  --color-hecho: #15803d;
-  --color-hecho-claro: #dcfce7;
-  --color-linea: #e2e7ec;
+  --color-tinta: #172033;
+  --color-tinta-2: #2b3648;
+  --color-papel: #f4f6f8;
+  --color-casma: #2f6f4e;
+  --color-casma-oscuro: #214f39;
+  --color-casma-claro: #eaf3ee;
+  --color-sol: #d3a620;
+  --color-sol-claro: #fbf3d6;
+  --color-alerta: #b42318;
+  --color-alerta-claro: #feecea;
+  --color-hecho: #2f7d53;
+  --color-hecho-claro: #e8f5ed;
+  --color-linea: #dde3ea;
   --color-tenue: #667085;
 }
 
@@ -32,16 +32,16 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at 10% -5%, rgb(30 122 59 / 0.055), transparent 28rem),
-      radial-gradient(circle at 92% 0%, rgb(234 179 8 / 0.04), transparent 22rem),
-      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 29rem);
+      radial-gradient(circle at 8% -8%, rgb(47 111 78 / 0.045), transparent 30rem),
+      radial-gradient(circle at 94% 2%, rgb(211 166 32 / 0.03), transparent 24rem),
+      linear-gradient(to bottom, #ffffff 0, #f8fafb 18rem, var(--color-papel) 34rem);
     min-height: 100dvh;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: -0.018em;
+    letter-spacing: -0.02em;
     text-wrap: balance;
   }
 
@@ -58,7 +58,7 @@
   }
 
   :focus-visible {
-    outline: 3px solid rgb(234 179 8 / 0.72);
+    outline: 3px solid rgb(47 111 78 / 0.28);
     outline-offset: 2px;
   }
 
@@ -97,18 +97,18 @@
 @layer components {
   .tecla {
     @apply relative flex w-full items-center gap-5 rounded-2xl border border-linea bg-white px-5 py-5 text-left text-tinta;
-    box-shadow: 0 8px 22px rgb(31 41 55 / 0.06);
+    box-shadow: 0 8px 22px rgb(23 32 51 / 0.055);
     transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
   }
 
   .tecla:hover {
-    border-color: rgb(30 122 59 / 0.42);
-    box-shadow: 0 14px 30px rgb(31 41 55 / 0.09);
+    border-color: rgb(47 111 78 / 0.34);
+    box-shadow: 0 14px 30px rgb(23 32 51 / 0.085);
     transform: translateY(-1px);
   }
 
   .tecla:active {
     transform: translateY(0);
-    box-shadow: 0 5px 14px rgb(31 41 55 / 0.06);
+    box-shadow: 0 5px 14px rgb(23 32 51 / 0.055);
   }
 }
