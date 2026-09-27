@@ -1,4 +1,4 @@
-import { BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, Users, WifiOff, X, type LucideIcon } from "lucide-react";
+import { Bell, BrainCircuit, Building2, ClipboardList, CloudUpload, Headset, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, Settings, Users, WifiOff, X, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
@@ -121,12 +121,12 @@ export function StaffLayout() {
       />
 
       <aside className={cx(
-        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-[#0F172A] text-white shadow-[12px_0_35px_rgba(2,6,23,0.22)] transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72",
+        "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-[#111827] text-white shadow-[12px_0_35px_rgba(2,6,23,0.24)] transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}>
-        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-5">
+        <div className="flex items-center justify-between border-b border-amber-500/30 px-5 py-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] text-[#0F172A] shadow-[0_8px_20px_rgba(234,179,8,0.16)]">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] text-[#111827] shadow-[0_8px_20px_rgba(234,179,8,0.16)]">
               <Headset className="size-5" aria-hidden />
             </span>
             <div className="min-w-0">
@@ -144,7 +144,7 @@ export function StaffLayout() {
             const items = NAV.filter((item) => item.section === group && (!item.admin || isAdmin));
             if (!items.length) return null;
             return (
-              <div key={group} className="mb-6">
+              <div key={group} className={cx("mb-6", group === "Administración" && "border-t border-amber-500/30 pt-5")}>
                 <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{group}</p>
                 <div className="space-y-1">
                   {items.map(({ to, label, icon: Icon, end }) => (
@@ -171,7 +171,7 @@ export function StaffLayout() {
                           />
                           <span className="min-w-0 flex-1 truncate">{label}</span>
                           {to === "/soporte/dispositivos" && pendingCount > 0 && (
-                            <span className="rounded-full bg-[#EAB308] px-2 py-1 text-xs font-bold leading-none text-[#0F172A]">{pendingCount}</span>
+                            <span className="rounded-full bg-[#EAB308] px-2 py-1 text-xs font-bold leading-none text-[#111827]">{pendingCount}</span>
                           )}
                         </>
                       )}
@@ -183,9 +183,9 @@ export function StaffLayout() {
           })}
         </nav>
 
-        <div className="mt-auto border-t border-slate-800 px-4 py-4 xl:px-5">
+        <div className="mt-auto border-t border-amber-500/30 px-4 py-4 xl:px-5">
           <div className="flex items-center gap-3 px-1 py-1">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] font-bold text-[#0F172A] shadow-sm">{initials}</span>
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] font-bold text-[#111827] shadow-sm">{initials}</span>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">{me?.staff?.full_name ?? "Administrador TI"}</p>
               <p className="mt-0.5 text-xs font-medium text-[#94A3B8]">{isAdmin ? "Administrador TI" : "Técnico"}</p>
@@ -193,7 +193,7 @@ export function StaffLayout() {
           </div>
           <button
             onClick={closeSession}
-            className="mt-4 flex min-h-11 w-full items-center justify-start gap-2 rounded-xl border border-slate-900 bg-[#030712] px-3.5 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-red-900/60 hover:bg-red-950/80 hover:text-white focus-visible:outline-red-400"
+            className="mt-4 flex min-h-11 w-full items-center justify-start gap-2 rounded-xl border border-black bg-black px-3.5 py-2.5 text-sm font-semibold text-white transition hover:border-red-900/70 hover:bg-red-950/80 hover:text-white focus-visible:outline-red-400"
             aria-label="Cerrar sesión"
           >
             <LogOut className="size-4" aria-hidden /> Cerrar sesión
@@ -205,7 +205,7 @@ export function StaffLayout() {
         <header className="sticky top-0 z-30 border-b border-linea bg-white/94 backdrop-blur-md">
           <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
             <button
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-linea bg-white text-tinta shadow-sm hover:border-casma/35 hover:text-casma-oscuro lg:hidden"
+              className="grid size-11 shrink-0 place-items-center rounded-xl border border-linea bg-white text-tinta shadow-sm hover:border-slate-400 hover:text-slate-900 lg:hidden"
               onClick={() => setSidebarOpen(true)}
               aria-label="Abrir menú"
             >
@@ -233,12 +233,24 @@ export function StaffLayout() {
               <span className="sm:hidden">Nueva</span>
             </button>
 
-            <div className="hidden items-center gap-3 rounded-xl border border-linea bg-white px-3 py-2 shadow-sm md:flex">
-              <span className="grid size-10 place-items-center rounded-xl bg-[#CCFBF1] text-sm font-bold text-[#115E59]">{initials}</span>
-              <div className="min-w-0">
-                <p className="max-w-44 truncate text-sm font-bold text-tinta">{me?.staff?.full_name ?? "Administrador TI"}</p>
-                <p className="text-xs font-medium text-tenue">{isAdmin ? "Administrador TI" : "Técnico"}</p>
-              </div>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                className="relative grid size-11 place-items-center rounded-xl border border-transparent text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Notificaciones"
+                title="Notificaciones"
+              >
+                <Bell className="size-5" aria-hidden />
+                {pendingCount > 0 && <span className="absolute right-2 top-2 size-2 rounded-full bg-amber-500 ring-2 ring-white" aria-hidden />}
+              </button>
+              <button
+                type="button"
+                className="grid size-11 place-items-center rounded-xl border border-transparent text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Configuración"
+                title="Configuración"
+              >
+                <Settings className="size-5" aria-hidden />
+              </button>
             </div>
           </div>
         </header>
