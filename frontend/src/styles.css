@@ -1,23 +1,31 @@
 @import "tailwindcss";
 @import "@fontsource/atkinson-hyperlegible-next/400.css";
+@import "@fontsource/atkinson-hyperlegible-next/500.css";
+@import "@fontsource/atkinson-hyperlegible-next/600.css";
 @import "@fontsource/atkinson-hyperlegible-next/700.css";
 
 @theme {
-  --font-sans: "Inter", "Segoe UI Variable", "Segoe UI", "Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --color-tinta: #111827;
-  --color-tinta-2: #1f2937;
-  --color-papel: #f3f4f6;
-  --color-casma: #0d9488;
-  --color-casma-oscuro: #0f766e;
-  --color-casma-claro: #ecfdf5;
-  --color-sol: #f59e0b;
-  --color-sol-claro: #fef3c7;
+  --font-sans: "Atkinson Hyperlegible Next", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Neutros */
+  --color-tinta: #0f172a;
+  --color-tinta-2: #1e293b;
+  --color-papel: #f7f8f5;
+  --color-linea: #dfe4dc;
+  --color-tenue: #64748b;
+
+  /* Identidad Municipalidad Provincial de Casma */
+  --color-casma: #15803d;
+  --color-casma-oscuro: #166534;
+  --color-casma-claro: #f0fdf4;
+  --color-sol: #eab308;
+  --color-sol-claro: #fef9c3;
+
+  /* Estados */
   --color-alerta: #b91c1c;
-  --color-alerta-claro: #fee2e2;
-  --color-hecho: #15803d;
-  --color-hecho-claro: #dcfce7;
-  --color-linea: #e5e7eb;
-  --color-tenue: #6b7280;
+  --color-alerta-claro: #fef2f2;
+  --color-hecho: #047857;
+  --color-hecho-claro: #ecfdf5;
 }
 
 @layer base {
@@ -32,9 +40,9 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at 0% 0%, rgb(13 148 136 / 0.05), transparent 24rem),
-      radial-gradient(circle at 100% 0%, rgb(17 24 39 / 0.035), transparent 24rem),
-      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 30rem);
+      radial-gradient(circle at 0% 0%, rgb(21 128 61 / 0.055), transparent 26rem),
+      radial-gradient(circle at 100% 0%, rgb(234 179 8 / 0.045), transparent 24rem),
+      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 34rem);
     min-height: 100dvh;
   }
 
@@ -52,19 +60,27 @@
     font: inherit;
   }
 
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   ::selection {
-    background: rgb(13 148 136 / 0.18);
+    background: rgb(21 128 61 / 0.22);
     color: var(--color-tinta);
   }
 
   :focus-visible {
-    outline: 3px solid rgb(13 148 136 / 0.24);
-    outline-offset: 2px;
+    outline: 2px solid var(--color-casma-oscuro);
+    outline-offset: 3px;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-color: #b9c3b8 transparent;
   }
 
   *::-webkit-scrollbar {
@@ -73,20 +89,22 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #b9c3b8;
     border: 2px solid transparent;
     border-radius: 999px;
     background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #8d9b8c;
     border: 2px solid transparent;
     background-clip: content-box;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
@@ -96,19 +114,46 @@
 
 @layer components {
   .tecla {
-    @apply relative flex w-full items-center gap-5 rounded-2xl border border-linea bg-white px-5 py-5 text-left text-tinta;
-    box-shadow: 0 10px 28px rgb(17 24 39 / 0.06);
-    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+    @apply relative flex w-full items-center gap-4 rounded-2xl border border-linea bg-white px-5 py-5 text-left text-tinta sm:gap-5;
+    box-shadow: 0 8px 24px rgb(15 23 42 / 0.055);
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
   }
 
   .tecla:hover {
-    border-color: rgb(13 148 136 / 0.25);
-    box-shadow: 0 16px 34px rgb(17 24 39 / 0.09);
+    border-color: rgb(21 128 61 / 0.32);
+    background: linear-gradient(135deg, #ffffff, rgb(240 253 244 / 0.75));
+    box-shadow: 0 14px 30px rgb(15 23 42 / 0.085);
     transform: translateY(-1px);
   }
 
   .tecla:active {
     transform: translateY(0);
-    box-shadow: 0 7px 18px rgb(17 24 39 / 0.06);
+    box-shadow: 0 6px 16px rgb(15 23 42 / 0.06);
+  }
+
+  .municipal-accent {
+    @apply flex items-center gap-2;
+  }
+
+  .municipal-accent::before,
+  .municipal-accent::after {
+    content: "";
+    display: block;
+    height: 0.375rem;
+    border-radius: 999px;
+  }
+
+  .municipal-accent::before {
+    width: 2.5rem;
+    background: var(--color-casma);
+  }
+
+  .municipal-accent::after {
+    width: 1rem;
+    background: var(--color-sol);
+  }
+
+  .mobile-safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
