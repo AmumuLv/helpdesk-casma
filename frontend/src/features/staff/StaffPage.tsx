@@ -27,8 +27,8 @@ export function StaffPage() {
       <Modal open={!!secret} onClose={() => setSecret(null)} title="Contraseña temporal">
         {secret && (
           <div className="flex flex-col gap-4">
-            <p>Entréguela en persona a <strong>{secret.username}</strong>. Solo se muestra esta vez; deberá cambiarla y configurar su app autenticadora al ingresar.</p>
-            <p className="select-all break-all rounded-xl bg-papel p-4 text-center text-xl font-bold">{secret.password}</p>
+            <p className="leading-6">Entréguela en persona a <strong>{secret.username}</strong>. Solo se muestra esta vez; deberá cambiarla y configurar su app autenticadora al ingresar.</p>
+            <p className="select-all break-all rounded-xl border border-linea bg-papel p-4 text-center text-xl font-bold">{secret.password}</p>
             <Button onClick={() => navigator.clipboard.writeText(secret.password)} variant="secondary">Copiar</Button>
           </div>
         )}
@@ -53,25 +53,25 @@ function StaffCard({ member: s, onEdit, onSecret }: { member: StaffMember; onEdi
   const self = me?.id === s.id;
 
   return (
-    <Card className={cx("flex flex-col gap-3 p-4", !s.active && "opacity-60")}>
+    <Card className={cx("flex flex-col gap-3 p-4 sm:p-5", !s.active && "opacity-60")}>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-lg font-bold">{s.full_name}</p>
-          <p className="text-sm text-tenue">{s.username}{s.phone && `, ${s.phone}`}</p>
+        <div className="min-w-0">
+          <p className="truncate text-lg font-bold text-tinta">{s.full_name}</p>
+          <p className="truncate text-sm text-tenue">{s.username}{s.phone && `, ${s.phone}`}</p>
         </div>
-        <Badge className={s.role === "ADMIN" ? "border-tinta bg-tinta text-white" : "border-linea bg-papel"}>{s.role === "ADMIN" ? "Admin" : "Técnico"}</Badge>
+        <Badge className={s.role === "ADMIN" ? "border-casma-oscuro bg-casma-oscuro text-white" : "border-linea bg-papel text-tinta"}>{s.role === "ADMIN" ? "Admin" : "Técnico"}</Badge>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {s.specialties.map((c) => <Badge key={c} className="border-casma/30 bg-casma-claro text-casma-oscuro">{CATEGORY_LABEL[c]}</Badge>)}
         {!s.specialties.length && <span className="text-sm text-tenue">Sin especialidades</span>}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span className="flex items-center gap-1"><ShieldCheck className={cx("size-4", s.totp_enabled ? "text-hecho" : "text-sol")} />{s.totp_enabled ? "2FA activo" : "2FA pendiente"}</span>
+        <span className="flex items-center gap-1"><ShieldCheck className={cx("size-4", s.totp_enabled ? "text-hecho" : "text-amber-700")} />{s.totp_enabled ? "2FA activo" : "2FA pendiente"}</span>
         {s.locked && <span className="flex items-center gap-1 font-bold text-alerta"><Lock className="size-4" /> Bloqueado</span>}
         <span>{s.open_tickets} casos abiertos</span>
         <span className="text-tenue">{s.last_login_at ? `Ingresó ${fmtAgo(s.last_login_at)}` : "Nunca ingresó"}</span>
       </div>
-      <div className="mt-auto flex flex-wrap gap-2 border-t border-linea pt-3">
+      <div className="mt-auto grid grid-cols-1 gap-2 border-t border-linea pt-3 sm:flex sm:flex-wrap">
         <Button size="sm" variant="secondary" onClick={onEdit}>Editar</Button>
         {!self && <>
           <Button size="sm" variant="ghost" loading={action.isPending && action.variables === "reset-password"}
@@ -113,14 +113,14 @@ function StaffModal({ member, onClose, onSecret }: { member: StaffMember | null;
   return (
     <Modal open onClose={onClose} title={member ? `Editar ${member.full_name}` : "Nuevo integrante"}>
       <form className="flex flex-col gap-4" onSubmit={(e: FormEvent) => { e.preventDefault(); save.mutate(); }}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Usuario">{(id) => <Input id={id} value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} disabled={!!member} required autoCapitalize="none" />}</Field>
           <Field label="Rol">
             {(id) => <Select id={id} value={f.role} disabled={self} onChange={(e) => setF({ ...f, role: e.target.value as StaffRole })}><option value="TECNICO">Técnico</option><option value="ADMIN">Administrador</option></Select>}
           </Field>
         </div>
         <Field label="Nombre completo">{(id) => <Input id={id} value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} required minLength={3} />}</Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Correo">{(id) => <Input id={id} type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />}</Field>
           <Field label="Teléfono">{(id) => <Input id={id} value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} maxLength={20} />}</Field>
         </div>
@@ -128,14 +128,14 @@ function StaffModal({ member, onClose, onSecret }: { member: StaffMember | null;
           <legend className="mb-2 font-bold">Especialidades <span className="font-normal text-tenue">(la IA las usa para sugerir asignaciones)</span></legend>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((c) => (
-              <label key={c} className={cx("cursor-pointer rounded-full border px-3 py-1 text-sm font-bold", f.specialties.includes(c) ? "border-casma bg-casma text-white" : "border-linea bg-white")}>
+              <label key={c} className={cx("cursor-pointer rounded-full border px-3 py-1.5 text-sm font-bold transition", f.specialties.includes(c) ? "border-casma-oscuro bg-casma-oscuro text-white" : "border-linea bg-white text-tinta hover:border-casma/30 hover:bg-casma-claro/50")}>
                 <input type="checkbox" className="sr-only" checked={f.specialties.includes(c)} onChange={() => toggle(c)} />{CATEGORY_LABEL[c]}
               </label>
             ))}
           </div>
         </fieldset>
         {member && !self && (
-          <label className="flex items-center gap-2 font-bold"><input type="checkbox" className="size-5 accent-casma" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Cuenta activa</label>
+          <label className="flex min-h-11 items-center gap-2 font-bold"><input type="checkbox" className="size-5 accent-casma" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Cuenta activa</label>
         )}
         {save.error && <ErrorBox message={errorMessage(save.error)} />}
         <Button type="submit" loading={save.isPending}>{member ? "Guardar" : "Crear y generar contraseña temporal"}</Button>

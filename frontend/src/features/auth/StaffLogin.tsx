@@ -52,13 +52,16 @@ export function StaffLogin() {
   };
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-tinta px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-8">
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-casma-oscuro px-4 py-10">
+      <div className="pointer-events-none absolute -left-24 top-10 size-80 rounded-full bg-white/[0.05]" aria-hidden />
+      <div className="pointer-events-none absolute -right-20 bottom-0 size-72 rounded-full bg-sol/[0.08]" aria-hidden />
+      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.3)] sm:rounded-3xl sm:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <span className="grid size-12 place-items-center rounded-xl bg-tinta text-white"><KeyRound className="size-6" /></span>
-          <div>
-            <h1 className="text-2xl font-bold">Personal de Soporte TI</h1>
-            <p className="text-tenue">Acceso con verificación en dos pasos</p>
+          <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-sol text-tinta shadow-sm"><KeyRound className="size-6" /></span>
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-casma-oscuro">Help Desk Municipal</p>
+            <h1 className="mt-0.5 text-2xl font-bold tracking-[-0.025em] text-tinta">Personal de Soporte TI</h1>
+            <p className="mt-0.5 text-sm text-tenue">Acceso seguro con verificación en dos pasos</p>
           </div>
         </div>
 
@@ -72,11 +75,11 @@ export function StaffLogin() {
         ) : (
           <form onSubmit={submitCode} className="flex flex-col gap-4">
             {stage.kind === "setup" && (
-              <div className="flex flex-col gap-3 rounded-2xl bg-papel p-4">
-                <p className="flex items-center gap-2 font-bold"><ShieldCheck className="size-5 text-casma" /> Configure su app autenticadora</p>
-                <p className="text-sm text-tenue">Escanee el código con Google Authenticator, Microsoft Authenticator o similar.</p>
-                {stage.qr && <img src={stage.qr} alt="Código QR para la verificación en dos pasos" className="mx-auto size-48 rounded-lg bg-white p-2" />}
-                <p className="break-all text-center text-sm">Clave manual: <strong>{stage.secret}</strong></p>
+              <div className="flex flex-col gap-3 rounded-2xl border border-casma/15 bg-casma-claro p-4">
+                <p className="flex items-center gap-2 font-bold text-casma-oscuro"><ShieldCheck className="size-5" /> Configure su app autenticadora</p>
+                <p className="text-sm leading-5 text-tenue">Escanee el código con Google Authenticator, Microsoft Authenticator o una app compatible.</p>
+                {stage.qr && <img src={stage.qr} alt="Código QR para la verificación en dos pasos" className="mx-auto size-48 rounded-lg border border-linea bg-white p-2" />}
+                <p className="break-all text-center text-sm text-tinta">Clave manual: <strong>{stage.secret}</strong></p>
               </div>
             )}
             <Field label="Código de 6 dígitos">
@@ -87,7 +90,7 @@ export function StaffLogin() {
             <Button type="button" variant="ghost" onClick={() => { setStage({ kind: "password" }); setCode(""); }}>Volver</Button>
           </form>
         )}
-        <Link to="/ingresar" className="mt-6 block text-center text-sm text-tenue underline">Acceso de oficinas</Link>
+        <Link to="/ingresar" className="mt-6 flex min-h-10 items-center justify-center text-center text-sm font-semibold text-casma-oscuro underline decoration-casma/40 underline-offset-4">Acceso de oficinas</Link>
       </div>
     </main>
   );

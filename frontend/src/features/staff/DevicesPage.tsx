@@ -37,11 +37,23 @@ export function DevicesPage() {
   return (
     <div>
       <PageHeader title="Dispositivos" description="Cada computadora o celular que usa la cuenta de una oficina debe ser autorizado. Pida al usuario que le dicte el código de su pantalla." />
-      <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-white p-1 sm:w-fit" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.value} role="tab" aria-selected={tab === t.value} onClick={() => setTab(t.value)}
-            className={cx("shrink-0 rounded-lg px-4 py-2 text-sm font-bold", tab === t.value ? "bg-tinta text-white" : "text-tenue hover:text-tinta")}>{t.label}</button>
-        ))}
+      <div className="-mx-1 mb-4 overflow-x-auto px-1 pb-1">
+        <div className="flex w-max gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-linea sm:w-fit" role="tablist" aria-label="Estado de dispositivos">
+          {TABS.map((t) => (
+            <button
+              key={t.value}
+              role="tab"
+              aria-selected={tab === t.value}
+              onClick={() => setTab(t.value)}
+              className={cx(
+                "min-h-10 shrink-0 rounded-lg px-3.5 py-2 text-sm font-bold transition sm:px-4",
+                tab === t.value ? "bg-casma-oscuro text-white shadow-sm" : "text-tenue hover:bg-casma-claro/60 hover:text-casma-oscuro",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
       {devices.isLoading ? <Spinner /> : devices.error ? <ErrorBox message={errorMessage(devices.error)} /> : !devices.data?.length ? (
         <Card><EmptyState icon={<MonitorSmartphone />} title="No hay dispositivos en esta lista" /></Card>
@@ -74,19 +86,19 @@ function DeviceCard({ device: d }: { device: Device }) {
   });
 
   return (
-    <Card className="flex flex-col gap-4 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-lg font-bold">{d.office_name}</p>
-          <p className="text-sm text-tenue">{describeAgent(d.user_agent)}, IP {d.last_ip ?? d.first_ip ?? "?"}</p>
-          <p className="text-sm text-tenue" title={fmtDateTime(d.created_at)}>Solicitado {fmtAgo(d.created_at)}, visto {fmtAgo(d.last_seen_at)}</p>
+    <Card className="flex flex-col gap-4 p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-lg font-bold text-tinta">{d.office_name}</p>
+          <p className="mt-0.5 text-sm leading-5 text-tenue">{describeAgent(d.user_agent)}, IP {d.last_ip ?? d.first_ip ?? "?"}</p>
+          <p className="mt-0.5 text-sm leading-5 text-tenue" title={fmtDateTime(d.created_at)}>Solicitado {fmtAgo(d.created_at)}, visto {fmtAgo(d.last_seen_at)}</p>
         </div>
-        <span className="shrink-0 whitespace-nowrap rounded-xl border-2 border-dashed border-casma px-3 py-1 text-2xl font-bold tracking-wider">{d.pair_code}</span>
+        <span className="w-fit shrink-0 whitespace-nowrap rounded-xl border-2 border-dashed border-casma bg-casma-claro px-3 py-1.5 text-xl font-bold tracking-wider text-casma-oscuro sm:text-2xl">{d.pair_code}</span>
       </div>
 
       {d.status === "PENDIENTE" ? (
         <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); action.mutate("approve"); }}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Tipo">
               {(id) => <Select id={id} value={kind} onChange={(e) => setKind(e.target.value as DeviceKind)}>{Object.entries(DEVICE_KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}
             </Field>
@@ -100,18 +112,18 @@ function DeviceCard({ device: d }: { device: Device }) {
               </Select>
             )}
           </Field>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button type="submit" variant="success" loading={action.isPending && action.variables === "approve"}><Check className="size-4" /> Autorizar</Button>
             <Button type="button" variant="danger" loading={action.isPending && action.variables === "reject"} onClick={() => action.mutate("reject")}><X className="size-4" /> Rechazar</Button>
           </div>
         </form>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge className="border-linea bg-papel">{DEVICE_KIND_LABEL[d.kind]}</Badge>
-          {d.label && <Badge className="border-linea bg-white">{d.label}</Badge>}
+        <div className="flex flex-wrap items-center gap-2 border-t border-linea/70 pt-3">
+          <Badge className="border-linea bg-papel text-tinta">{DEVICE_KIND_LABEL[d.kind]}</Badge>
+          {d.label && <Badge className="border-linea bg-white text-tinta">{d.label}</Badge>}
           {d.equipment_code && <Badge className="border-casma/30 bg-casma-claro text-casma-oscuro">{d.equipment_code}</Badge>}
           {d.status === "APROBADO" && (
-            <Button size="sm" variant="danger" className="ml-auto" loading={action.isPending}
+            <Button size="sm" variant="danger" className="sm:ml-auto" loading={action.isPending}
               onClick={() => confirm(`¿Quitar el acceso a «${d.label ?? d.pair_code}»?`) && action.mutate("revoke")}><Ban className="size-4" /> Revocar</Button>
           )}
         </div>
