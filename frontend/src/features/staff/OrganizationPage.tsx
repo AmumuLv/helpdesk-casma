@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Building2, Pencil, Plus, UserRound, Users } from "lucide-react";
+import { ArrowRight, Building2, Mail, Pencil, Phone, UserRound, Users } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
@@ -19,6 +19,10 @@ const EMPTY_ZONE: ZoneForm = { code: "", name: "", description: "", active: true
 const EMPTY_USER: UserForm = {
   employee_code: "", full_name: "", office_id: "", job_title: "", email: "", phone: "", active: true,
 };
+
+function initials(name: string) {
+  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
 
 export function OrganizationPage() {
   const zones = useZones();
@@ -62,15 +66,15 @@ export function OrganizationPage() {
       />
 
       <section className="mb-6">
-        <h2 className="mb-3 text-lg font-bold">Zonas</h2>
+        <h2 className="mb-3 text-lg font-bold text-tinta">Zonas</h2>
         {zones.isLoading ? <Spinner /> : zones.error ? <ErrorBox message={errorMessage(zones.error)} /> : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(zones.data ?? []).map((zone) => (
-              <Card key={zone.id} className={zone.active ? "p-4" : "p-4 opacity-60"}>
+              <Card key={zone.id} className={zone.active ? "p-4 sm:p-5" : "p-4 opacity-60 sm:p-5"}>
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-bold">{zone.name}</h3>
+                      <h3 className="font-bold text-tinta">{zone.name}</h3>
                       {!zone.active && <Badge className="border-linea bg-papel text-tenue">Inactiva</Badge>}
                     </div>
                     <p className="text-sm text-tenue">{zone.code}</p>
@@ -81,11 +85,11 @@ export function OrganizationPage() {
                     </Button>
                   )}
                 </div>
-                {zone.description && <p className="mt-2 text-sm">{zone.description}</p>}
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm">
-                  <div className="rounded-lg bg-papel p-2"><strong className="block text-lg">{zone.office_count}</strong>Oficinas</div>
-                  <div className="rounded-lg bg-papel p-2"><strong className="block text-lg">{zone.user_count}</strong>Usuarios</div>
-                  <div className="rounded-lg bg-papel p-2"><strong className="block text-lg">{zone.equipment_count}</strong>Equipos</div>
+                {zone.description && <p className="mt-2 text-sm leading-5 text-tenue">{zone.description}</p>}
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs sm:text-sm">
+                  <div className="rounded-xl bg-papel p-2"><strong className="block text-lg text-tinta">{zone.office_count}</strong>Oficinas</div>
+                  <div className="rounded-xl bg-papel p-2"><strong className="block text-lg text-tinta">{zone.user_count}</strong>Usuarios</div>
+                  <div className="rounded-xl bg-papel p-2"><strong className="block text-lg text-tinta">{zone.equipment_count}</strong>Equipos</div>
                 </div>
                 <Button className="mt-3 w-full" variant="secondary" onClick={() => navigate(`/soporte/organizacion/zona/${zone.id}`)}>
                   Ver perfil <ArrowRight className="size-4" />
@@ -99,11 +103,11 @@ export function OrganizationPage() {
 
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-lg font-bold"><Users className="size-5" /> Usuarios municipales</h2>
-          <span className="text-sm text-tenue">{filteredUsers.length} resultado{filteredUsers.length === 1 ? "" : "s"}</span>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-tinta"><Users className="size-5 text-casma-oscuro" /> Usuarios municipales</h2>
+          <span className="text-sm font-medium text-tenue">{filteredUsers.length} resultado{filteredUsers.length === 1 ? "" : "s"}</span>
         </div>
 
-        <Card className="mb-3 grid gap-3 p-3 md:grid-cols-3">
+        <Card className="mb-3 grid gap-3 p-3 sm:p-4 md:grid-cols-3">
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar nombre, código, cargo u oficina" />
           <Select
             value={zoneFilter}
@@ -123,7 +127,46 @@ export function OrganizationPage() {
 
         {users.isLoading ? <Spinner /> : users.error ? <ErrorBox message={errorMessage(users.error)} /> : (
           <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="divide-y divide-linea md:hidden">
+              {filteredUsers.map((user) => (
+                <article key={user.id} className={user.active ? "bg-white p-4" : "bg-white p-4 opacity-60"}>
+                  <div className="flex items-start gap-3">
+                    {user.photo_url ? (
+                      <img src={user.photo_url} alt="" className="size-12 shrink-0 rounded-xl border border-linea object-cover" />
+                    ) : (
+                      <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-casma-claro font-bold text-casma-oscuro">{initials(user.full_name)}</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold text-tinta">{user.full_name}</h3>
+                          <p className="text-xs text-tenue">{user.employee_code ?? "Sin código interno"}</p>
+                        </div>
+                        {user.active ? <Badge className="border-hecho/30 bg-hecho-claro text-hecho">Activo</Badge> : <Badge className="border-linea bg-papel text-tenue">Inactivo</Badge>}
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-tinta">{user.job_title ?? "Sin cargo registrado"}</p>
+                      <p className="mt-1 text-sm text-tenue"><strong className="text-tinta">{user.zone_name ?? "Sin zona"}</strong> · {user.office_name}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-1.5 rounded-xl bg-papel/80 p-3 text-sm text-tenue">
+                    {user.email && <p className="flex items-center gap-2"><Mail className="size-4 shrink-0 text-casma-oscuro" /><span className="truncate">{user.email}</span></p>}
+                    {user.phone && <p className="flex items-center gap-2"><Phone className="size-4 shrink-0 text-casma-oscuro" />{user.phone}</p>}
+                    <p><strong className="text-tinta">{user.equipment_count}</strong> equipo{user.equipment_count === 1 ? "" : "s"} asignado{user.equipment_count === 1 ? "" : "s"}</p>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-2 border-t border-linea/70 pt-3 sm:grid-cols-2">
+                    <Button size="sm" variant="secondary" onClick={() => navigate(`/soporte/organizacion/usuario/${user.id}`)}>
+                      Ver perfil <ArrowRight className="size-4" />
+                    </Button>
+                    {isAdmin && <Button size="sm" variant="secondary" onClick={() => setUserEdit(user)}><Pencil className="size-4" /> Editar</Button>}
+                  </div>
+                </article>
+              ))}
+              {!filteredUsers.length && <div className="p-8 text-center text-tenue">No se encontraron usuarios municipales.</div>}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="border-b border-linea bg-papel text-tenue">
                   <tr>
@@ -138,15 +181,13 @@ export function OrganizationPage() {
                 </thead>
                 <tbody className="divide-y divide-linea">
                   {filteredUsers.map((user) => (
-                    <tr key={user.id} className={user.active ? "" : "opacity-55"}>
+                    <tr key={user.id} className={user.active ? "transition hover:bg-casma-claro/25" : "opacity-55"}>
                       <td className="p-3">
                         <div className="flex items-center gap-3">
                           {user.photo_url ? (
                             <img src={user.photo_url} alt="" className="size-10 rounded-xl border border-linea object-cover" />
                           ) : (
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-casma-claro font-bold text-casma">
-                              {user.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
-                            </div>
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-casma-claro font-bold text-casma-oscuro">{initials(user.full_name)}</div>
                           )}
                           <div>
                             <p className="font-bold">{user.full_name}</p>
@@ -225,7 +266,7 @@ function ZoneModal({ zone, onClose }: { zone: Zone | null; onClose: () => void }
         <Field label="Código">{(id) => <Input id={id} value={form.code} disabled={!!zone} onChange={(e) => setForm((s) => ({ ...s, code: e.target.value }))} required maxLength={30} />}</Field>
         <Field label="Nombre">{(id) => <Input id={id} value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} required maxLength={120} placeholder="Ej. Complejo Municipal" />}</Field>
         <Field label="Descripción">{(id) => <Input id={id} value={form.description} onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))} maxLength={300} />}</Field>
-        {zone && <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={form.active} onChange={(e) => setForm((s) => ({ ...s, active: e.target.checked }))} className="size-5 accent-casma" /> Zona activa</label>}
+        {zone && <label className="flex min-h-11 items-center gap-2 font-bold"><input type="checkbox" checked={form.active} onChange={(e) => setForm((s) => ({ ...s, active: e.target.checked }))} className="size-5 accent-casma" /> Zona activa</label>}
         {save.error && <ErrorBox message={errorMessage(save.error)} />}
         <Button type="submit" loading={save.isPending}>Guardar</Button>
       </form>
@@ -293,7 +334,7 @@ function MunicipalUserModal({ user, onClose }: { user: MunicipalUser | null; onC
           <Field label="Correo">{(id) => <Input id={id} type="email" value={form.email} onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))} maxLength={120} />}</Field>
           <Field label="Teléfono / anexo">{(id) => <Input id={id} value={form.phone} onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))} maxLength={20} />}</Field>
         </div>
-        {user && <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={form.active} onChange={(e) => setForm((s) => ({ ...s, active: e.target.checked }))} className="size-5 accent-casma" /> Usuario activo</label>}
+        {user && <label className="flex min-h-11 items-center gap-2 font-bold"><input type="checkbox" checked={form.active} onChange={(e) => setForm((s) => ({ ...s, active: e.target.checked }))} className="size-5 accent-casma" /> Usuario activo</label>}
         {save.error && <ErrorBox message={errorMessage(save.error)} />}
         <Button type="submit" loading={save.isPending}>Guardar</Button>
       </form>
