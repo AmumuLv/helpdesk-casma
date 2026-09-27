@@ -124,7 +124,7 @@ export function StaffLayout() {
         "fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-[#111827] text-white shadow-[12px_0_35px_rgba(2,6,23,0.24)] transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}>
-        <div className="flex items-center justify-between px-5 py-5 shadow-[0_12px_26px_-20px_rgba(245,158,11,0.72)]">
+        <div className="flex items-center justify-between px-5 py-5 shadow-[0_12px_26px_-20px_rgba(245,158,11,0.24)]">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] text-[#111827] shadow-[0_8px_20px_rgba(234,179,8,0.16)]">
               <Headset className="size-5" aria-hidden />
@@ -144,7 +144,7 @@ export function StaffLayout() {
             const items = NAV.filter((item) => item.section === group && (!item.admin || isAdmin));
             if (!items.length) return null;
             return (
-              <div key={group} className={cx("mb-6", group === "Administración" && "pt-5 shadow-[0_-12px_26px_-22px_rgba(245,158,11,0.64)]")}>
+              <div key={group} className={cx("mb-6", group === "Administración" && "pt-5 shadow-[0_-12px_26px_-22px_rgba(245,158,11,0.18)]")}>
                 <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{group}</p>
                 <div className="space-y-1">
                   {items.map(({ to, label, icon: Icon, end }) => (
@@ -183,7 +183,7 @@ export function StaffLayout() {
           })}
         </nav>
 
-        <div className="mt-auto px-4 py-4 shadow-[0_-14px_30px_-22px_rgba(245,158,11,0.72)] xl:px-5">
+        <div className="mt-auto px-4 py-4 shadow-[0_-14px_30px_-22px_rgba(245,158,11,0.24)] xl:px-5">
           <div className="flex items-center gap-3 px-1 py-1">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] font-bold text-[#111827] shadow-sm">{initials}</span>
             <div className="min-w-0">
