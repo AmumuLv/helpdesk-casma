@@ -212,7 +212,7 @@ export function StaffLayout() {
               <Menu className="size-5" />
             </button>
 
-            <form onSubmit={submitHeaderSearch} role="search" className="relative min-w-0 flex-1 lg:max-w-3xl">
+            <form onSubmit={submitHeaderSearch} role="search" className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-tenue" aria-hidden />
               <Input
                 value={headerSearch}
@@ -223,34 +223,45 @@ export function StaffLayout() {
               />
             </form>
 
-            <button
-              onClick={openNewTicket}
-              className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-xl border border-[#0F766E] bg-[#0D9488] px-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(13,148,136,0.22)] transition hover:bg-[#0F766E] sm:px-4"
-              aria-label="Nueva incidencia"
-            >
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Nueva incidencia</span>
-              <span className="sm:hidden">Nueva</span>
-            </button>
+            <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+              <button
+                onClick={openNewTicket}
+                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[#166534] bg-[#15803D] px-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(21,128,61,0.20)] transition hover:bg-[#166534] sm:px-4"
+                aria-label="Nueva incidencia"
+              >
+                <Plus className="size-4" />
+                <span className="hidden sm:inline">Nueva incidencia</span>
+                <span className="sm:hidden">Nueva</span>
+              </button>
 
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                type="button"
-                className="relative grid size-11 place-items-center rounded-xl border border-transparent text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
-                aria-label="Notificaciones"
-                title="Notificaciones"
-              >
-                <Bell className="size-5" aria-hidden />
-                {pendingCount > 0 && <span className="absolute right-2 top-2 size-2 rounded-full bg-amber-500 ring-2 ring-white" aria-hidden />}
-              </button>
-              <button
-                type="button"
-                className="grid size-11 place-items-center rounded-xl border border-transparent text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
-                aria-label="Configuración"
-                title="Configuración"
-              >
-                <Settings className="size-5" aria-hidden />
-              </button>
+              <div className="hidden min-h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm md:inline-flex">
+                <span className={cx("mr-2 inline-block size-2 rounded-full", online ? "bg-emerald-500" : "bg-amber-500")} aria-hidden />
+                {online ? "En línea" : "Offline"}
+              </div>
+
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  className="relative grid size-10 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="Notificaciones"
+                  title="Notificaciones"
+                >
+                  <Bell className="size-5" aria-hidden />
+                  {pendingCount > 0 && (
+                    <span className="absolute right-1 top-1 min-w-[18px] rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-[18px] text-white" aria-label={`${pendingCount} notificaciones pendientes`}>
+                      {pendingCount > 9 ? "9+" : pendingCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="grid size-10 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="Configuración"
+                  title="Configuración"
+                >
+                  <Settings className="size-5" aria-hidden />
+                </button>
+              </div>
             </div>
           </div>
         </header>
