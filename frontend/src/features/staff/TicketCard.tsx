@@ -1,5 +1,5 @@
 import { Cpu, Eye, Phone, Sparkles, Star, User, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Badge, Button, CategoryBadge, cx, Modal, PriorityBadge, Select, StatusBadge } from "../../components/ui";
 import { fmtAgo, fmtDateTime } from "../../lib/labels";
 import type { Ticket } from "../../lib/types";
@@ -104,7 +104,7 @@ export function TicketCard({ ticket: t, onOpen }: { ticket: Ticket; onOpen: () =
   );
 }
 
-function Meta({ icon, text }: { icon: React.ReactNode; text: string }) {
+function Meta({ icon, text }: { icon: ReactNode; text: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-lg border border-linea bg-papel/70 px-2 py-1.5">
       <span className="text-casma">{icon}</span>
