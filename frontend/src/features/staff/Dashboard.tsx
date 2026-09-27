@@ -71,14 +71,36 @@ export function Dashboard() {
 
   const createOpen = searchParams.get("new") === "1";
   const urlQuery = searchParams.get("q") ?? "";
+  const notificationSource = searchParams.get("source");
+  const notificationStatus = searchParams.get("status");
+  const notificationMine = searchParams.get("mine");
+  const notificationTicket = searchParams.get("ticket");
 
   useEffect(() => {
     setQ(urlQuery);
   }, [urlQuery]);
 
+  useEffect(() => {
+    if (notificationSource === "notifications" && notificationStatus) {
+      const requested = FILTERS.find((item) => item.value === notificationStatus)?.value;
+      if (requested) setStatus(requested);
+      setMine(notificationMine === "1");
+    }
+    if (notificationTicket) setOpenId(notificationTicket);
+  }, [notificationSource, notificationStatus, notificationMine, notificationTicket]);
+
   const closeCreate = () => {
     const next = new URLSearchParams(searchParams);
     next.delete("new");
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeTicket = () => {
+    setOpenId(null);
+    if (!searchParams.has("ticket")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("ticket");
+    if (next.get("source") === "notifications" && !next.has("status") && !next.has("mine")) next.delete("source");
     setSearchParams(next, { replace: true });
   };
 
@@ -325,7 +347,7 @@ export function Dashboard() {
         />
       </Modal>
 
-      <TicketDetail ticketId={openId} onClose={() => setOpenId(null)} />
+      <TicketDetail ticketId={openId} onClose={closeTicket} />
     </div>
   );
 }
