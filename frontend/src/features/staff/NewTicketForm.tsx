@@ -98,7 +98,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
       ];
       optional.forEach(([k, v]) => v && form.set(k, v));
       if (photo) form.set("photo", photo);
-      return api<Ticket | OfflineQueuedResponse>("/tickets/assisted", { form });
+      return api<Ticket | OfflineQueuedResponse>("/tickets", { form });
     },
     onSuccess: (result) => {
       setReviewing(false);
