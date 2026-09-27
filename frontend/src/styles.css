@@ -10,8 +10,8 @@
   /* Neutros */
   --color-tinta: #0f172a;
   --color-tinta-2: #1e293b;
-  --color-papel: #f7f8f5;
-  --color-linea: #dfe4dc;
+  --color-papel: #eceee9;
+  --color-linea: #d6dad3;
   --color-tenue: #64748b;
 
   /* Identidad Municipalidad Provincial de Casma */
@@ -40,9 +40,9 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at 0% 0%, rgb(21 128 61 / 0.055), transparent 26rem),
-      radial-gradient(circle at 100% 0%, rgb(234 179 8 / 0.045), transparent 24rem),
-      linear-gradient(to bottom, #ffffff 0, var(--color-papel) 34rem);
+      radial-gradient(circle at 0% 0%, rgb(21 128 61 / 0.035), transparent 28rem),
+      radial-gradient(circle at 100% 0%, rgb(245 158 11 / 0.03), transparent 24rem),
+      linear-gradient(to bottom, #f0f1ed 0, var(--color-papel) 30rem);
     min-height: 100dvh;
   }
 
