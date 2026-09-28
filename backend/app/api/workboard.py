@@ -1,17 +1,18 @@
 import re
-from datetime import datetime
+from collections import Counter
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import parse_id, require_staff
-from app.core.timeutil import aware
+from app.core.timeutil import aware, utcnow
 from app.models import Office, StaffUser, Ticket
 from app.models.enums import TicketCategory, TicketPriority, TicketStatus
 from app.models.ticket import ResolutionType
 from app.schemas.common import Page
-from app.schemas.ticket import TicketOut
-from app.services.serializers import ticket_out
+from app.schemas.ticket import FollowUpMetricsOut, TicketOut
+from app.services.serializers import follow_up_for, last_human_activity, ticket_out
 
 router = APIRouter(prefix="/workboard", tags=["incidencias"])
 
@@ -25,6 +26,67 @@ SortMode = Literal[
     "duration_desc",
     "duration_asc",
 ]
+FollowState = Literal["EN_SEGUIMIENTO", "SIN_ACTUALIZACION", "REQUIERE_REVISION", "EN_ESPERA"]
+
+
+@router.get("/metrics", response_model=FollowUpMetricsOut)
+async def follow_up_metrics(_: StaffUser = Depends(require_staff)):
+    since = utcnow() - timedelta(days=30)
+    active = await Ticket.find({"deleted_at": None, "status": {"$ne": TicketStatus.RESUELTO.value}}).to_list()
+    recent = await Ticket.find({"deleted_at": None, "created_at": {"$gte": since}}).to_list()
+
+    followups = [follow_up_for(ticket) for ticket in active]
+    waiting = sum(1 for item in followups if item.state == "EN_ESPERA")
+    no_update = sum(1 for item in followups if item.state == "SIN_ACTUALIZACION")
+    review = sum(1 for item in followups if item.state == "REQUIERE_REVISION")
+
+    first_response_hours = [
+        (aware(ticket.first_response_at) - aware(ticket.created_at)).total_seconds() / 3600
+        for ticket in recent
+        if ticket.first_response_at
+    ]
+    resolution_hours = [
+        (aware(ticket.resolution.resolved_at) - aware(ticket.created_at)).total_seconds() / 3600
+        for ticket in recent
+        if ticket.resolution and ticket.resolution.resolved_at
+    ]
+
+    update_gaps: list[float] = []
+    for ticket in recent:
+        timestamps = sorted(
+            aware(entry.at)
+            for entry in ticket.timeline
+            if entry.actor not in {"Asistente IA", "IA predictiva", "Triaje local"}
+        )
+        if not timestamps:
+            timestamps = [aware(ticket.created_at)]
+        for previous, current in zip(timestamps, timestamps[1:]):
+            gap = (current - previous).total_seconds() / 3600
+            if gap >= 0:
+                update_gaps.append(gap)
+
+    office_counts = Counter(ticket.office_name for ticket in recent)
+    equipment_counts = Counter(
+        ticket.equipment.patrimonial_code
+        for ticket in recent
+        if ticket.equipment and ticket.equipment.patrimonial_code
+    )
+    recurrent_cases = sum(count for count in equipment_counts.values() if count >= 2)
+    top_office = office_counts.most_common(1)[0][0] if office_counts else None
+    top_equipment, top_equipment_count = equipment_counts.most_common(1)[0] if equipment_counts else (None, 0)
+
+    return FollowUpMetricsOut(
+        waiting=waiting,
+        sin_actualizacion=no_update,
+        requieren_revision=review,
+        primera_respuesta_horas_30d=round(sum(first_response_hours) / len(first_response_hours), 2) if first_response_hours else None,
+        entre_actualizaciones_horas_30d=round(sum(update_gaps) / len(update_gaps), 2) if update_gaps else None,
+        resolucion_horas_30d=round(sum(resolution_hours) / len(resolution_hours), 2) if resolution_hours else None,
+        casos_recurrentes_30d=recurrent_cases,
+        top_office_30d=top_office,
+        top_equipment_30d=top_equipment,
+        top_equipment_incidents_30d=top_equipment_count,
+    )
 
 
 @router.get("/tickets", response_model=Page[TicketOut])
@@ -38,6 +100,7 @@ async def workboard_tickets(
     user_id: str | None = None,
     technician_id: str | None = None,
     assigned: str | None = Query(None, description="me | none"),
+    follow_up_state: FollowState | None = None,
     resolution_type: ResolutionType | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -113,15 +176,21 @@ async def workboard_tickets(
         ]
 
     finder = Ticket.find(query)
-    total = await finder.count()
+    ordered: list[Ticket] | None = None
+    if follow_up_state:
+        ordered = [ticket for ticket in await finder.to_list() if follow_up_for(ticket).state == follow_up_state]
+        total = len(ordered)
+    else:
+        total = await finder.count()
+
     offset = (page - 1) * page_size
 
-    if sort_by == "created_desc":
+    if ordered is None and sort_by == "created_desc":
         items = await Ticket.find(query).sort(-Ticket.created_at).skip(offset).limit(page_size).to_list()
-    elif sort_by == "created_asc":
+    elif ordered is None and sort_by == "created_asc":
         items = await Ticket.find(query).sort(Ticket.created_at).skip(offset).limit(page_size).to_list()
     else:
-        ordered = await Ticket.find(query).to_list()
+        ordered = ordered if ordered is not None else await Ticket.find(query).to_list()
         priority_rank = {
             TicketPriority.ALTA: 0,
             TicketPriority.MEDIA: 1,
@@ -132,14 +201,22 @@ async def workboard_tickets(
             TicketStatus.EN_PROCESO: 1,
             TicketStatus.RESUELTO: 2,
         }
+        follow_rank = {
+            "REQUIERE_REVISION": 0,
+            "SIN_ACTUALIZACION": 1,
+            "EN_SEGUIMIENTO": 2,
+            "EN_ESPERA": 3,
+            "CERRADA": 4,
+        }
 
         if sort_by == "smart":
             ordered.sort(
                 key=lambda ticket: (
+                    follow_rank.get(follow_up_for(ticket).state, 9),
                     priority_rank.get(ticket.priority, 9),
                     0 if ticket.assigned_to_id is None else 1,
                     status_rank.get(ticket.status, 9),
-                    aware(ticket.created_at).timestamp(),
+                    aware(last_human_activity(ticket)).timestamp(),
                 )
             )
         elif sort_by == "priority_desc":
@@ -149,6 +226,10 @@ async def workboard_tickets(
                     aware(ticket.created_at).timestamp(),
                 )
             )
+        elif sort_by == "created_desc":
+            ordered.sort(key=lambda ticket: aware(ticket.created_at).timestamp(), reverse=True)
+        elif sort_by == "created_asc":
+            ordered.sort(key=lambda ticket: aware(ticket.created_at).timestamp())
         elif sort_by in {"closed_desc", "closed_asc"}:
             ordered.sort(
                 key=lambda ticket: aware(ticket.resolution.resolved_at).timestamp() if ticket.resolution else 0,
