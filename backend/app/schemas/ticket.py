@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,14 @@ class AttachmentOut(BaseModel):
     url: str
     width: int
     height: int
+
+
+class FollowUpOut(BaseModel):
+    state: Literal["CERRADA", "EN_SEGUIMIENTO", "SIN_ACTUALIZACION", "REQUIERE_REVISION"]
+    label: str
+    detail: str
+    last_activity_at: datetime
+    hours_without_update: float
 
 
 class TicketOut(BaseModel):
@@ -37,6 +46,7 @@ class TicketOut(BaseModel):
     ai: AIAnalysis | None
     resolution: Resolution | None
     timeline: list[TimelineEntry]
+    follow_up: FollowUpOut
     first_response_at: datetime | None
     created_at: datetime
     updated_at: datetime
