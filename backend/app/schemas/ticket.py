@@ -108,7 +108,10 @@ class KpiOut(BaseModel):
     pendientes: int
     en_proceso: int
     resueltos: int
+    cerrados_mes: int
     urgentes_abiertos: int
     nuevos_hoy: int
     sin_asignar: int
     horas_primera_respuesta_30d: float | None
+    horas_resolucion_30d: float | None
+    reabiertos_30d: int
