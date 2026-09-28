@@ -28,6 +28,16 @@ class ResolutionType(StrEnum):
     DERIVADO = "DERIVADO"
 
 
+class WaitReason(StrEnum):
+    REPUESTO = "REPUESTO"
+    PROVEEDOR = "PROVEEDOR"
+    AUTORIZACION = "AUTORIZACION"
+    USUARIO = "USUARIO"
+    DIAGNOSTICO_COMPLEJO = "DIAGNOSTICO_COMPLEJO"
+    DEPENDENCIA_EXTERNA = "DEPENDENCIA_EXTERNA"
+    OTRO = "OTRO"
+
+
 class AttachmentMeta(BaseModel):
     id: str
     path: str
@@ -175,6 +185,13 @@ class Ticket(Document):
     timeline: list[TimelineEntry] = Field(default_factory=list)
     created_by_staff_id: PydanticObjectId | None = None
     first_response_at: datetime | None = None
+    waiting_reason: WaitReason | None = None
+    waiting_note: str | None = None
+    waiting_since: datetime | None = None
+    waiting_by_id: PydanticObjectId | None = None
+    waiting_by_name: str | None = None
+    followup_alert_state: str | None = None
+    followup_alerted_at: datetime | None = None
     deleted_at: datetime | None = None
     created_at: Annotated[datetime, Indexed()] = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
