@@ -257,11 +257,11 @@ export function Dashboard() {
       active: status === "EN_PROCESO",
     },
     {
-      label: "Cerrados este mes",
-      value: k?.cerrados_mes,
+      label: "Cerrados",
+      value: k?.resueltos,
       icon: <CircleCheckBig className="size-4" />,
       tone: "closed" as const,
-      detail: k ? `Histórico: ${k.resueltos} · Prom. ${formatHours(k.horas_resolucion_30d)}` : undefined,
+      detail: k ? `Este mes: ${k.cerrados_mes}${k.horas_resolucion_30d != null ? ` · Prom. ${formatHours(k.horas_resolucion_30d)}` : ""}` : undefined,
       onClick: () => setStatus("RESUELTO"),
       active: status === "RESUELTO",
     },
@@ -322,11 +322,22 @@ export function Dashboard() {
           </div>
 
           {status === "RESUELTO" && k && (
-            <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <ClosedMetric label="Cerrados este mes" value={String(k.cerrados_mes)} />
-              <ClosedMetric label="Prom. resolución · 30 días" value={formatHours(k.horas_resolucion_30d)} />
-              <ClosedMetric label="Reaperturas · 30 días" value={String(k.reabiertos_30d)} />
-              <ClosedMetric label="Histórico cerrado" value={String(k.resueltos)} />
+            <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-linea bg-papel/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-bold text-tinta">
+                  {k.resueltos === 0 ? "Aún no hay incidencias cerradas" : `${k.resueltos} ${k.resueltos === 1 ? "incidencia cerrada" : "incidencias cerradas"}`}
+                </p>
+                <p className="mt-1 text-sm leading-5 text-tenue">
+                  {k.resueltos === 0
+                    ? "Para cerrar una incidencia, abre un caso activo, registra la solución y pulsa “Cerrar incidencia”."
+                    : "Consulta aquí las soluciones anteriores. Puedes abrir cualquier caso para revisar su detalle o reabrirlo si el problema continúa."}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {k.horas_resolucion_30d != null && <Badge className="border-slate-300 bg-white text-slate-700">Promedio 30 días: {formatHours(k.horas_resolucion_30d)}</Badge>}
+                {k.reabiertos_30d > 0 && <Badge className="border-amber-200 bg-amber-50 text-amber-800">Reabiertas: {k.reabiertos_30d}</Badge>}
+                {k.resueltos === 0 && <Button size="sm" variant="secondary" onClick={() => setStatus("ACTIVAS")}>Ver incidencias activas</Button>}
+              </div>
             </div>
           )}
 
@@ -537,7 +548,7 @@ function ClosedHistory({ tickets, onOpen }: { tickets: Ticket[]; onOpen: (id: st
             </div>
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="text-xs text-tenue">Cerrado: {ticket.resolution?.resolved_at ? formatClosedDate(ticket.resolution.resolved_at) : "Sin fecha"}</span>
-              <Button size="sm" variant="secondary" onClick={() => onOpen(ticket.id)}>Ver solución <ArrowRight className="size-4" /></Button>
+              <Button size="sm" variant="secondary" onClick={() => onOpen(ticket.id)}>Ver / reabrir <ArrowRight className="size-4" /></Button>
             </div>
           </article>
         ))}
@@ -575,7 +586,7 @@ function ClosedHistory({ tickets, onOpen }: { tickets: Ticket[]; onOpen: (id: st
                 </td>
                 <td className="px-5 py-4 text-sm text-tinta">{ticket.resolution?.resolved_by_name || ticket.assigned_to_name || "Sin dato"}</td>
                 <td className="px-5 py-4">
-                  <Button size="sm" variant="ghost" onClick={() => onOpen(ticket.id)}>Ver solución <ArrowRight className="size-4" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => onOpen(ticket.id)}>Ver / reabrir <ArrowRight className="size-4" /></Button>
                 </td>
               </tr>
             ))}
@@ -583,15 +594,6 @@ function ClosedHistory({ tickets, onOpen }: { tickets: Ticket[]; onOpen: (id: st
         </table>
       </div>
     </>
-  );
-}
-
-function ClosedMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-linea/80 bg-papel/55 px-3 py-3">
-      <p className="text-xs font-semibold text-tenue">{label}</p>
-      <p className="mt-1 text-lg font-bold tracking-[-0.02em] text-tinta">{value}</p>
-    </div>
   );
 }
 
