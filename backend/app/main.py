@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app import db
 from app.ai.engine import get_engine
-from app.api import admin, ai, auth, equipment, events, office_portal, organization, staff_ticket_entry, tickets
+from app.api import admin, ai, auth, equipment, events, office_portal, organization, staff_ticket_entry, tickets, workboard
 from app.core.config import get_settings
 from app.core.ratelimit import limiter
 
@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok", "ai_ready": get_engine().state is not None}
 
-    for module in (auth, office_portal, staff_ticket_entry, tickets, admin, organization, equipment, ai, events):
+    for module in (auth, office_portal, staff_ticket_entry, workboard, tickets, admin, organization, equipment, ai, events):
         api.include_router(module.router)
     api.include_router(tickets.tech_router)
     api.include_router(tickets.lookup_router)
