@@ -45,6 +45,31 @@ class TimelineEntry(BaseModel):
     text: str
     internal: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_kind(cls, data):
+        """Permite leer eventos históricos creados antes de que `kind` fuera obligatorio."""
+        if not isinstance(data, dict) or data.get("kind"):
+            return data
+
+        values = dict(data)
+        text = str(values.get("text") or "").lower()
+
+        if "reabiert" in text or "resoluci" in text or "resuelt" in text or "cerrad" in text:
+            values["kind"] = TimelineKind.ESTADO
+        elif "asign" in text:
+            values["kind"] = TimelineKind.ASIGNADO
+        elif "prioridad" in text:
+            values["kind"] = TimelineKind.PRIORIDAD
+        elif "categor" in text:
+            values["kind"] = TimelineKind.CATEGORIA
+        elif "confirm" in text:
+            values["kind"] = TimelineKind.CONFIRMACION
+        else:
+            values["kind"] = TimelineKind.NOTA
+
+        return values
+
 
 class SimilarCase(BaseModel):
     ticket_id: str
