@@ -14,7 +14,12 @@ export const useIsAdmin = () => useMe().data?.staff?.role === "ADMIN";
 export const useTechnicians = () => useQuery({ queryKey: ["technicians"], queryFn: () => api<StaffMember[]>("/technicians"), staleTime: 60_000 });
 export const useOfficeLookup = () => useQuery({ queryKey: ["offices", "lookup"], queryFn: () => api<OfficeLookup[]>("/lookup/offices"), staleTime: 300_000 });
 export const useKpis = () => useQuery({ queryKey: ["kpis"], queryFn: () => api<Kpis>("/tickets/kpis"), refetchInterval: 60_000 });
-export const useFollowUpMetrics = () => useQuery({ queryKey: ["follow-up-metrics"], queryFn: () => api<FollowUpMetrics>("/workboard/metrics"), refetchInterval: 60_000 });
+export const useFollowUpMetrics = (enabled = false) => useQuery({
+  queryKey: ["follow-up-metrics", enabled ? "analysis" : "hidden"],
+  queryFn: () => api<FollowUpMetrics>("/workboard/metrics"),
+  refetchInterval: enabled ? 60_000 : false,
+  enabled,
+});
 export const useInsights = (enabled = true) => useQuery({ queryKey: ["insights"], queryFn: () => api<Insights>("/ai/insights"), staleTime: 120_000, enabled });
 export const useOffices = () => useQuery({ queryKey: ["offices", "admin"], queryFn: () => api<Office[]>("/admin/offices") });
 export const useZones = () =>
