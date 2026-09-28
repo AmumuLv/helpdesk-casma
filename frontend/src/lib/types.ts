@@ -13,6 +13,7 @@ export type EquipmentType =
   | "CPU" | "MONITOR" | "MOUSE" | "TECLADO" | "IMPRESORA" | "LAPTOP"
   | "PC" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
 export type EquipmentStatus = "OPERATIVO" | "EN_REPARACION" | "BAJA";
+export type FollowUpState = "CERRADA" | "EN_SEGUIMIENTO" | "SIN_ACTUALIZACION" | "REQUIERE_REVISION";
 
 export interface Me {
   kind: "staff" | "office";
@@ -23,6 +24,13 @@ export interface Me {
 export interface Attachment { id: string; url: string; width: number; height: number }
 export interface TimelineEntry { at: string; kind: string; actor: string; text: string; internal: boolean }
 export interface SimilarCase { ticket_id: string; number: string; subject: string; score: number; resolution: string | null }
+export interface FollowUp {
+  state: FollowUpState;
+  label: string;
+  detail: string;
+  last_activity_at: string;
+  hours_without_update: number;
+}
 
 export interface AIAnalysis {
   category: TicketCategory;
@@ -59,7 +67,7 @@ export interface Ticket {
   priority: TicketPriority; priority_source: string; status: TicketStatus; assigned_to_id: string | null; assigned_to_name: string | null;
   attachments: Attachment[]; ai: AIAnalysis | null;
   resolution: { notes: string; resolved_by_name: string; tipo_resolucion: ResolutionType; resolved_at: string; confirmed_by_user: boolean | null } | null;
-  timeline: TimelineEntry[]; first_response_at: string | null; created_at: string; updated_at: string;
+  timeline: TimelineEntry[]; follow_up: FollowUp; first_response_at: string | null; created_at: string; updated_at: string;
 }
 
 export interface OfficeTicket {
