@@ -80,8 +80,9 @@ export interface OfficeHome {
 export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
 
 export interface Kpis {
-  total: number; pendientes: number; en_proceso: number; resueltos: number; urgentes_abiertos: number;
+  total: number; pendientes: number; en_proceso: number; resueltos: number; cerrados_mes: number; urgentes_abiertos: number;
   nuevos_hoy: number; sin_asignar: number; horas_primera_respuesta_30d: number | null;
+  horas_resolucion_30d: number | null; reabiertos_30d: number;
 }
 
 export interface StaffMember {
