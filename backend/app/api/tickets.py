@@ -371,8 +371,7 @@ async def assign_ticket(request: Request, ticket_id: str, data: AssignIn, user: 
 @router.post("/{ticket_id}/notes", response_model=TicketOut)
 async def add_note(request: Request, ticket_id: str, data: NoteIn, user: StaffUser = Depends(require_staff)):
     t = await _get(ticket_id)
-    t.timeline.append({"at": utcnow(), "actor": user.full_name, "text": data.text, "internal": not data.visible_to_office})
-    await t.save()
+    t = await ticket_service.add_note(t, user, data.text, data.visible_to_office)
     await audit.record(request, "staff", "ticket.note.added", actor_id=str(user.id), actor_name=user.full_name,
                        target_type="ticket", target_id=str(t.id), visible_to_office=data.visible_to_office)
     return ticket_out(t)
@@ -391,9 +390,7 @@ async def resolve_ticket(request: Request, ticket_id: str, data: ResolveIn, back
 @router.post("/{ticket_id}/reopen", response_model=TicketOut)
 async def reopen_ticket(request: Request, ticket_id: str, user: StaffUser = Depends(require_staff)):
     t = await _get(ticket_id)
-    await t.set({"status": TicketStatus.EN_PROCESO.value, "resolution": None})
-    t.timeline.append({"at": utcnow(), "actor": user.full_name, "text": "Incidencia reabierta", "internal": False})
-    await t.save()
+    t = await ticket_service.reopen(t, user.full_name, by_user=False)
     await audit.record(request, "staff", "ticket.reopened", actor_id=str(user.id), actor_name=user.full_name,
                        target_type="ticket", target_id=str(t.id))
     return ticket_out(t)
