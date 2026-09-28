@@ -1,5 +1,6 @@
 export type TicketStatus = "PENDIENTE" | "EN_PROCESO" | "RESUELTO";
 export type ResolutionType = "SOLUCIONADO" | "REPARADO" | "REQUIERE_REPUESTO" | "REEMPLAZADO" | "OBSOLETO" | "IRREPARABLE" | "BAJA_PATRIMONIAL" | "DERIVADO";
+export type WaitReason = "REPUESTO" | "PROVEEDOR" | "AUTORIZACION" | "USUARIO" | "DIAGNOSTICO_COMPLEJO" | "DEPENDENCIA_EXTERNA" | "OTRO";
 export type TicketPriority = "BAJA" | "MEDIA" | "ALTA";
 export type TicketCategory =
   | "HARDWARE" | "RED_INTERNET" | "IMPRESORA" | "SOFTWARE" | "SISTEMAS_MUNICIPALES"
@@ -13,7 +14,7 @@ export type EquipmentType =
   | "CPU" | "MONITOR" | "MOUSE" | "TECLADO" | "IMPRESORA" | "LAPTOP"
   | "PC" | "ESCANER" | "SWITCH_ROUTER" | "SERVIDOR" | "TELEFONO_IP" | "OTRO";
 export type EquipmentStatus = "OPERATIVO" | "EN_REPARACION" | "BAJA";
-export type FollowUpState = "CERRADA" | "EN_SEGUIMIENTO" | "SIN_ACTUALIZACION" | "REQUIERE_REVISION";
+export type FollowUpState = "CERRADA" | "EN_SEGUIMIENTO" | "SIN_ACTUALIZACION" | "REQUIERE_REVISION" | "EN_ESPERA";
 
 export interface Me {
   kind: "staff" | "office";
@@ -30,6 +31,26 @@ export interface FollowUp {
   detail: string;
   last_activity_at: string;
   hours_without_update: number;
+  wait_reason: WaitReason | null;
+  wait_reason_label: string | null;
+  wait_note: string | null;
+  waiting_since: string | null;
+  ai_summary: string | null;
+  ai_recommendation: string | null;
+  ai_reasons: string[];
+}
+
+export interface FollowUpMetrics {
+  waiting: number;
+  sin_actualizacion: number;
+  requieren_revision: number;
+  primera_respuesta_horas_30d: number | null;
+  entre_actualizaciones_horas_30d: number | null;
+  resolucion_horas_30d: number | null;
+  casos_recurrentes_30d: number;
+  top_office_30d: string | null;
+  top_equipment_30d: string | null;
+  top_equipment_incidents_30d: number;
 }
 
 export interface AIAnalysis {
