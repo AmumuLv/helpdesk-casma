@@ -276,12 +276,13 @@ export function Dashboard() {
               <p className="text-xs text-tenue">Patrón: {m.top_office_30d ? `oficina ${m.top_office_30d}` : ""}{m.top_office_30d && m.top_equipment_30d ? " · " : ""}{m.top_equipment_30d ? `equipo ${m.top_equipment_30d} (${m.top_equipment_incidents_30d})` : ""}</p>
             )}
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
             <MiniMetric label="En espera" value={String(m.waiting)} helper="Con motivo registrado" />
             <MiniMetric label="Requieren revisión" value={String(m.requieren_revision)} helper="Sin atribuir culpa" />
             <MiniMetric label="Sin actualización" value={String(m.sin_actualizacion)} helper="Conviene comprobar" />
             <MiniMetric label="1.ª respuesta" value={formatHours(m.primera_respuesta_horas_30d)} helper="Promedio 30 días" />
             <MiniMetric label="Entre avances" value={formatHours(m.entre_actualizaciones_horas_30d)} helper="Promedio entre actualizaciones" />
+            <MiniMetric label="Resolución" value={formatHours(m.resolucion_horas_30d)} helper="Promedio 30 días" />
             <MiniMetric label="Recurrentes" value={String(m.casos_recurrentes_30d)} helper="Casos de equipos repetidos" />
           </div>
         </section>
