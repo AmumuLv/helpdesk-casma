@@ -70,9 +70,6 @@ _LOCAL_PRIORITY_KEYWORDS = {
 }
 
 _HIERARCHY_BOOST = {
-    # Niveles adaptados a la estructura de la Municipalidad Provincial de Casma.
-    # La jerarquía solo complementa la gravedad técnica: nunca reemplaza las
-    # palabras clave ni convierte automáticamente todo reporte en urgente.
     "PERSONAL": 0,
     "UNIDAD_ORGANIZACION": 0,
     "SUBGERENCIA": 0,
@@ -126,11 +123,7 @@ def calculate_local_priority(
     if service_level in (OfficeServiceLevel.ATENCION_PUBLICO, OfficeServiceLevel.SERVICIO_CRITICO):
         original = priority
         priority = _PRIORITY_UP[priority]
-        label = (
-            "atención al público"
-            if service_level == OfficeServiceLevel.ATENCION_PUBLICO
-            else "servicio crítico"
-        )
+        label = "atención al público" if service_level == OfficeServiceLevel.ATENCION_PUBLICO else "servicio crítico"
         reason = f" ({office_service_reason.strip()})" if office_service_reason and office_service_reason.strip() else ""
         if priority != original:
             reasons.append(f"Oficina de {label}{reason}: prioridad elevada un nivel.")
@@ -175,15 +168,25 @@ async def next_ticket_number() -> str:
     return f"INC-{year}-{seq:06d}"
 
 
-def _event(ticket: Ticket, kind: str) -> dict:
-    return {
-        "type": kind, "ticket_id": str(ticket.id), "number": ticket.number, "subject": ticket.subject,
-        "office": ticket.office_name, "status": ticket.status.value, "priority": ticket.priority.value,
+def _event(ticket: Ticket, kind: str, **extra) -> dict:
+    event = {
+        "type": kind,
+        "ticket_id": str(ticket.id),
+        "number": ticket.number,
+        "subject": ticket.subject,
+        "office": ticket.office_name,
+        "status": ticket.status.value,
+        "priority": ticket.priority.value,
+        "assigned_to_id": str(ticket.assigned_to_id) if ticket.assigned_to_id else None,
+        "assigned_to_name": ticket.assigned_to_name,
+        "reporter_name": ticket.reporter_name,
     }
+    event.update(extra)
+    return event
 
 
-async def _publish(ticket: Ticket, kind: str) -> None:
-    event = _event(ticket, kind)
+async def _publish(ticket: Ticket, kind: str, **extra) -> None:
+    event = _event(ticket, kind, **extra)
     await broker.publish("staff", event)
     await broker.publish(f"office:{ticket.office_id}", event)
 
@@ -226,8 +229,6 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
         office_service_reason=data.office.service_reason,
     )
 
-    # El ticket se clasifica inicialmente sin esperar a la IA.
-    # El análisis avanzado se añade luego con FastAPI BackgroundTasks.
     category = data.category or (info.category if info else TicketCategory.OTRO)
     priority = data.priority or local_priority
 
@@ -262,6 +263,9 @@ async def create_ticket(data: NewTicket) -> tuple[Ticket, bool]:
 
 async def assign(ticket: Ticket, actor: StaffUser, technician_id: PydanticObjectId | None) -> Ticket:
     now = utcnow()
+    previous_id = ticket.assigned_to_id
+    previous_name = ticket.assigned_to_name
+
     if technician_id:
         tech = await StaffUser.get(technician_id)
         if not tech or not tech.active:
@@ -271,16 +275,24 @@ async def assign(ticket: Ticket, actor: StaffUser, technician_id: PydanticObject
             ticket.status = TicketStatus.EN_PROCESO
         ticket.first_response_at = ticket.first_response_at or now
         ticket.timeline.append(TimelineEntry(kind=TimelineKind.ASIGNADO, actor=actor.full_name, text=f"{tech.full_name} atenderá su reporte."))
+        event_type = "ticket.reassigned" if previous_id and previous_id != tech.id else "ticket.assigned"
     else:
         ticket.assigned_to_id, ticket.assigned_to_name = None, None
+        ticket.waiting_reason = None
+        ticket.waiting_note = None
+        ticket.waiting_since = None
+        ticket.waiting_by_id = None
+        ticket.waiting_by_name = None
         if ticket.status == TicketStatus.EN_PROCESO:
             ticket.status = TicketStatus.PENDIENTE
         ticket.timeline.append(TimelineEntry(kind=TimelineKind.ASIGNADO, actor=actor.full_name, text="Se quitó la asignación.", internal=True))
+        event_type = "ticket.unassigned"
+
+    ticket.followup_alert_state = None
+    ticket.followup_alerted_at = None
     ticket.updated_at = now
     await ticket.save()
-    await _publish(ticket, "ticket.updated")
-    if ticket.assigned_to_id and ticket.assigned_to_id != actor.id:
-        await broker.publish(f"staff:{ticket.assigned_to_id}", _event(ticket, "ticket.assigned"))
+    await _publish(ticket, event_type, previous_technician_name=previous_name)
     return ticket
 
 
@@ -333,11 +345,14 @@ async def apply_ai_priority(ticket: Ticket, actor: StaffUser) -> Ticket:
 
 
 async def add_note(ticket: Ticket, actor: StaffUser, text: str, visible_to_office: bool) -> Ticket:
-    ticket.timeline.append(TimelineEntry(kind=TimelineKind.NOTA, actor=actor.full_name, text=text.strip(), internal=not visible_to_office))
+    clean_text = text.strip()
+    ticket.timeline.append(TimelineEntry(kind=TimelineKind.NOTA, actor=actor.full_name, text=clean_text, internal=not visible_to_office))
     ticket.first_response_at = ticket.first_response_at or utcnow()
+    ticket.followup_alert_state = None
+    ticket.followup_alerted_at = None
     ticket.updated_at = utcnow()
     await ticket.save()
-    await _publish(ticket, "ticket.updated")
+    await _publish(ticket, "ticket.note", visible_to_office=visible_to_office, message=clean_text[:180])
     return ticket
 
 
@@ -361,6 +376,13 @@ async def resolve(
     if not ticket.assigned_to_id:
         ticket.assigned_to_id, ticket.assigned_to_name = actor.id, actor.full_name
     ticket.first_response_at = ticket.first_response_at or now
+    ticket.waiting_reason = None
+    ticket.waiting_note = None
+    ticket.waiting_since = None
+    ticket.waiting_by_id = None
+    ticket.waiting_by_name = None
+    ticket.followup_alert_state = None
+    ticket.followup_alerted_at = None
     resolution_label = tipo_resolucion.value.replace("_", " ").title()
     ticket.timeline.append(
         TimelineEntry(
@@ -380,6 +402,13 @@ async def reopen(ticket: Ticket, actor_name: str, by_user: bool) -> Ticket:
     if ticket.status != TicketStatus.RESUELTO:
         raise HTTPException(status_code=409, detail="La incidencia no está resuelta.")
     ticket.status = TicketStatus.EN_PROCESO if ticket.assigned_to_id else TicketStatus.PENDIENTE
+    ticket.waiting_reason = None
+    ticket.waiting_note = None
+    ticket.waiting_since = None
+    ticket.waiting_by_id = None
+    ticket.waiting_by_name = None
+    ticket.followup_alert_state = None
+    ticket.followup_alerted_at = None
     if ticket.resolution and by_user:
         ticket.resolution.confirmed_by_user = False
     if by_user:
