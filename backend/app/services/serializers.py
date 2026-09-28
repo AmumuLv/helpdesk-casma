@@ -1,11 +1,62 @@
 from app.core.timeutil import aware, utcnow
 from app.models import Device, Equipment, Office, StaffUser, Ticket
+from app.models.enums import TicketStatus
 from app.schemas.admin import DeviceOut, EquipmentOut, OfficeOut, StaffOut
-from app.schemas.ticket import AttachmentOut, OfficeTicketOut, OfficeTimelineItem, TicketOut
+from app.schemas.ticket import AttachmentOut, FollowUpOut, OfficeTicketOut, OfficeTimelineItem, TicketOut
+
+
+_AUTOMATED_FOLLOW_UP_ACTORS = {"Asistente IA", "IA predictiva", "Triaje local"}
 
 
 def _attachments(t: Ticket) -> list[AttachmentOut]:
     return [AttachmentOut(id=a.id, url=f"/api/tickets/{t.id}/attachments/{a.id}", width=a.width, height=a.height) for a in t.attachments]
+
+
+def _follow_up(t: Ticket) -> FollowUpOut:
+    human_activity = [entry.at for entry in t.timeline if entry.actor not in _AUTOMATED_FOLLOW_UP_ACTORS]
+    last_activity = max(human_activity) if human_activity else t.created_at
+
+    if t.status == TicketStatus.RESUELTO:
+        closed_at = t.resolution.resolved_at if t.resolution else last_activity
+        return FollowUpOut(
+            state="CERRADA",
+            label="Atención finalizada",
+            detail="La solución quedó registrada en el historial.",
+            last_activity_at=closed_at,
+            hours_without_update=0,
+        )
+
+    hours = max(0.0, (aware(utcnow()) - aware(last_activity)).total_seconds() / 3600)
+
+    if not t.assigned_to_id:
+        return FollowUpOut(
+            state="REQUIERE_REVISION",
+            label="Requiere revisión",
+            detail="Aún no tiene técnico asignado. Conviene revisar quién continuará la atención.",
+            last_activity_at=last_activity,
+            hours_without_update=round(hours, 1),
+        )
+
+    if hours <= 12:
+        state = "EN_SEGUIMIENTO"
+        label = "En seguimiento"
+        detail = "Registra actividad reciente. El caso continúa con seguimiento normal."
+    elif hours <= 48:
+        state = "SIN_ACTUALIZACION"
+        label = "Sin actualización reciente"
+        detail = "No hay una actualización reciente. Conviene revisar si existen novedades."
+    else:
+        state = "REQUIERE_REVISION"
+        label = "Requiere revisión"
+        detail = "Lleva tiempo sin una actualización. Se recomienda revisar el caso; no implica incumplimiento del técnico."
+
+    return FollowUpOut(
+        state=state,
+        label=label,
+        detail=detail,
+        last_activity_at=last_activity,
+        hours_without_update=round(hours, 1),
+    )
 
 
 def ticket_out(t: Ticket) -> TicketOut:
@@ -15,7 +66,7 @@ def ticket_out(t: Ticket) -> TicketOut:
         reporter_name=t.reporter_name, contact_phone=t.contact_phone, category=t.category, category_source=t.category_source,
         priority=t.priority, priority_source=t.priority_source, status=t.status, assigned_to_id=str(t.assigned_to_id) if t.assigned_to_id else None,
         assigned_to_name=t.assigned_to_name, attachments=_attachments(t), ai=t.ai, resolution=t.resolution,
-        timeline=t.timeline, first_response_at=t.first_response_at, created_at=t.created_at, updated_at=t.updated_at,
+        timeline=t.timeline, follow_up=_follow_up(t), first_response_at=t.first_response_at, created_at=t.created_at, updated_at=t.updated_at,
     )
 
 
