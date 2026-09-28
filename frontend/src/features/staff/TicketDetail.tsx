@@ -65,7 +65,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const patch = useTicketAction<{ category?: TicketCategory; priority?: TicketPriority }>((id) => `/tickets/${id}`, "PATCH", "Clasificación corregida");
   const assign = useTicketAction<{ technician_id: string | null }>((id) => `/tickets/${id}/assign`, "POST", "Técnico asignado");
   const note = useTicketAction<{ text: string; visible_to_office: boolean }>((id) => `/tickets/${id}/notes`, "POST", "Nota agregada");
-  const resolve = useTicketAction<{ notes: string; tipo_resolucion: ResolutionType }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia resuelta");
+  const resolve = useTicketAction<{ notes: string; tipo_resolucion: ResolutionType }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia cerrada");
   const reopen = useTicketAction((id) => `/tickets/${id}/reopen`, "POST", "Incidencia reabierta");
   const reanalyze = useTicketAction((id) => `/tickets/${id}/reanalyze`, "POST", "Análisis actualizado");
   const applyAiPriority = useTicketAction<{ priority: TicketPriority; model_version: string }>(
@@ -110,6 +110,8 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
     return [...timelineItems, ...auditItems].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }, [t.timeline, auditTrail.data]);
 
+  const canClose = resolution.trim().length >= 5;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="flex min-w-0 flex-col gap-5">
@@ -136,28 +138,46 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
         ))}
 
         {t.status !== "RESUELTO" ? (
-          <section className="flex flex-col gap-3 rounded-xl border-2 border-hecho/40 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-bold">Resolver</h3>
+          <section className="flex flex-col gap-3 rounded-xl border-2 border-hecho/40 bg-hecho-claro/25 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-tinta">Cerrar incidencia</h3>
+                <p className="mt-1 text-sm leading-5 text-tenue">Úsalo cuando la atención haya terminado. Registra brevemente qué se hizo para que la oficina y el historial conserven la solución.</p>
+              </div>
               {suggestedFix && !resolution && (
                 <Button size="sm" variant="ghost" onClick={() => setResolution(suggestedFix)}>Usar solución del caso parecido</Button>
               )}
             </div>
-            <label className="flex flex-col gap-1 text-sm font-bold">Tipo de resolución
+            <label className="flex flex-col gap-1 text-sm font-bold">Resultado de la atención
               <Select value={resolutionType} onChange={(e) => setResolutionType(e.target.value as ResolutionType)}>
                 {RESOLUTION_TYPES.map((type) => <option key={type} value={type}>{RESOLUTION_LABEL[type]}</option>)}
               </Select>
             </label>
-            <Textarea rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Qué se hizo para solucionarlo (la oficina lo verá)" />
-            <Button variant="success" loading={resolve.isPending} disabled={resolution.trim().length < 5}
-              onClick={() => resolve.mutate({ id: t.id, body: { notes: resolution.trim(), tipo_resolucion: resolutionType } })}>Marcar como resuelto</Button>
+            <label className="flex flex-col gap-1 text-sm font-bold">Solución aplicada
+              <Textarea rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Ejemplo: se reinstaló el controlador de la impresora y se realizaron pruebas de impresión." />
+            </label>
+            {!canClose && <p className="text-xs text-tenue">Escribe al menos 5 caracteres para habilitar el cierre de la incidencia.</p>}
+            <Button variant="success" loading={resolve.isPending} disabled={!canClose}
+              onClick={() => resolve.mutate({ id: t.id, body: { notes: resolution.trim(), tipo_resolucion: resolutionType } })}>Cerrar incidencia</Button>
           </section>
         ) : (
-          <section className="flex flex-col gap-2 rounded-xl bg-hecho-claro p-4">
-            {t.resolution?.tipo_resolucion && <p className="text-sm"><strong>Tipo de resolución:</strong> {RESOLUTION_LABEL[t.resolution.tipo_resolucion]}</p>}
-            <p><strong>Solución de {t.resolution?.resolved_by_name}:</strong> {t.resolution?.notes}</p>
+          <section className="flex flex-col gap-3 rounded-xl border border-hecho/30 bg-hecho-claro p-4">
+            <div>
+              <h3 className="font-bold text-tinta">Incidencia cerrada</h3>
+              <p className="mt-1 text-sm text-tenue">La solución quedó registrada en el historial. Si el problema continúa o vuelve a presentarse, puedes reabrir este mismo caso.</p>
+            </div>
+            {t.resolution?.tipo_resolucion && <p className="text-sm"><strong>Resultado:</strong> {RESOLUTION_LABEL[t.resolution.tipo_resolucion]}</p>}
+            <p><strong>Solución de {t.resolution?.resolved_by_name || "personal TI"}:</strong> {t.resolution?.notes || "Sin detalle de solución."}</p>
             {t.resolution?.confirmed_by_user != null && <p className="text-sm font-bold">{t.resolution.confirmed_by_user ? "La oficina confirmó que funciona." : "La oficina indicó que sigue fallando."}</p>}
-            <Button variant="secondary" size="sm" className="w-fit" loading={reopen.isPending} onClick={() => reopen.mutate({ id: t.id })}>Reabrir</Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-fit"
+              loading={reopen.isPending}
+              onClick={() => confirm(`¿Reabrir la incidencia ${t.number}? Volverá a la bandeja de atención y conservará su historial.`) && reopen.mutate({ id: t.id })}
+            >
+              Reabrir incidencia
+            </Button>
           </section>
         )}
 
@@ -248,9 +268,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                   <span>→ IA:</span>
                   <span className="rounded bg-sol/20 px-2 py-1 font-bold text-sol">{PRIORITY_LABEL[ai.priority]}</span>
                 </div>
-                <p className="mt-2 text-xs text-white/65">
-                  La IA no cambia la prioridad automáticamente. Al aceptar, su decisión quedará registrada a nombre del técnico.
-                </p>
+                <p className="mt-2 text-xs text-white/65">La IA no cambia la prioridad automáticamente. Al aceptar, su decisión quedará registrada a nombre del técnico.</p>
                 <Button
                   className="mt-3 w-full"
                   variant="secondary"
@@ -264,9 +282,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                 </Button>
               </div>
             ) : (
-              <div className="rounded-lg border border-hecho/30 bg-white/10 p-2 text-xs text-white/75">
-                La prioridad actual coincide con la recomendación de IA.
-              </div>
+              <div className="rounded-lg border border-hecho/30 bg-white/10 p-2 text-xs text-white/75">La prioridad actual coincide con la recomendación de IA.</div>
             )}
             {ai.suggested_technician_name && <AiBlock title={`Técnico sugerido: ${ai.suggested_technician_name}`} items={ai.technician_reasons} />}
             {ai.equipment_risk != null && (
@@ -282,25 +298,19 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                 {ai.historical_patterns.length > 0 && (
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-white/60">Patrones detectados</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-white/85">
-                      {ai.historical_patterns.map((item) => <li key={item}>{item}</li>)}
-                    </ul>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-white/85">{ai.historical_patterns.map((item) => <li key={item}>{item}</li>)}</ul>
                   </div>
                 )}
                 {ai.historical_evidence.length > 0 && (
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-white/60">Evidencia</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-white/75">
-                      {ai.historical_evidence.map((item) => <li key={item}>{item}</li>)}
-                    </ul>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-white/75">{ai.historical_evidence.map((item) => <li key={item}>{item}</li>)}</ul>
                   </div>
                 )}
                 {ai.historical_recommendations.length > 0 && (
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-white/60">Recomendación inicial</p>
-                    <ol className="mt-1 list-decimal pl-5 text-xs text-sol">
-                      {ai.historical_recommendations.map((item) => <li key={item}>{item}</li>)}
-                    </ol>
+                    <ol className="mt-1 list-decimal pl-5 text-xs text-sol">{ai.historical_recommendations.map((item) => <li key={item}>{item}</li>)}</ol>
                   </div>
                 )}
               </div>
