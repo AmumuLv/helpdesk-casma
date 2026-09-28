@@ -6,6 +6,7 @@ import { Button, cx, ErrorBox, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { fmtDateTime } from "../../lib/labels";
 import type { OfficeTicket, TicketStatus } from "../../lib/types";
+import { OfficeTicketConversation } from "../shared/TicketConversation";
 
 const STEPS: { status: TicketStatus; label: string }[] = [
   { status: "PENDIENTE", label: "Recibido" },
@@ -76,6 +77,8 @@ export function TicketStatusPage() {
 
       {statusMessage && <p className="rounded-2xl border border-linea bg-white p-5 text-xl">{statusMessage}</p>}
 
+      <OfficeTicketConversation ticketId={t.id} closed={t.status === "RESUELTO"} />
+
       {t.status === "RESUELTO" && (
         <section className="flex flex-col gap-4 rounded-3xl border-2 border-casma bg-white p-5">
           {t.resolution_notes && <p className="text-xl"><strong>Lo que hizo Soporte TI:</strong> {t.resolution_notes}</p>}
@@ -111,6 +114,7 @@ export function TicketStatusPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-2xl font-bold">Historial</h2>
+        <p className="text-base text-tenue">Aquí se muestran cambios de estado y avances generales. Los mensajes están separados en la conversación superior.</p>
         <ol className="flex flex-col gap-3 border-l-4 border-linea pl-5">
           {[...t.timeline].reverse().map((e, i) => (
             <li key={i}>

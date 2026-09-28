@@ -29,7 +29,7 @@ export function useLogout() {
   };
 }
 
-const TICKET_INVALIDATIONS = [["tickets"], ["workboard"], ["ticket"], ["kpis"], ["follow-up-metrics"], ["office-home"], ["office-ticket"]];
+const TICKET_INVALIDATIONS = [["tickets"], ["workboard"], ["ticket"], ["kpis"], ["follow-up-metrics"], ["office-home"], ["office-ticket"], ["ticket-conversation"], ["office-ticket-conversation"]];
 
 const INVALIDATIONS: Record<string, string[][]> = {
   "ticket.created": [["tickets"], ["workboard"], ["kpis"], ["follow-up-metrics"], ["office-home"]],

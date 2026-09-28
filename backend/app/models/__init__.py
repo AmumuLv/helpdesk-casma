@@ -6,7 +6,8 @@ from app.models.municipal_user import MunicipalUser
 from app.models.staff import StaffUser
 from app.models.system import AIModelRecord, Announcement, AuditLog, SystemSetting
 from app.models.ticket import Ticket
+from app.models.conversation import TicketConversation
 
-DOCUMENT_MODELS = [Zone, Office, MunicipalUser, StaffUser, Device, Equipment, Ticket, SystemSetting, AuditLog, Announcement, AIModelRecord]
+DOCUMENT_MODELS = [Zone, Office, MunicipalUser, StaffUser, Device, Equipment, Ticket, TicketConversation, SystemSetting, AuditLog, Announcement, AIModelRecord]
 
-__all__ = ["Zone", "Office", "MunicipalUser", "StaffUser", "Device", "Equipment", "Ticket", "SystemSetting", "AuditLog", "Announcement", "AIModelRecord", "DOCUMENT_MODELS"]
+__all__ = ["Zone", "Office", "MunicipalUser", "StaffUser", "Device", "Equipment", "Ticket", "TicketConversation", "SystemSetting", "AuditLog", "Announcement", "AIModelRecord", "DOCUMENT_MODELS"]

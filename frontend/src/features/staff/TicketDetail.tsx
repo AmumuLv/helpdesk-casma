@@ -6,6 +6,7 @@ import { Badge, Button, CategoryBadge, cx, ErrorBox, Modal, PriorityBadge, Selec
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORIES, CATEGORY_LABEL, EQUIPMENT_LABEL, fmtDateTime, pct, PRIORITY_LABEL } from "../../lib/labels";
 import type { ResolutionType, Ticket, TicketCategory, TicketPriority, WaitReason } from "../../lib/types";
+import { StaffTicketConversation } from "../shared/TicketConversation";
 import { useIsAdmin, useTechnicians, useTicketAction } from "./hooks";
 
 const RESOLUTION_LABEL: Record<ResolutionType, string> = {
@@ -75,7 +76,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const toast = useToast();
   const patch = useTicketAction<{ category?: TicketCategory; priority?: TicketPriority }>((id) => `/tickets/${id}`, "PATCH", "Clasificación corregida");
   const assign = useTicketAction<{ technician_id: string | null }>((id) => `/tickets/${id}/assign`, "POST", "Técnico asignado");
-  const note = useTicketAction<{ text: string; visible_to_office: boolean }>((id) => `/tickets/${id}/notes`, "POST", "Nota agregada");
+  const note = useTicketAction<{ text: string; visible_to_office: boolean }>((id) => `/tickets/${id}/notes`, "POST", "Nota interna guardada");
   const wait = useTicketAction<{ reason: WaitReason; note?: string }>((id) => `/tickets/${id}/wait`, "POST", "Incidencia puesta en espera");
   const resume = useTicketAction<{ note?: string }>((id) => `/tickets/${id}/resume`, "POST", "Atención reanudada");
   const resolve = useTicketAction<{ notes: string; tipo_resolucion: ResolutionType }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia cerrada");
@@ -92,7 +93,6 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
     onError: (err) => toast({ tone: "danger", title: "No se pudo eliminar", body: errorMessage(err) }),
   });
   const [noteText, setNoteText] = useState("");
-  const [visible, setVisible] = useState(false);
   const [resolution, setResolution] = useState("");
   const [resolutionType, setResolutionType] = useState<ResolutionType>("SOLUCIONADO");
   const [waitReason, setWaitReason] = useState<WaitReason>("REPUESTO");
@@ -152,6 +152,8 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
         {t.attachments.map((a) => (
           <a key={a.id} href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt="Foto adjunta" className="max-h-80 rounded-xl border border-linea" /></a>
         ))}
+
+        <StaffTicketConversation ticket={t} />
 
         {t.status !== "RESUELTO" && (
           <section className={cx(
@@ -265,18 +267,18 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
         )}
 
         <section className="flex flex-col gap-3">
-          <h3 className="font-bold">Seguimiento</h3>
-          <div className="flex flex-col gap-2">
-            <Textarea rows={2} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Agregar nota" />
+          <h3 className="font-bold">Nota interna y actividad</h3>
+          <div className="flex flex-col gap-2 rounded-xl border border-linea bg-papel/35 p-3">
+            <Textarea rows={2} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Nota interna para el equipo TI" />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-casma" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> Visible para la oficina</label>
+              <span className="text-xs font-semibold text-tenue">Solo visible para el personal TI. Para hablar con la oficina usa la conversación superior.</span>
               <Button size="sm" loading={note.isPending} disabled={noteText.trim().length < 2}
-                onClick={() => note.mutate({ id: t.id, body: { text: noteText.trim(), visible_to_office: visible } }, { onSuccess: () => setNoteText("") })}>Agregar nota</Button>
+                onClick={() => note.mutate({ id: t.id, body: { text: noteText.trim(), visible_to_office: false } }, { onSuccess: () => setNoteText("") })}>Guardar nota interna</Button>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <History className="size-5 text-casma" aria-hidden />
-            <h3 className="font-bold">Historial del ticket</h3>
+            <h3 className="font-bold">Actividad y auditoría</h3>
             {auditTrail.isLoading && <span className="text-xs text-tenue">Cargando auditoría…</span>}
           </div>
           {auditTrail.error && <p className="text-xs text-alerta">No se pudo cargar la auditoría; se muestra el seguimiento del ticket.</p>}
@@ -312,11 +314,12 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
       <aside className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 rounded-xl border border-linea p-4">
           <label className="flex flex-col gap-1 text-sm font-bold">Técnico
-            <Select value={t.assigned_to_id ?? ""} disabled={assign.isPending || t.status === "RESUELTO"} onChange={(e) => assign.mutate({ id: t.id, body: { technician_id: e.target.value || null } })}>
+            <Select value={t.assigned_to_id ?? ""} disabled={assign.isPending || t.status === "RESUELTO" || !!t.assigned_to_id} onChange={(e) => assign.mutate({ id: t.id, body: { technician_id: e.target.value || null } })}>
               <option value="">Sin asignar</option>
               {techs.data?.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.id === ai?.suggested_technician_id ? "★ " : ""}{s.full_name} ({s.open_tickets})</option>)}
             </Select>
           </label>
+          {t.assigned_to_id && <p className="text-xs text-tenue">Para reasignar usa “Conversación y atención”; ahí se registra el motivo y la IA genera un resumen de transferencia.</p>}
           <label className="flex flex-col gap-1 text-sm font-bold">Categoría
             <Select value={t.category} onChange={(e) => patch.mutate({ id: t.id, body: { category: e.target.value as TicketCategory } })}>
               {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
@@ -429,7 +432,10 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
   "ticket.classification_updated": "Clasificación actualizada",
   "ticket.ai_priority_applied": "Recomendación de prioridad IA aceptada",
   "ticket.assigned": "Asignación de técnico actualizada",
+  "ticket.reassigned": "Responsable reasignado",
   "ticket.note_added": "Nota registrada",
+  "ticket.message.sent": "Mensaje enviado a la oficina",
+  "ticket.message.office_sent": "Respuesta recibida de la oficina",
   "ticket.resolved": "Ticket resuelto",
   "ticket.reopened": "Ticket reabierto",
   "ticket.waiting": "Atención puesta en espera",
@@ -440,8 +446,10 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
 
 function auditEventText(event: TicketAuditEvent): string {
   const base = AUDIT_ACTION_LABEL[event.action] ?? event.action.replace(/^ticket\./, "").replaceAll("_", " ");
-  if (event.action === "ticket.assigned") {
+  if (event.action === "ticket.assigned" || event.action === "ticket.reassigned") {
     const name = typeof event.details.technician_name === "string" ? event.details.technician_name : null;
+    const reason = typeof event.details.reason === "string" ? event.details.reason.replaceAll("_", " ").toLowerCase() : null;
+    if (name && reason) return `${base}: ${name}. Motivo: ${reason}.`;
     return name ? `${base}: ${name}.` : `${base}: sin técnico asignado.`;
   }
   if (event.action === "ticket.ai_priority_applied") {
