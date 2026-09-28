@@ -29,12 +29,20 @@ export function useLogout() {
   };
 }
 
+const TICKET_INVALIDATIONS = [["tickets"], ["workboard"], ["ticket"], ["kpis"], ["follow-up-metrics"], ["office-home"], ["office-ticket"]];
+
 const INVALIDATIONS: Record<string, string[][]> = {
-  "ticket.created": [["tickets"], ["kpis"], ["office-home"]],
-  "ticket.updated": [["tickets"], ["ticket"], ["kpis"], ["office-home"], ["office-ticket"]],
-  "ticket.resolved": [["tickets"], ["ticket"], ["kpis"], ["office-home"], ["office-ticket"]],
-  "ticket.reopened": [["tickets"], ["ticket"], ["kpis"], ["office-home"], ["office-ticket"]],
-  "ticket.assigned": [["tickets"], ["ticket"], ["kpis"]],
+  "ticket.created": [["tickets"], ["workboard"], ["kpis"], ["follow-up-metrics"], ["office-home"]],
+  "ticket.updated": TICKET_INVALIDATIONS,
+  "ticket.note": TICKET_INVALIDATIONS,
+  "ticket.resolved": TICKET_INVALIDATIONS,
+  "ticket.reopened": TICKET_INVALIDATIONS,
+  "ticket.assigned": TICKET_INVALIDATIONS,
+  "ticket.reassigned": TICKET_INVALIDATIONS,
+  "ticket.unassigned": TICKET_INVALIDATIONS,
+  "ticket.waiting": TICKET_INVALIDATIONS,
+  "ticket.resumed": TICKET_INVALIDATIONS,
+  "ticket.followup_due": [["tickets"], ["workboard"], ["follow-up-metrics"]],
   "device.pending": [["devices"], ["offices"]],
   "device.reviewed": [["devices"], ["offices"]],
   "alert.created": [["insights"], ["office-home"]],
@@ -51,6 +59,15 @@ export type LiveEvent = {
   status?: string;
   priority?: string;
   pair_code?: string;
+  assigned_to_id?: string | null;
+  assigned_to_name?: string | null;
+  previous_technician_name?: string | null;
+  reporter_name?: string | null;
+  visible_to_office?: boolean;
+  wait_reason?: string;
+  wait_reason_label?: string;
+  follow_up_state?: string;
+  follow_up_label?: string;
 };
 
 export function useLiveEvents(enabled: boolean, onEvent?: (e: LiveEvent) => void) {
