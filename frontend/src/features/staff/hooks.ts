@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../components/Toasts";
 import { api, errorMessage, isOfflineQueued, type OfflineQueuedResponse } from "../../lib/api";
 import { useMe } from "../../lib/session";
-import type { Device, Equipment, Insights, Kpis, MunicipalUser, Office, OfficeServiceLevel, StaffMember, Ticket, Zone } from "../../lib/types";
+import type { Device, Equipment, FollowUpMetrics, Insights, Kpis, MunicipalUser, Office, OfficeServiceLevel, StaffMember, Ticket, Zone } from "../../lib/types";
 
 export type OfficeLookup = {
   id: string; code: string; name: string; zone_id: string | null; zone_name: string | null;
@@ -14,6 +14,7 @@ export const useIsAdmin = () => useMe().data?.staff?.role === "ADMIN";
 export const useTechnicians = () => useQuery({ queryKey: ["technicians"], queryFn: () => api<StaffMember[]>("/technicians"), staleTime: 60_000 });
 export const useOfficeLookup = () => useQuery({ queryKey: ["offices", "lookup"], queryFn: () => api<OfficeLookup[]>("/lookup/offices"), staleTime: 300_000 });
 export const useKpis = () => useQuery({ queryKey: ["kpis"], queryFn: () => api<Kpis>("/tickets/kpis"), refetchInterval: 60_000 });
+export const useFollowUpMetrics = () => useQuery({ queryKey: ["follow-up-metrics"], queryFn: () => api<FollowUpMetrics>("/workboard/metrics"), refetchInterval: 60_000 });
 export const useInsights = (enabled = true) => useQuery({ queryKey: ["insights"], queryFn: () => api<Insights>("/ai/insights"), staleTime: 120_000, enabled });
 export const useOffices = () => useQuery({ queryKey: ["offices", "admin"], queryFn: () => api<Office[]>("/admin/offices") });
 export const useZones = () =>
@@ -60,6 +61,7 @@ export function useTicketAction<TBody = unknown>(buildPath: (id: string) => stri
       qc.setQueryData(["ticket", result.id], result);
       qc.invalidateQueries({ queryKey: ["tickets"] });
       qc.invalidateQueries({ queryKey: ["workboard"] });
+      qc.invalidateQueries({ queryKey: ["follow-up-metrics"] });
       qc.invalidateQueries({ queryKey: ["ticket-audit", result.id] });
       qc.invalidateQueries({ queryKey: ["kpis"] });
       if (successText) toast({ tone: "success", title: successText, body: result.number });
