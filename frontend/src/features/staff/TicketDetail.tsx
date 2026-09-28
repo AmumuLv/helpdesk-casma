@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, History, RefreshCw, ShieldCheck, Trash } from "lucide-react";
+import { BrainCircuit, Clock3, History, PauseCircle, PlayCircle, RefreshCw, ShieldCheck, Trash } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, CategoryBadge, cx, ErrorBox, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORIES, CATEGORY_LABEL, EQUIPMENT_LABEL, fmtDateTime, pct, PRIORITY_LABEL } from "../../lib/labels";
-import type { ResolutionType, Ticket, TicketCategory, TicketPriority } from "../../lib/types";
+import type { ResolutionType, Ticket, TicketCategory, TicketPriority, WaitReason } from "../../lib/types";
 import { useIsAdmin, useTechnicians, useTicketAction } from "./hooks";
 
 const RESOLUTION_LABEL: Record<ResolutionType, string> = {
@@ -19,6 +19,17 @@ const RESOLUTION_LABEL: Record<ResolutionType, string> = {
   DERIVADO: "Derivado",
 };
 const RESOLUTION_TYPES = Object.keys(RESOLUTION_LABEL) as ResolutionType[];
+
+const WAIT_LABEL: Record<WaitReason, string> = {
+  REPUESTO: "Espera de repuesto",
+  PROVEEDOR: "Espera de proveedor",
+  AUTORIZACION: "Espera de autorización",
+  USUARIO: "Espera de respuesta del usuario",
+  DIAGNOSTICO_COMPLEJO: "Diagnóstico complejo",
+  DEPENDENCIA_EXTERNA: "Dependencia externa",
+  OTRO: "Otro motivo justificado",
+};
+const WAIT_REASONS = Object.keys(WAIT_LABEL) as WaitReason[];
 
 const PRIORITY_SOURCE_LABEL: Record<string, string> = {
   LOCAL: "Triaje local",
@@ -65,6 +76,8 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const patch = useTicketAction<{ category?: TicketCategory; priority?: TicketPriority }>((id) => `/tickets/${id}`, "PATCH", "Clasificación corregida");
   const assign = useTicketAction<{ technician_id: string | null }>((id) => `/tickets/${id}/assign`, "POST", "Técnico asignado");
   const note = useTicketAction<{ text: string; visible_to_office: boolean }>((id) => `/tickets/${id}/notes`, "POST", "Nota agregada");
+  const wait = useTicketAction<{ reason: WaitReason; note?: string }>((id) => `/tickets/${id}/wait`, "POST", "Incidencia puesta en espera");
+  const resume = useTicketAction<{ note?: string }>((id) => `/tickets/${id}/resume`, "POST", "Atención reanudada");
   const resolve = useTicketAction<{ notes: string; tipo_resolucion: ResolutionType }>((id) => `/tickets/${id}/resolve`, "POST", "Incidencia cerrada");
   const reopen = useTicketAction((id) => `/tickets/${id}/reopen`, "POST", "Incidencia reabierta");
   const reanalyze = useTicketAction((id) => `/tickets/${id}/reanalyze`, "POST", "Análisis actualizado");
@@ -75,13 +88,16 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   );
   const remove = useMutation({
     mutationFn: () => api(`/tickets/${t.id}`, { method: "DELETE" }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); qc.invalidateQueries({ queryKey: ["kpis"] }); toast({ tone: "success", title: "Incidencia eliminada" }); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); qc.invalidateQueries({ queryKey: ["workboard"] }); qc.invalidateQueries({ queryKey: ["kpis"] }); qc.invalidateQueries({ queryKey: ["follow-up-metrics"] }); toast({ tone: "success", title: "Incidencia eliminada" }); onClose(); },
     onError: (err) => toast({ tone: "danger", title: "No se pudo eliminar", body: errorMessage(err) }),
   });
   const [noteText, setNoteText] = useState("");
   const [visible, setVisible] = useState(false);
   const [resolution, setResolution] = useState("");
   const [resolutionType, setResolutionType] = useState<ResolutionType>("SOLUCIONADO");
+  const [waitReason, setWaitReason] = useState<WaitReason>("REPUESTO");
+  const [waitNote, setWaitNote] = useState("");
+  const [resumeNote, setResumeNote] = useState("");
   const suggestedFix = t.ai?.similar_cases.find((c) => c.resolution)?.resolution;
   const ai = t.ai;
 
@@ -136,6 +152,73 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
         {t.attachments.map((a) => (
           <a key={a.id} href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt="Foto adjunta" className="max-h-80 rounded-xl border border-linea" /></a>
         ))}
+
+        {t.status !== "RESUELTO" && (
+          <section className={cx(
+            "rounded-2xl border p-4",
+            t.follow_up.state === "EN_ESPERA" ? "border-violet-200 bg-violet-50/65" : "border-sky-100 bg-sky-50/55",
+          )}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">Seguimiento de atención</p>
+                <h3 className="mt-1 flex items-center gap-2 font-bold text-tinta">
+                  {t.follow_up.state === "EN_ESPERA" ? <PauseCircle className="size-5 text-violet-700" /> : <Clock3 className="size-5 text-sky-700" />}
+                  {t.follow_up.label}
+                </h3>
+                <p className="mt-1 text-sm leading-5 text-tenue">{t.follow_up.detail}</p>
+              </div>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-tenue shadow-sm">Última actividad: {fmtDateTime(t.follow_up.last_activity_at)}</span>
+            </div>
+
+            {t.follow_up.ai_summary && (
+              <div className="mt-3 rounded-xl border border-casma/15 bg-white p-3">
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-casma-oscuro"><BrainCircuit className="size-4" /> IA de seguimiento</p>
+                <p className="mt-1 text-sm text-tinta">{t.follow_up.ai_summary}</p>
+                {t.follow_up.ai_recommendation && <p className="mt-2 text-sm text-tenue"><strong className="text-tinta">Recomendación:</strong> {t.follow_up.ai_recommendation}</p>}
+                {t.follow_up.ai_reasons.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-tenue">{t.follow_up.ai_reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+              </div>
+            )}
+
+            {t.follow_up.state === "EN_ESPERA" ? (
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-xl border border-violet-200 bg-white p-3 text-sm">
+                  <p className="text-xs font-bold uppercase tracking-[0.08em] text-violet-700">Motivo registrado</p>
+                  <p className="mt-1 font-bold text-tinta">{t.follow_up.wait_reason_label}</p>
+                  {t.follow_up.wait_note && <p className="mt-1 text-tenue">{t.follow_up.wait_note}</p>}
+                  {t.follow_up.waiting_since && <p className="mt-2 text-xs text-tenue">En espera desde {fmtDateTime(t.follow_up.waiting_since)}</p>}
+                </div>
+                <Textarea rows={2} value={resumeNote} onChange={(e) => setResumeNote(e.target.value)} placeholder="Nota opcional al reanudar la atención" />
+                <Button
+                  variant="secondary"
+                  loading={resume.isPending}
+                  onClick={() => resume.mutate({ id: t.id, body: { note: resumeNote.trim() || undefined } }, { onSuccess: () => setResumeNote("") })}
+                >
+                  <PlayCircle className="size-4" /> Reanudar atención
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.5fr_auto] sm:items-end">
+                <label className="flex flex-col gap-1 text-sm font-bold">Motivo de espera
+                  <Select value={waitReason} onChange={(e) => setWaitReason(e.target.value as WaitReason)}>
+                    {WAIT_REASONS.map((reason) => <option key={reason} value={reason}>{WAIT_LABEL[reason]}</option>)}
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-bold">Contexto opcional
+                  <Textarea rows={2} value={waitNote} onChange={(e) => setWaitNote(e.target.value)} placeholder="Ejemplo: repuesto solicitado al almacén" />
+                </label>
+                <Button
+                  variant="secondary"
+                  disabled={!t.assigned_to_id}
+                  loading={wait.isPending}
+                  onClick={() => wait.mutate({ id: t.id, body: { reason: waitReason, note: waitNote.trim() || undefined } }, { onSuccess: () => setWaitNote("") })}
+                >
+                  <PauseCircle className="size-4" /> Marcar en espera
+                </Button>
+                {!t.assigned_to_id && <p className="text-xs text-amber-700 sm:col-span-3">Primero asigna un técnico para registrar un motivo de espera.</p>}
+              </div>
+            )}
+          </section>
+        )}
 
         {t.status !== "RESUELTO" ? (
           <section className="flex flex-col gap-3 rounded-xl border-2 border-hecho/40 bg-hecho-claro/25 p-4">
@@ -349,6 +432,8 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
   "ticket.note_added": "Nota registrada",
   "ticket.resolved": "Ticket resuelto",
   "ticket.reopened": "Ticket reabierto",
+  "ticket.waiting": "Atención puesta en espera",
+  "ticket.resumed": "Atención reanudada",
   "ticket.reanalysis_requested": "Reanálisis de IA solicitado",
   "ticket.deleted": "Ticket eliminado",
 };
@@ -379,6 +464,9 @@ function auditEventText(event: TicketAuditEvent): string {
   }
   if (event.action === "ticket.resolved" && typeof event.details.resolution_type === "string") {
     return `${base}: ${event.details.resolution_type.replaceAll("_", " ").toLowerCase()}.`;
+  }
+  if (event.action === "ticket.waiting" && typeof event.details.wait_reason === "string") {
+    return `${base}: ${event.details.wait_reason.replaceAll("_", " ").toLowerCase()}.`;
   }
   return base;
 }
