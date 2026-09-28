@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import parse_id, require_staff
 from app.core.timeutil import aware
-from app.models import StaffUser, Ticket
+from app.models import Office, StaffUser, Ticket
 from app.models.enums import TicketCategory, TicketPriority, TicketStatus
 from app.models.ticket import ResolutionType
 from app.schemas.common import Page
@@ -61,10 +61,12 @@ async def workboard_tickets(
     if category:
         query["category"] = category.value
 
-    if zone_id and (zid := parse_id(zone_id)):
-        query["zone_id"] = zid
     if office_id and (oid := parse_id(office_id)):
         query["office_id"] = oid
+    elif zone_id and (zid := parse_id(zone_id)):
+        office_ids = [office.id for office in await Office.find({"zone_id": zid}).to_list()]
+        query["office_id"] = {"$in": office_ids}
+
     if user_id and (uid := parse_id(user_id)):
         query["user_id"] = uid
 
@@ -133,25 +135,30 @@ async def workboard_tickets(
 
         if sort_by == "smart":
             ordered.sort(
-                key=lambda t: (
-                    priority_rank.get(t.priority, 9),
-                    0 if t.assigned_to_id is None else 1,
-                    status_rank.get(t.status, 9),
-                    aware(t.created_at).timestamp(),
+                key=lambda ticket: (
+                    priority_rank.get(ticket.priority, 9),
+                    0 if ticket.assigned_to_id is None else 1,
+                    status_rank.get(ticket.status, 9),
+                    aware(ticket.created_at).timestamp(),
                 )
             )
         elif sort_by == "priority_desc":
-            ordered.sort(key=lambda t: (priority_rank.get(t.priority, 9), aware(t.created_at).timestamp()))
+            ordered.sort(
+                key=lambda ticket: (
+                    priority_rank.get(ticket.priority, 9),
+                    aware(ticket.created_at).timestamp(),
+                )
+            )
         elif sort_by in {"closed_desc", "closed_asc"}:
             ordered.sort(
-                key=lambda t: aware(t.resolution.resolved_at).timestamp() if t.resolution else 0,
+                key=lambda ticket: aware(ticket.resolution.resolved_at).timestamp() if ticket.resolution else 0,
                 reverse=sort_by == "closed_desc",
             )
         elif sort_by in {"duration_desc", "duration_asc"}:
             ordered.sort(
-                key=lambda t: (
-                    aware(t.resolution.resolved_at) - aware(t.created_at)
-                ).total_seconds() if t.resolution else 0,
+                key=lambda ticket: (
+                    aware(ticket.resolution.resolved_at) - aware(ticket.created_at)
+                ).total_seconds() if ticket.resolution else 0,
                 reverse=sort_by == "duration_desc",
             )
         items = ordered[offset:offset + page_size]
