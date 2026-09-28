@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority, TicketStatus
-from app.models.ticket import AIAnalysis, EquipmentSnapshot, Resolution, ResolutionType, TimelineEntry
+from app.models.ticket import AIAnalysis, EquipmentSnapshot, Resolution, ResolutionType, TimelineEntry, WaitReason
 
 
 class AttachmentOut(BaseModel):
@@ -15,11 +15,31 @@ class AttachmentOut(BaseModel):
 
 
 class FollowUpOut(BaseModel):
-    state: Literal["CERRADA", "EN_SEGUIMIENTO", "SIN_ACTUALIZACION", "REQUIERE_REVISION"]
+    state: Literal["CERRADA", "EN_SEGUIMIENTO", "SIN_ACTUALIZACION", "REQUIERE_REVISION", "EN_ESPERA"]
     label: str
     detail: str
     last_activity_at: datetime
     hours_without_update: float
+    wait_reason: WaitReason | None = None
+    wait_reason_label: str | None = None
+    wait_note: str | None = None
+    waiting_since: datetime | None = None
+    ai_summary: str | None = None
+    ai_recommendation: str | None = None
+    ai_reasons: list[str] = Field(default_factory=list)
+
+
+class FollowUpMetricsOut(BaseModel):
+    waiting: int
+    sin_actualizacion: int
+    requieren_revision: int
+    primera_respuesta_horas_30d: float | None
+    entre_actualizaciones_horas_30d: float | None
+    resolucion_horas_30d: float | None
+    casos_recurrentes_30d: int
+    top_office_30d: str | None
+    top_equipment_30d: str | None
+    top_equipment_incidents_30d: int
 
 
 class TicketOut(BaseModel):
@@ -94,6 +114,15 @@ class AssignIn(BaseModel):
 class NoteIn(BaseModel):
     text: str = Field(min_length=2, max_length=2000)
     visible_to_office: bool = False
+
+
+class WaitIn(BaseModel):
+    reason: WaitReason
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ResumeIn(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
 
 
 class ResolveIn(BaseModel):
