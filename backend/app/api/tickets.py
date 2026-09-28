@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.core.timeutil import aware, utcnow
 from app.models import AuditLog, Equipment, Office, StaffUser, Ticket
 from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority, TicketStatus
-from app.models.ticket import AIAnalysis
+from app.models.ticket import AIAnalysis, ResolutionType
 from app.schemas.admin import StaffOut
 from app.schemas.common import Message, Page
 from app.schemas.ticket import AssignIn, KpiOut, NoteIn, ResolveIn, TicketOut, TicketPatch, TriagePreviewIn
@@ -113,21 +113,46 @@ async def kpis(_: StaffUser = Depends(require_staff)):
     base = {"deleted_at": None}
     open_q = base | {"status": {"$ne": TicketStatus.RESUELTO.value}}
     tz = ZoneInfo(get_settings().timezone)
-    midnight = datetime.combine(datetime.now(tz).date(), time.min, tzinfo=tz)
+    now = datetime.now(tz)
+    midnight = datetime.combine(now.date(), time.min, tzinfo=tz)
+    month_start = datetime(now.year, now.month, 1, tzinfo=tz)
     since = utcnow() - timedelta(days=30)
-    responded = await Ticket.get_pymongo_collection().find(
+    collection = Ticket.get_pymongo_collection()
+
+    responded = await collection.find(
         base | {"created_at": {"$gte": since}, "first_response_at": {"$ne": None}}, {"created_at": 1, "first_response_at": 1}
     ).to_list(None)
-    hours = [(aware(d["first_response_at"]) - aware(d["created_at"])).total_seconds() / 3600 for d in responded]
+    response_hours = [(aware(d["first_response_at"]) - aware(d["created_at"])).total_seconds() / 3600 for d in responded]
+
+    resolved = await collection.find(
+        base | {
+            "status": TicketStatus.RESUELTO.value,
+            "resolution.resolved_at": {"$gte": since},
+        },
+        {"created_at": 1, "resolution.resolved_at": 1},
+    ).to_list(None)
+    resolution_hours = [
+        (aware(d["resolution"]["resolved_at"]) - aware(d["created_at"])).total_seconds() / 3600
+        for d in resolved
+        if d.get("resolution") and d["resolution"].get("resolved_at")
+    ]
+    reabiertos_30d = await AuditLog.find({"action": "ticket.reopened", "at": {"$gte": since}}).count()
+
     return KpiOut(
         total=await Ticket.find(base).count(),
         pendientes=await Ticket.find(base | {"status": TicketStatus.PENDIENTE.value}).count(),
         en_proceso=await Ticket.find(base | {"status": TicketStatus.EN_PROCESO.value}).count(),
         resueltos=await Ticket.find(base | {"status": TicketStatus.RESUELTO.value}).count(),
+        cerrados_mes=await Ticket.find(base | {
+            "status": TicketStatus.RESUELTO.value,
+            "resolution.resolved_at": {"$gte": month_start},
+        }).count(),
         urgentes_abiertos=await Ticket.find(open_q | {"priority": TicketPriority.ALTA.value}).count(),
         nuevos_hoy=await Ticket.find(base | {"created_at": {"$gte": midnight}}).count(),
         sin_asignar=await Ticket.find(open_q | {"assigned_to_id": None}).count(),
-        horas_primera_respuesta_30d=round(sum(hours) / len(hours), 2) if hours else None,
+        horas_primera_respuesta_30d=round(sum(response_hours) / len(response_hours), 2) if response_hours else None,
+        horas_resolucion_30d=round(sum(resolution_hours) / len(resolution_hours), 2) if resolution_hours else None,
+        reabiertos_30d=reabiertos_30d,
     )
 
 
@@ -140,6 +165,11 @@ async def list_tickets(
     office_id: str | None = None,
     equipment_id: str | None = None,
     assigned: str | None = Query(None, description="me | none | <id>"),
+    resolved_by: str | None = Query(None, max_length=64),
+    resolution_type: ResolutionType | None = None,
+    resolved_from: datetime | None = None,
+    resolved_to: datetime | None = None,
+    sort_by: Literal["created_desc", "closed_desc", "closed_asc", "duration_desc", "duration_asc"] = "created_desc",
     q: str | None = Query(None, max_length=80),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -164,12 +194,43 @@ async def list_tickets(
         query["assigned_to_id"] = None
     elif assigned and (aid := parse_id(assigned)):
         query["assigned_to_id"] = aid
+    if resolved_by:
+        query["resolution.resolved_by_id"] = resolved_by
+    if resolution_type:
+        query["resolution.tipo_resolucion"] = resolution_type.value
+    resolved_range: dict = {}
+    if resolved_from:
+        resolved_range["$gte"] = resolved_from
+    if resolved_to:
+        resolved_range["$lte"] = resolved_to
+    if resolved_range:
+        query["resolution.resolved_at"] = resolved_range
     if q and q.strip():
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
         query["$or"] = [{"number": rx}, {"subject": rx}, {"description": rx}, {"office_name": rx}, {"equipment.patrimonial_code": rx}]
+
     finder = Ticket.find(query)
     total = await finder.count()
-    items = await Ticket.find(query).sort(-Ticket.created_at).skip((page - 1) * page_size).limit(page_size).to_list()
+    offset = (page - 1) * page_size
+
+    if sort_by == "created_desc":
+        items = await Ticket.find(query).sort(-Ticket.created_at).skip(offset).limit(page_size).to_list()
+    else:
+        ordered = await Ticket.find(query).to_list()
+        if sort_by in {"closed_desc", "closed_asc"}:
+            ordered.sort(
+                key=lambda t: aware(t.resolution.resolved_at).timestamp() if t.resolution else 0,
+                reverse=sort_by == "closed_desc",
+            )
+        else:
+            ordered.sort(
+                key=lambda t: (
+                    aware(t.resolution.resolved_at) - aware(t.created_at)
+                ).total_seconds() if t.resolution else 0,
+                reverse=sort_by == "duration_desc",
+            )
+        items = ordered[offset:offset + page_size]
+
     return Page[TicketOut](items=[ticket_out(t) for t in items], total=total, page=page, page_size=page_size)
 
 
