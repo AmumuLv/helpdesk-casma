@@ -1,15 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, BrainCircuit, CheckCheck, ChevronDown, FileText, MessageCircle, Paperclip, Send, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Button, ErrorBox, Select, Spinner, Textarea, cx } from "../../components/ui";
+import { CheckCheck, FileText, MessageCircle, Paperclip, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button, ErrorBox, Spinner, Textarea, cx } from "../../components/ui";
 import { useToast } from "../../components/Toasts";
 import { api, errorMessage } from "../../lib/api";
-import { fmtDateTime, PRIORITY_LABEL } from "../../lib/labels";
-import type { Ticket, TicketPriority } from "../../lib/types";
-import { useTechnicians } from "../staff/hooks";
+import { fmtDateTime } from "../../lib/labels";
+import type { Ticket } from "../../lib/types";
 
 type AttentionState = "POR_ATENDER" | "EN_ATENCION" | "ESPERANDO_RESPUESTA" | "EN_ESPERA" | "CERRADA";
-type ReassignmentReason = "OTRA_ESPECIALIDAD" | "TECNICO_NO_DISPONIBLE" | "DISTRIBUCION_CARGA" | "COMPLEJIDAD" | "RESPONSABLE_TI" | "OTRO";
 
 type ConversationAttachment = {
   id: string;
@@ -40,35 +38,6 @@ type ConversationData = {
   unread_for_office: number;
 };
 
-type AssistantData = {
-  summary: string;
-  missing_info: string[];
-  suggested_questions: string[];
-  suggested_reply: string;
-  priority_suggestion: TicketPriority | null;
-  priority_reason: string | null;
-  recommended_technician_id: string | null;
-  recommended_technician_name: string | null;
-  technician_reasons: string[];
-  keep_current_technician: boolean;
-  handoff_summary: string;
-};
-
-type ReassignResult = {
-  assigned_to_id: string | null;
-  assigned_to_name: string | null;
-  handoff_summary: string | null;
-};
-
-const REASSIGNMENT_LABEL: Record<ReassignmentReason, string> = {
-  OTRA_ESPECIALIDAD: "Otra especialidad",
-  TECNICO_NO_DISPONIBLE: "Técnico no disponible",
-  DISTRIBUCION_CARGA: "Distribución de carga",
-  COMPLEJIDAD: "Complejidad del caso",
-  RESPONSABLE_TI: "Decisión del responsable TI",
-  OTRO: "Otro motivo",
-};
-
 function attentionTone(state: AttentionState) {
   if (state === "CERRADA") return "border-emerald-200 bg-emerald-50 text-emerald-800";
   if (state === "ESPERANDO_RESPUESTA") return "border-violet-200 bg-violet-50 text-violet-800";
@@ -93,7 +62,7 @@ function MessageList({ data, viewer }: { data: ConversationData; viewer: "staff"
       <div className="rounded-2xl border border-dashed border-linea bg-papel/40 px-5 py-9 text-center">
         <div className="mx-auto grid size-11 place-items-center rounded-full bg-white text-casma shadow-sm"><MessageCircle className="size-5" /></div>
         <p className="mt-3 font-bold text-tinta">Aún no hay mensajes</p>
-        <p className="mt-1 text-sm text-tenue">La conversación entre Soporte TI y la oficina aparecerá aquí.</p>
+        <p className="mt-1 text-sm text-tenue">La conversación de esta incidencia aparecerá aquí.</p>
       </div>
     );
   }
@@ -123,7 +92,6 @@ function MessageList({ data, viewer }: { data: ConversationData; viewer: "staff"
 export function StaffTicketConversation({ ticket, embedded = false }: { ticket: Ticket; embedded?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const techs = useTechnicians();
   const conversation = useQuery({
     queryKey: ["ticket-conversation", ticket.id],
     queryFn: () => api<ConversationData>(`/tickets/${ticket.id}/conversation`),
@@ -139,7 +107,6 @@ export function StaffTicketConversation({ ticket, embedded = false }: { ticket: 
 
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [assistant, setAssistant] = useState<AssistantData | null>(null);
   const send = useMutation({
     mutationFn: (waitForReply: boolean) => {
       const form = new FormData();
@@ -159,73 +126,26 @@ export function StaffTicketConversation({ ticket, embedded = false }: { ticket: 
     },
     onError: (err) => toast({ tone: "danger", title: "No se pudo enviar", body: errorMessage(err) }),
   });
-  const assistantMutation = useMutation({
-    mutationFn: () => api<AssistantData>(`/tickets/${ticket.id}/conversation/assistant`),
-    onSuccess: setAssistant,
-    onError: (err) => toast({ tone: "danger", title: "No se pudo consultar la IA", body: errorMessage(err) }),
-  });
-
-  const [selectedTech, setSelectedTech] = useState(ticket.assigned_to_id ?? "");
-  const [reason, setReason] = useState<"" | ReassignmentReason>("");
-  const [reasonNote, setReasonNote] = useState("");
-  useEffect(() => setSelectedTech(ticket.assigned_to_id ?? ""), [ticket.assigned_to_id, ticket.id]);
-  const changingExisting = !!ticket.assigned_to_id && selectedTech !== (ticket.assigned_to_id ?? "");
-  const assignmentChanged = selectedTech !== (ticket.assigned_to_id ?? "");
-  const reassign = useMutation({
-    mutationFn: () => api<ReassignResult>(`/tickets/${ticket.id}/reassign`, {
-      method: "POST",
-      json: {
-        technician_id: selectedTech || null,
-        reason: changingExisting ? reason || null : null,
-        note: reasonNote.trim() || null,
-      },
-    }),
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["ticket", ticket.id] });
-      qc.invalidateQueries({ queryKey: ["workboard"] });
-      qc.invalidateQueries({ queryKey: ["tickets"] });
-      qc.invalidateQueries({ queryKey: ["ticket-audit", ticket.id] });
-      setReason("");
-      setReasonNote("");
-      toast({ tone: "success", title: result.assigned_to_name ? "Responsable actualizado" : "Incidencia sin asignar", body: result.handoff_summary ? "La IA dejó un resumen de transferencia en la actividad interna." : undefined });
-    },
-    onError: (err) => toast({ tone: "danger", title: "No se pudo cambiar el responsable", body: errorMessage(err) }),
-  });
 
   const canSend = text.trim().length > 0 || !!file;
-  const recommendedId = assistant?.recommended_technician_id ?? ticket.ai?.suggested_technician_id ?? null;
-  const activeTechs = useMemo(() => (techs.data ?? []).filter((item) => item.active), [techs.data]);
   const assistedReport = ticket.channel === "TELEFONO";
 
   return (
     <section className={cx("flex flex-col gap-5", !embedded && "rounded-3xl border border-linea bg-white p-5 shadow-sm sm:p-6")}>
-      {!embedded && (
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-linea pb-4">
-          <div className="flex gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma-claro text-casma-oscuro"><MessageCircle className="size-5" /></div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.08em] text-casma-oscuro">Conversación y atención</p>
-              <h3 className="mt-1 text-xl font-bold text-tinta">Soporte TI ↔ {ticket.office_name}</h3>
-              <p className="mt-1 text-sm leading-5 text-tenue">Mensajes públicos separados de las notas internas y de la auditoría.</p>
-            </div>
-          </div>
-          {conversation.data && <span className={cx("rounded-full border px-3 py-1.5 text-xs font-bold", attentionTone(conversation.data.attention_state))}>{conversation.data.attention_label}</span>}
-        </div>
-      )}
-
-      {embedded && conversation.data && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex gap-3">
+          {!embedded && <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma-claro text-casma-oscuro"><MessageCircle className="size-5" /></div>}
           <div>
             <p className="text-sm font-bold text-tinta">Soporte TI ↔ {ticket.office_name}</p>
-            <p className="mt-1 text-xs text-tenue">Esta conversación pertenece a la incidencia y al portal de la oficina.</p>
+            <p className="mt-1 text-xs leading-5 text-tenue">Mensajes visibles en el portal de la oficina y separados de las notas internas.</p>
           </div>
-          <span className={cx("rounded-full border px-3 py-1.5 text-xs font-bold", attentionTone(conversation.data.attention_state))}>{conversation.data.attention_label}</span>
         </div>
-      )}
+        {conversation.data && <span className={cx("rounded-full border px-3 py-1.5 text-xs font-bold", attentionTone(conversation.data.attention_state))}>{conversation.data.attention_label}</span>}
+      </div>
 
       {assistedReport && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-          Este reporte fue registrado manualmente por soporte. Los mensajes se muestran en el portal de <strong>{ticket.office_name}</strong>; no se envían automáticamente al número telefónico escrito en la incidencia.
+          Este reporte fue registrado manualmente por soporte. El chat se ve en el portal de <strong>{ticket.office_name}</strong>; no se envía automáticamente al teléfono del reportante.
         </div>
       )}
 
@@ -234,8 +154,8 @@ export function StaffTicketConversation({ ticket, embedded = false }: { ticket: 
       {ticket.status !== "RESUELTO" && (
         <div className="rounded-2xl border border-linea bg-papel/35 p-4 sm:p-5">
           <div className="mb-3">
-            <p className="text-sm font-bold text-tinta">Responder a la oficina</p>
-            <p className="mt-1 text-xs text-tenue">El mensaje será visible dentro del reporte de esta oficina.</p>
+            <p className="text-sm font-bold text-tinta">Responder</p>
+            <p className="mt-1 text-xs text-tenue">La respuesta quedará asociada a esta incidencia.</p>
           </div>
           <Textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribe una respuesta clara para la oficina…" />
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -254,65 +174,6 @@ export function StaffTicketConversation({ ticket, embedded = false }: { ticket: 
           {!ticket.assigned_to_id && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Asigna un responsable antes de usar “Enviar y esperar respuesta”.</p>}
         </div>
       )}
-
-      <details className="group overflow-hidden rounded-2xl border border-linea bg-white">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 hover:bg-papel/50 [&::-webkit-details-marker]:hidden">
-          <span className="grid size-9 place-items-center rounded-lg bg-papel text-casma"><ArrowRightLeft className="size-4" /></span>
-          <span className="flex-1"><span className="block text-sm font-bold text-tinta">Responsable y reasignación</span><span className="block text-xs text-tenue">Cambiar técnico sin perder el contexto</span></span>
-          <ChevronDown className="size-4 text-tenue transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="border-t border-linea p-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <Select value={selectedTech} disabled={ticket.status === "RESUELTO" || reassign.isPending} onChange={(e) => setSelectedTech(e.target.value)}>
-              <option value="">Sin asignar</option>
-              {activeTechs.map((tech) => <option key={tech.id} value={tech.id}>{tech.id === recommendedId ? "★ " : ""}{tech.full_name} ({tech.open_tickets} activas)</option>)}
-            </Select>
-            <Button variant="secondary" disabled={!assignmentChanged || (changingExisting && !reason)} loading={reassign.isPending} onClick={() => reassign.mutate()}><ArrowRightLeft className="size-4" /> {ticket.assigned_to_id ? "Cambiar responsable" : "Asignar"}</Button>
-          </div>
-          {changingExisting && (
-            <div className="mt-3 grid gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm font-bold">Motivo de reasignación
-                <Select value={reason} onChange={(e) => setReason(e.target.value as ReassignmentReason)}>
-                  <option value="">Seleccionar motivo…</option>
-                  {(Object.keys(REASSIGNMENT_LABEL) as ReassignmentReason[]).map((key) => <option key={key} value={key}>{REASSIGNMENT_LABEL[key]}</option>)}
-                </Select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-bold">Contexto opcional
-                <Textarea rows={2} value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} placeholder="Ejemplo: requiere experiencia en redes" />
-              </label>
-            </div>
-          )}
-        </div>
-      </details>
-
-      <details className="group overflow-hidden rounded-2xl border border-casma/20 bg-casma-claro/20">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 hover:bg-casma-claro/35 [&::-webkit-details-marker]:hidden">
-          <span className="grid size-9 place-items-center rounded-lg bg-white text-casma"><BrainCircuit className="size-4" /></span>
-          <span className="flex-1"><span className="block text-sm font-bold text-casma-oscuro">Asistente IA de la conversación</span><span className="block text-xs text-tenue">Resumen, preguntas y recomendación de responsable</span></span>
-          <ChevronDown className="size-4 text-tenue transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="border-t border-casma/15 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-2xl text-xs leading-5 text-tenue">Analiza la conversación junto con casos similares y carga técnica. Solo propone; tú confirmas cualquier acción.</p>
-            <Button size="sm" variant="secondary" loading={assistantMutation.isPending} onClick={() => assistantMutation.mutate()}><Sparkles className="size-4" /> Analizar conversación</Button>
-          </div>
-          {assistant && (
-            <div className="mt-4 grid gap-3 text-sm">
-              <p className="leading-6">{assistant.summary}</p>
-              {assistant.missing_info.length > 0 && <div><p className="font-bold">Información que conviene confirmar</p><ul className="mt-1 list-disc pl-5 text-tenue">{assistant.missing_info.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-              <div className="rounded-xl border border-linea bg-white p-4">
-                <p className="font-bold">Respuesta sugerida</p>
-                <p className="mt-1 leading-5 text-tenue">{assistant.suggested_reply}</p>
-                <Button size="sm" variant="ghost" className="mt-2" onClick={() => setText(assistant.suggested_reply)}>Usar respuesta sugerida</Button>
-              </div>
-              {assistant.priority_suggestion && <p><strong>Prioridad sugerida:</strong> {PRIORITY_LABEL[assistant.priority_suggestion]}{assistant.priority_reason ? ` · ${assistant.priority_reason}` : ""}</p>}
-              {assistant.recommended_technician_name && <div><p className="font-bold">Responsable recomendado: {assistant.recommended_technician_name}</p><ul className="mt-1 list-disc pl-5 text-tenue">{assistant.technician_reasons.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-              {assistant.keep_current_technician && <p className="rounded-xl bg-emerald-50 p-3 text-emerald-800">La IA recomienda mantener al responsable actual para conservar continuidad.</p>}
-              <details className="rounded-xl border border-linea bg-white p-4"><summary className="cursor-pointer font-bold">Resumen de transferencia IA</summary><p className="mt-2 leading-5 text-tenue">{assistant.handoff_summary}</p></details>
-            </div>
-          )}
-        </div>
-      </details>
     </section>
   );
 }
