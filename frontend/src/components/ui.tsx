@@ -121,7 +121,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
       onClick={(e) => e.target === ref.current && onClose()}
       className={cx(
         "m-auto w-[calc(100%-1rem)] overflow-hidden rounded-2xl border border-linea bg-white p-0 text-tinta shadow-[0_32px_100px_rgba(15,23,42,0.28)] backdrop:bg-slate-950/55 backdrop:backdrop-blur-[3px] sm:w-[calc(100%-1.5rem)]",
-        wide ? "max-w-4xl" : "max-w-lg",
+        wide ? "max-w-6xl" : "max-w-lg",
       )}
     >
       {open && (
