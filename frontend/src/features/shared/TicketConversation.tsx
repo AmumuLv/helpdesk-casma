@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, BrainCircuit, CheckCheck, FileText, MessageCircle, Paperclip, Send, Sparkles } from "lucide-react";
+import { ArrowRightLeft, BrainCircuit, CheckCheck, ChevronDown, FileText, MessageCircle, Paperclip, Send, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, ErrorBox, Select, Spinner, Textarea, cx } from "../../components/ui";
 import { useToast } from "../../components/Toasts";
@@ -104,7 +104,7 @@ function MessageList({ data, viewer }: { data: ConversationData; viewer: "staff"
         const seen = viewer === "staff" ? message.seen_by_office_at : message.seen_by_staff_at;
         return (
           <div key={message.id} className={cx("flex", mine ? "justify-end" : "justify-start")}>
-            <div className={cx("max-w-[88%] rounded-2xl px-4 py-3 text-sm shadow-sm sm:max-w-[76%]", mine ? "bg-casma text-white" : "border border-linea bg-white text-tinta")}>
+            <div className={cx("max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm sm:max-w-[78%]", mine ? "bg-casma text-white" : "border border-linea bg-white text-tinta")}>
               <div className={cx("mb-1.5 flex flex-wrap items-center gap-2 text-[11px]", mine ? "text-white/70" : "text-tenue")}>
                 <span className="font-bold">{message.author_name}</span>
                 <span>{fmtDateTime(message.at)}</span>
@@ -120,7 +120,7 @@ function MessageList({ data, viewer }: { data: ConversationData; viewer: "staff"
   );
 }
 
-export function StaffTicketConversation({ ticket }: { ticket: Ticket }) {
+export function StaffTicketConversation({ ticket, embedded = false }: { ticket: Ticket; embedded?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
   const techs = useTechnicians();
@@ -195,20 +195,39 @@ export function StaffTicketConversation({ ticket }: { ticket: Ticket }) {
   const canSend = text.trim().length > 0 || !!file;
   const recommendedId = assistant?.recommended_technician_id ?? ticket.ai?.suggested_technician_id ?? null;
   const activeTechs = useMemo(() => (techs.data ?? []).filter((item) => item.active), [techs.data]);
+  const assistedReport = ticket.channel === "TELEFONO";
 
   return (
-    <section className="flex flex-col gap-5 rounded-3xl border border-linea bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-linea pb-4">
-        <div className="flex gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma-claro text-casma-oscuro"><MessageCircle className="size-5" /></div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-casma-oscuro">Conversación y atención</p>
-            <h3 className="mt-1 text-xl font-bold text-tinta">Soporte TI ↔ {ticket.office_name}</h3>
-            <p className="mt-1 text-sm leading-5 text-tenue">Mensajes públicos separados de las notas internas y de la auditoría.</p>
+    <section className={cx("flex flex-col gap-5", !embedded && "rounded-3xl border border-linea bg-white p-5 shadow-sm sm:p-6")}>
+      {!embedded && (
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-linea pb-4">
+          <div className="flex gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma-claro text-casma-oscuro"><MessageCircle className="size-5" /></div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-casma-oscuro">Conversación y atención</p>
+              <h3 className="mt-1 text-xl font-bold text-tinta">Soporte TI ↔ {ticket.office_name}</h3>
+              <p className="mt-1 text-sm leading-5 text-tenue">Mensajes públicos separados de las notas internas y de la auditoría.</p>
+            </div>
           </div>
+          {conversation.data && <span className={cx("rounded-full border px-3 py-1.5 text-xs font-bold", attentionTone(conversation.data.attention_state))}>{conversation.data.attention_label}</span>}
         </div>
-        {conversation.data && <span className={cx("rounded-full border px-3 py-1.5 text-xs font-bold", attentionTone(conversation.data.attention_state))}>{conversation.data.attention_label}</span>}
-      </div>
+      )}
+
+      {embedded && conversation.data && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-tinta">Soporte TI ↔ {ticket.office_name}</p>
+            <p className="mt-1 text-xs text-tenue">Esta conversación pertenece a la incidencia y al portal de la oficina.</p>
+          </div>
+          <span className={cx("rounded-full border px-3 py-1.5 text-xs font-bold", attentionTone(conversation.data.attention_state))}>{conversation.data.attention_label}</span>
+        </div>
+      )}
+
+      {assistedReport && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+          Este reporte fue registrado manualmente por soporte. Los mensajes se muestran en el portal de <strong>{ticket.office_name}</strong>; no se envían automáticamente al número telefónico escrito en la incidencia.
+        </div>
+      )}
 
       {conversation.isLoading ? <Spinner label="Cargando conversación" /> : conversation.error ? <ErrorBox message={errorMessage(conversation.error)} /> : conversation.data ? <MessageList data={conversation.data} viewer="staff" /> : null}
 
@@ -216,7 +235,7 @@ export function StaffTicketConversation({ ticket }: { ticket: Ticket }) {
         <div className="rounded-2xl border border-linea bg-papel/35 p-4 sm:p-5">
           <div className="mb-3">
             <p className="text-sm font-bold text-tinta">Responder a la oficina</p>
-            <p className="mt-1 text-xs text-tenue">El mensaje será visible para la oficina dentro de esta incidencia.</p>
+            <p className="mt-1 text-xs text-tenue">El mensaje será visible dentro del reporte de esta oficina.</p>
           </div>
           <Textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribe una respuesta clara para la oficina…" />
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -236,58 +255,64 @@ export function StaffTicketConversation({ ticket }: { ticket: Ticket }) {
         </div>
       )}
 
-      <div className="border-t border-linea pt-5">
-        <div className="mb-3">
-          <p className="flex items-center gap-2 text-sm font-bold text-tinta"><ArrowRightLeft className="size-4 text-casma" /> Responsable técnico</p>
-          <p className="mt-1 text-xs text-tenue">Asigna o transfiere la atención sin perder el contexto del caso.</p>
-        </div>
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <Select value={selectedTech} disabled={ticket.status === "RESUELTO" || reassign.isPending} onChange={(e) => setSelectedTech(e.target.value)}>
-            <option value="">Sin asignar</option>
-            {activeTechs.map((tech) => <option key={tech.id} value={tech.id}>{tech.id === recommendedId ? "★ " : ""}{tech.full_name} ({tech.open_tickets} activas)</option>)}
-          </Select>
-          <Button variant="secondary" disabled={!assignmentChanged || (changingExisting && !reason)} loading={reassign.isPending} onClick={() => reassign.mutate()}><ArrowRightLeft className="size-4" /> {ticket.assigned_to_id ? "Cambiar responsable" : "Asignar"}</Button>
-        </div>
-      </div>
-
-      {changingExisting && (
-        <div className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm font-bold">Motivo de reasignación
-            <Select value={reason} onChange={(e) => setReason(e.target.value as ReassignmentReason)}>
-              <option value="">Seleccionar motivo…</option>
-              {(Object.keys(REASSIGNMENT_LABEL) as ReassignmentReason[]).map((key) => <option key={key} value={key}>{REASSIGNMENT_LABEL[key]}</option>)}
+      <details className="group overflow-hidden rounded-2xl border border-linea bg-white">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 hover:bg-papel/50 [&::-webkit-details-marker]:hidden">
+          <span className="grid size-9 place-items-center rounded-lg bg-papel text-casma"><ArrowRightLeft className="size-4" /></span>
+          <span className="flex-1"><span className="block text-sm font-bold text-tinta">Responsable y reasignación</span><span className="block text-xs text-tenue">Cambiar técnico sin perder el contexto</span></span>
+          <ChevronDown className="size-4 text-tenue transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-linea p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <Select value={selectedTech} disabled={ticket.status === "RESUELTO" || reassign.isPending} onChange={(e) => setSelectedTech(e.target.value)}>
+              <option value="">Sin asignar</option>
+              {activeTechs.map((tech) => <option key={tech.id} value={tech.id}>{tech.id === recommendedId ? "★ " : ""}{tech.full_name} ({tech.open_tickets} activas)</option>)}
             </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-bold">Contexto opcional
-            <Textarea rows={2} value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} placeholder="Ejemplo: requiere experiencia en redes" />
-          </label>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-casma/20 bg-casma-claro/30 p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-sm font-bold text-casma-oscuro"><BrainCircuit className="size-4" /> Asistente IA del chat</p>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-tenue">Analiza la conversación junto con casos similares y carga técnica. Solo propone; tú confirmas cualquier acción.</p>
+            <Button variant="secondary" disabled={!assignmentChanged || (changingExisting && !reason)} loading={reassign.isPending} onClick={() => reassign.mutate()}><ArrowRightLeft className="size-4" /> {ticket.assigned_to_id ? "Cambiar responsable" : "Asignar"}</Button>
           </div>
-          <Button size="sm" variant="secondary" loading={assistantMutation.isPending} onClick={() => assistantMutation.mutate()}><Sparkles className="size-4" /> Analizar conversación</Button>
-        </div>
-        {assistant && (
-          <div className="mt-4 grid gap-3 text-sm">
-            <p>{assistant.summary}</p>
-            {assistant.missing_info.length > 0 && <div><p className="font-bold">Información que conviene confirmar</p><ul className="mt-1 list-disc pl-5 text-tenue">{assistant.missing_info.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-            <div className="rounded-xl border border-linea bg-white p-4">
-              <p className="font-bold">Respuesta sugerida</p>
-              <p className="mt-1 leading-5 text-tenue">{assistant.suggested_reply}</p>
-              <Button size="sm" variant="ghost" className="mt-2" onClick={() => setText(assistant.suggested_reply)}>Usar respuesta sugerida</Button>
+          {changingExisting && (
+            <div className="mt-3 grid gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm font-bold">Motivo de reasignación
+                <Select value={reason} onChange={(e) => setReason(e.target.value as ReassignmentReason)}>
+                  <option value="">Seleccionar motivo…</option>
+                  {(Object.keys(REASSIGNMENT_LABEL) as ReassignmentReason[]).map((key) => <option key={key} value={key}>{REASSIGNMENT_LABEL[key]}</option>)}
+                </Select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-bold">Contexto opcional
+                <Textarea rows={2} value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} placeholder="Ejemplo: requiere experiencia en redes" />
+              </label>
             </div>
-            {assistant.priority_suggestion && <p><strong>Prioridad sugerida:</strong> {PRIORITY_LABEL[assistant.priority_suggestion]}{assistant.priority_reason ? ` · ${assistant.priority_reason}` : ""}</p>}
-            {assistant.recommended_technician_name && <div><p className="font-bold">Responsable recomendado: {assistant.recommended_technician_name}</p><ul className="mt-1 list-disc pl-5 text-tenue">{assistant.technician_reasons.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-            {assistant.keep_current_technician && <p className="rounded-xl bg-emerald-50 p-3 text-emerald-800">La IA recomienda mantener al responsable actual para conservar continuidad.</p>}
-            <details className="rounded-xl border border-linea bg-white p-4"><summary className="cursor-pointer font-bold">Resumen de transferencia IA</summary><p className="mt-2 leading-5 text-tenue">{assistant.handoff_summary}</p></details>
+          )}
+        </div>
+      </details>
+
+      <details className="group overflow-hidden rounded-2xl border border-casma/20 bg-casma-claro/20">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 hover:bg-casma-claro/35 [&::-webkit-details-marker]:hidden">
+          <span className="grid size-9 place-items-center rounded-lg bg-white text-casma"><BrainCircuit className="size-4" /></span>
+          <span className="flex-1"><span className="block text-sm font-bold text-casma-oscuro">Asistente IA de la conversación</span><span className="block text-xs text-tenue">Resumen, preguntas y recomendación de responsable</span></span>
+          <ChevronDown className="size-4 text-tenue transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-casma/15 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-2xl text-xs leading-5 text-tenue">Analiza la conversación junto con casos similares y carga técnica. Solo propone; tú confirmas cualquier acción.</p>
+            <Button size="sm" variant="secondary" loading={assistantMutation.isPending} onClick={() => assistantMutation.mutate()}><Sparkles className="size-4" /> Analizar conversación</Button>
           </div>
-        )}
-      </div>
+          {assistant && (
+            <div className="mt-4 grid gap-3 text-sm">
+              <p className="leading-6">{assistant.summary}</p>
+              {assistant.missing_info.length > 0 && <div><p className="font-bold">Información que conviene confirmar</p><ul className="mt-1 list-disc pl-5 text-tenue">{assistant.missing_info.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+              <div className="rounded-xl border border-linea bg-white p-4">
+                <p className="font-bold">Respuesta sugerida</p>
+                <p className="mt-1 leading-5 text-tenue">{assistant.suggested_reply}</p>
+                <Button size="sm" variant="ghost" className="mt-2" onClick={() => setText(assistant.suggested_reply)}>Usar respuesta sugerida</Button>
+              </div>
+              {assistant.priority_suggestion && <p><strong>Prioridad sugerida:</strong> {PRIORITY_LABEL[assistant.priority_suggestion]}{assistant.priority_reason ? ` · ${assistant.priority_reason}` : ""}</p>}
+              {assistant.recommended_technician_name && <div><p className="font-bold">Responsable recomendado: {assistant.recommended_technician_name}</p><ul className="mt-1 list-disc pl-5 text-tenue">{assistant.technician_reasons.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+              {assistant.keep_current_technician && <p className="rounded-xl bg-emerald-50 p-3 text-emerald-800">La IA recomienda mantener al responsable actual para conservar continuidad.</p>}
+              <details className="rounded-xl border border-linea bg-white p-4"><summary className="cursor-pointer font-bold">Resumen de transferencia IA</summary><p className="mt-2 leading-5 text-tenue">{assistant.handoff_summary}</p></details>
+            </div>
+          )}
+        </div>
+      </details>
     </section>
   );
 }
