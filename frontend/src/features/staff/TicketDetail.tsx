@@ -1,6 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, Clock3, History, PauseCircle, PlayCircle, RefreshCw, ShieldCheck, Trash } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  BrainCircuit,
+  Building2,
+  ChevronDown,
+  Clock3,
+  History,
+  MapPin,
+  MessageCircle,
+  PauseCircle,
+  Phone,
+  PlayCircle,
+  RefreshCw,
+  ShieldCheck,
+  Trash,
+  UserRound,
+  Wrench,
+} from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useToast } from "../../components/Toasts";
 import { Badge, Button, CategoryBadge, cx, ErrorBox, Modal, PriorityBadge, Select, Spinner, StatusBadge, Textarea } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -89,9 +105,17 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   );
   const remove = useMutation({
     mutationFn: () => api(`/tickets/${t.id}`, { method: "DELETE" }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); qc.invalidateQueries({ queryKey: ["workboard"] }); qc.invalidateQueries({ queryKey: ["kpis"] }); qc.invalidateQueries({ queryKey: ["follow-up-metrics"] }); toast({ tone: "success", title: "Incidencia eliminada" }); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+      qc.invalidateQueries({ queryKey: ["workboard"] });
+      qc.invalidateQueries({ queryKey: ["kpis"] });
+      qc.invalidateQueries({ queryKey: ["follow-up-metrics"] });
+      toast({ tone: "success", title: "Incidencia eliminada" });
+      onClose();
+    },
     onError: (err) => toast({ tone: "danger", title: "No se pudo eliminar", body: errorMessage(err) }),
   });
+
   const [noteText, setNoteText] = useState("");
   const [resolution, setResolution] = useState("");
   const [resolutionType, setResolutionType] = useState<ResolutionType>("SOLUCIONADO");
@@ -100,6 +124,7 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const [resumeNote, setResumeNote] = useState("");
   const suggestedFix = t.ai?.similar_cases.find((c) => c.resolution)?.resolution;
   const ai = t.ai;
+  const assistedReport = t.channel === "TELEFONO";
 
   const auditTrail = useQuery({
     queryKey: ["ticket-audit", t.id],
@@ -129,88 +154,109 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
   const canClose = resolution.trim().length >= 5;
 
   return (
-    <div className="grid gap-8 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:items-start">
-      <div className="flex min-w-0 flex-col gap-6">
-        <section className="rounded-3xl border border-linea bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="border-tinta bg-tinta text-white">{t.office_name}</Badge>
-              <PriorityBadge priority={t.priority} />
-              <StatusBadge status={t.status} />
-              <CategoryBadge category={t.category} />
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-linea pb-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">Información del reporte</p>
-                <p className="mt-1 text-sm text-tenue">Registrada {fmtDateTime(t.created_at)} · canal {t.channel.toLowerCase()}</p>
-              </div>
-              {t.assigned_to_name && (
-                <div className="rounded-xl border border-casma/15 bg-casma-claro/45 px-3 py-2 text-sm">
-                  <span className="text-tenue">Responsable:</span> <strong className="text-casma-oscuro">{t.assigned_to_name}</strong>
-                </div>
-              )}
-            </div>
-
-            {t.description && (
-              <div className="rounded-2xl border border-linea bg-papel/45 p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">Descripción reportada</p>
-                <p className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-tinta">{t.description}</p>
-              </div>
-            )}
-
-            <div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.08em] text-tenue">Datos del solicitante</p>
-              <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <InfoCard label="Reporta" value={t.reporter_name} />
-                <InfoCard label="Teléfono" value={t.contact_phone} />
-                <InfoCard label="Ubicación" value={t.office_location} />
-                {t.equipment && <>
-                  <InfoCard label="Código patrimonial" value={t.equipment.patrimonial_code} />
-                  <InfoCard label="Equipo" value={[EQUIPMENT_LABEL[t.equipment.type], t.equipment.brand, t.equipment.model].filter(Boolean).join(" ")} />
-                  <InfoCard label="IP / hostname" value={[t.equipment.ip_address, t.equipment.hostname].filter(Boolean).join(" / ")} />
-                </>}
-              </dl>
-            </div>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+      <section className="rounded-3xl border border-linea bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="border-tinta bg-tinta text-white">{t.office_name}</Badge>
+            <PriorityBadge priority={t.priority} />
+            <StatusBadge status={t.status} />
+            <CategoryBadge category={t.category} />
           </div>
-        </section>
 
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.1em] text-tenue">Resumen de la incidencia</p>
+            <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-tinta">{t.description || "Sin descripción adicional."}</p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard icon={<UserRound className="size-5" />} label="Reportante" value={t.reporter_name || "No identificado"} helper={assistedReport ? "Contacto registrado por soporte" : "Reportado desde la oficina"} />
+            <SummaryCard icon={<Building2 className="size-5" />} label="Oficina" value={t.office_name} helper={t.office_location || "Ubicación no registrada"} />
+            <SummaryCard icon={<Wrench className="size-5" />} label="Técnico responsable" value={t.assigned_to_name || "Sin asignar"} helper={t.follow_up.label} />
+            <SummaryCard icon={<MessageCircle className="size-5" />} label="Comunicación" value={`Portal de ${t.office_name}`} helper={assistedReport ? "El teléfono del reportante no recibe este chat" : "Conversación disponible dentro del reporte"} />
+          </div>
+
+          {assistedReport && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              <strong>Reporte asistido por soporte.</strong> El nombre y teléfono identifican al reportante, pero la conversación del sistema pertenece al portal de la oficina. Una persona sin acceso a ese portal no recibe los mensajes únicamente por haber dejado su número telefónico.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <Accordion title="Conversación con la oficina" subtitle="Mensajes y respuesta del caso" icon={<MessageCircle className="size-5" />} defaultOpen>
+        <StaffTicketConversation ticket={t} embedded />
+      </Accordion>
+
+      <Accordion title="Datos completos del reporte" subtitle="Solicitante, ubicación, equipo y archivos" icon={<UserRound className="size-5" />}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <InfoCard label="Reportante" value={t.reporter_name} />
+          <InfoCard label="Teléfono" value={t.contact_phone} icon={<Phone className="size-4" />} />
+          <InfoCard label="Oficina" value={t.office_name} icon={<Building2 className="size-4" />} />
+          <InfoCard label="Ubicación" value={t.office_location} icon={<MapPin className="size-4" />} />
+          <InfoCard label="Canal de registro" value={t.channel.toLowerCase()} />
+          <InfoCard label="Registrada" value={fmtDateTime(t.created_at)} />
+          {t.equipment && <>
+            <InfoCard label="Código patrimonial" value={t.equipment.patrimonial_code} />
+            <InfoCard label="Equipo" value={[EQUIPMENT_LABEL[t.equipment.type], t.equipment.brand, t.equipment.model].filter(Boolean).join(" ")} />
+            <InfoCard label="IP / hostname" value={[t.equipment.ip_address, t.equipment.hostname].filter(Boolean).join(" / ")} />
+          </>}
+        </div>
         {t.attachments.length > 0 && (
-          <section className="rounded-2xl border border-linea bg-white p-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.08em] text-tenue">Adjuntos del reporte</p>
+          <div className="mt-5 border-t border-linea pt-5">
+            <p className="mb-3 text-sm font-bold text-tinta">Adjuntos originales</p>
             <div className="flex flex-wrap gap-3">
               {t.attachments.map((a) => (
-                <a key={a.id} href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt="Foto adjunta" className="max-h-64 rounded-xl border border-linea object-contain" /></a>
+                <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-linea bg-papel/40 p-2">
+                  <img src={a.url} alt="Foto adjunta" className="max-h-64 rounded-lg object-contain" />
+                </a>
               ))}
             </div>
-          </section>
+          </div>
         )}
+      </Accordion>
 
-        <StaffTicketConversation ticket={t} />
+      <Accordion title="Gestión técnica" subtitle="Responsable, categoría y prioridad" icon={<Wrench className="size-5" />}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="flex flex-col gap-1.5 text-sm font-bold">Técnico
+            <Select value={t.assigned_to_id ?? ""} disabled={assign.isPending || t.status === "RESUELTO" || !!t.assigned_to_id} onChange={(e) => assign.mutate({ id: t.id, body: { technician_id: e.target.value || null } })}>
+              <option value="">Sin asignar</option>
+              {techs.data?.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.id === ai?.suggested_technician_id ? "★ " : ""}{s.full_name} ({s.open_tickets})</option>)}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm font-bold">Categoría
+            <Select value={t.category} onChange={(e) => patch.mutate({ id: t.id, body: { category: e.target.value as TicketCategory } })}>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm font-bold">Prioridad
+            <Select value={t.priority} onChange={(e) => patch.mutate({ id: t.id, body: { priority: e.target.value as TicketPriority } })}>
+              {(["BAJA", "MEDIA", "ALTA"] as TicketPriority[]).map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
+            </Select>
+          </label>
+        </div>
+        <div className="mt-4 rounded-xl bg-papel/45 p-3 text-xs leading-5 text-tenue">
+          <p>Origen de prioridad: <strong className="text-tinta">{PRIORITY_SOURCE_LABEL[t.priority_source] ?? t.priority_source}</strong>.</p>
+          {t.assigned_to_id && <p className="mt-1">Para reasignar a otro técnico usa el bloque de responsable dentro de la conversación; allí se registra el motivo y se conserva el contexto.</p>}
+        </div>
+      </Accordion>
 
-        {t.status !== "RESUELTO" && (
-          <section className={cx(
-            "rounded-2xl border p-5",
-            t.follow_up.state === "EN_ESPERA" ? "border-violet-200 bg-violet-50/65" : "border-sky-100 bg-sky-50/55",
-          )}>
+      {t.status !== "RESUELTO" && (
+        <Accordion title="Seguimiento de atención" subtitle={t.follow_up.label} icon={t.follow_up.state === "EN_ESPERA" ? <PauseCircle className="size-5" /> : <Clock3 className="size-5" />}>
+          <div className={cx("rounded-2xl border p-4", t.follow_up.state === "EN_ESPERA" ? "border-violet-200 bg-violet-50/65" : "border-sky-100 bg-sky-50/55")}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">Seguimiento de atención</p>
-                <h3 className="mt-1 flex items-center gap-2 font-bold text-tinta">
-                  {t.follow_up.state === "EN_ESPERA" ? <PauseCircle className="size-5 text-violet-700" /> : <Clock3 className="size-5 text-sky-700" />}
-                  {t.follow_up.label}
-                </h3>
-                <p className="mt-1 text-sm leading-5 text-tenue">{t.follow_up.detail}</p>
+                <h3 className="font-bold text-tinta">{t.follow_up.label}</h3>
+                <p className="mt-1 text-sm leading-6 text-tenue">{t.follow_up.detail}</p>
               </div>
-              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-tenue shadow-sm">Última actividad: {fmtDateTime(t.follow_up.last_activity_at)}</span>
+              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-tenue shadow-sm">Última actividad: {fmtDateTime(t.follow_up.last_activity_at)}</span>
             </div>
 
             {t.follow_up.ai_summary && (
-              <div className="mt-3 rounded-xl border border-casma/15 bg-white p-3">
+              <div className="mt-4 rounded-xl border border-casma/15 bg-white p-4">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-casma-oscuro"><BrainCircuit className="size-4" /> IA de seguimiento</p>
-                <p className="mt-1 text-sm text-tinta">{t.follow_up.ai_summary}</p>
+                <p className="mt-2 text-sm leading-6 text-tinta">{t.follow_up.ai_summary}</p>
                 {t.follow_up.ai_recommendation && <p className="mt-2 text-sm text-tenue"><strong className="text-tinta">Recomendación:</strong> {t.follow_up.ai_recommendation}</p>}
-                {t.follow_up.ai_reasons.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-tenue">{t.follow_up.ai_reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
               </div>
             )}
 
@@ -220,19 +266,14 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                   <p className="text-xs font-bold uppercase tracking-[0.08em] text-violet-700">Motivo registrado</p>
                   <p className="mt-1 font-bold text-tinta">{t.follow_up.wait_reason_label}</p>
                   {t.follow_up.wait_note && <p className="mt-1 text-tenue">{t.follow_up.wait_note}</p>}
-                  {t.follow_up.waiting_since && <p className="mt-2 text-xs text-tenue">En espera desde {fmtDateTime(t.follow_up.waiting_since)}</p>}
                 </div>
-                <Textarea rows={2} value={resumeNote} onChange={(e) => setResumeNote(e.target.value)} placeholder="Nota opcional al reanudar la atención" />
-                <Button
-                  variant="secondary"
-                  loading={resume.isPending}
-                  onClick={() => resume.mutate({ id: t.id, body: { note: resumeNote.trim() || undefined } }, { onSuccess: () => setResumeNote("") })}
-                >
+                <Textarea rows={2} value={resumeNote} onChange={(e) => setResumeNote(e.target.value)} placeholder="Nota opcional al reanudar" />
+                <Button variant="secondary" loading={resume.isPending} onClick={() => resume.mutate({ id: t.id, body: { note: resumeNote.trim() || undefined } }, { onSuccess: () => setResumeNote("") })}>
                   <PlayCircle className="size-4" /> Reanudar atención
                 </Button>
               </div>
             ) : (
-              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.5fr_auto] sm:items-end">
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1.5fr_auto] md:items-end">
                 <label className="flex flex-col gap-1 text-sm font-bold">Motivo de espera
                   <Select value={waitReason} onChange={(e) => setWaitReason(e.target.value as WaitReason)}>
                     {WAIT_REASONS.map((reason) => <option key={reason} value={reason}>{WAIT_LABEL[reason]}</option>)}
@@ -241,232 +282,163 @@ function Detail({ t, onClose }: { t: Ticket; onClose: () => void }) {
                 <label className="flex flex-col gap-1 text-sm font-bold">Contexto opcional
                   <Textarea rows={2} value={waitNote} onChange={(e) => setWaitNote(e.target.value)} placeholder="Ejemplo: repuesto solicitado al almacén" />
                 </label>
-                <Button
-                  variant="secondary"
-                  disabled={!t.assigned_to_id}
-                  loading={wait.isPending}
-                  onClick={() => wait.mutate({ id: t.id, body: { reason: waitReason, note: waitNote.trim() || undefined } }, { onSuccess: () => setWaitNote("") })}
-                >
+                <Button variant="secondary" disabled={!t.assigned_to_id} loading={wait.isPending} onClick={() => wait.mutate({ id: t.id, body: { reason: waitReason, note: waitNote.trim() || undefined } }, { onSuccess: () => setWaitNote("") })}>
                   <PauseCircle className="size-4" /> Marcar en espera
                 </Button>
-                {!t.assigned_to_id && <p className="text-xs text-amber-700 sm:col-span-3">Primero asigna un técnico para registrar un motivo de espera.</p>}
               </div>
             )}
-          </section>
-        )}
+          </div>
+        </Accordion>
+      )}
 
-        {t.status !== "RESUELTO" ? (
-          <section className="flex flex-col gap-3 rounded-2xl border-2 border-hecho/40 bg-hecho-claro/25 p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+      {ai && (
+        <Accordion title="Asistente IA" subtitle={`${CATEGORY_LABEL[ai.category]} · ${pct(ai.category_confidence)} de confianza`} icon={<BrainCircuit className="size-5" />}>
+          <div className="rounded-2xl bg-tinta p-5 text-white">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-tinta">Cerrar incidencia</h3>
-                <p className="mt-1 text-sm leading-5 text-tenue">Úsalo cuando la atención haya terminado. Registra brevemente qué se hizo para que la oficina y el historial conserven la solución.</p>
+                <p className="text-sm font-bold text-sol">Resumen del análisis</p>
+                <p className="mt-2 text-sm leading-6">{ai.briefing}</p>
               </div>
-              {suggestedFix && !resolution && (
-                <Button size="sm" variant="ghost" onClick={() => setResolution(suggestedFix)}>Usar solución del caso parecido</Button>
-              )}
-            </div>
-            <label className="flex flex-col gap-1 text-sm font-bold">Resultado de la atención
-              <Select value={resolutionType} onChange={(e) => setResolutionType(e.target.value as ResolutionType)}>
-                {RESOLUTION_TYPES.map((type) => <option key={type} value={type}>{RESOLUTION_LABEL[type]}</option>)}
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-bold">Solución aplicada
-              <Textarea rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Ejemplo: se reinstaló el controlador de la impresora y se realizaron pruebas de impresión." />
-            </label>
-            {!canClose && <p className="text-xs text-tenue">Escribe al menos 5 caracteres para habilitar el cierre de la incidencia.</p>}
-            <Button variant="success" loading={resolve.isPending} disabled={!canClose}
-              onClick={() => resolve.mutate({ id: t.id, body: { notes: resolution.trim(), tipo_resolucion: resolutionType } })}>Cerrar incidencia</Button>
-          </section>
-        ) : (
-          <section className="flex flex-col gap-3 rounded-2xl border border-hecho/30 bg-hecho-claro p-5">
-            <div>
-              <h3 className="font-bold text-tinta">Incidencia cerrada</h3>
-              <p className="mt-1 text-sm text-tenue">La solución quedó registrada en el historial. Si el problema continúa o vuelve a presentarse, puedes reabrir este mismo caso.</p>
-            </div>
-            {t.resolution?.tipo_resolucion && <p className="text-sm"><strong>Resultado:</strong> {RESOLUTION_LABEL[t.resolution.tipo_resolucion]}</p>}
-            <p><strong>Solución de {t.resolution?.resolved_by_name || "personal TI"}:</strong> {t.resolution?.notes || "Sin detalle de solución."}</p>
-            {t.resolution?.confirmed_by_user != null && <p className="text-sm font-bold">{t.resolution.confirmed_by_user ? "La oficina confirmó que funciona." : "La oficina indicó que sigue fallando."}</p>}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="w-fit"
-              loading={reopen.isPending}
-              onClick={() => confirm(`¿Reabrir la incidencia ${t.number}? Volverá a la bandeja de atención y conservará su historial.`) && reopen.mutate({ id: t.id })}
-            >
-              Reabrir incidencia
-            </Button>
-          </section>
-        )}
-
-        <section className="flex flex-col gap-3 rounded-2xl border border-linea bg-white p-5">
-          <div>
-            <h3 className="font-bold text-tinta">Nota interna y actividad</h3>
-            <p className="mt-1 text-sm text-tenue">Espacio privado del equipo TI, separado de la conversación con la oficina.</p>
-          </div>
-          <div className="flex flex-col gap-2 rounded-xl border border-linea bg-papel/35 p-3">
-            <Textarea rows={2} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Nota interna para el equipo TI" />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-tenue">Solo visible para el personal TI. Para hablar con la oficina usa la conversación superior.</span>
-              <Button size="sm" loading={note.isPending} disabled={noteText.trim().length < 2}
-                onClick={() => note.mutate({ id: t.id, body: { text: noteText.trim(), visible_to_office: false } }, { onSuccess: () => setNoteText("") })}>Guardar nota interna</Button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 border-t border-linea pt-4">
-            <History className="size-5 text-casma" aria-hidden />
-            <h3 className="font-bold">Actividad y auditoría</h3>
-            {auditTrail.isLoading && <span className="text-xs text-tenue">Cargando auditoría…</span>}
-          </div>
-          {auditTrail.error && <p className="text-xs text-alerta">No se pudo cargar la auditoría; se muestra el seguimiento del ticket.</p>}
-          <ol className="relative ml-2 flex flex-col gap-0 border-l-2 border-linea pl-6">
-            {history.map((item) => (
-              <li key={item.key} className="relative pb-5 last:pb-0">
-                <span
-                  className={cx(
-                    "absolute -left-[31px] top-1.5 size-3 rounded-full border-2 border-white",
-                    item.source === "audit" ? "bg-casma" : item.internal ? "bg-sol" : "bg-hecho",
-                  )}
-                  aria-hidden
-                />
-                <div className={cx("rounded-xl border p-3", item.source === "audit" ? "border-casma/20 bg-casma-claro/40" : "border-linea bg-white")}>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-tenue">
-                    <span>{fmtDateTime(item.at)}</span>
-                    <span>•</span>
-                    <span className="font-bold text-tinta">{item.actor}</span>
-                    {item.source === "audit" ? (
-                      <Badge className="border-casma/30 bg-white text-casma"><ShieldCheck className="mr-1 size-3" /> Auditoría</Badge>
-                    ) : item.internal ? (
-                      <Badge className="border-linea bg-papel text-tenue">Interno</Badge>
-                    ) : null}
-                  </div>
-                  <p className={cx("mt-1 text-sm", item.internal && item.source !== "audit" && "text-tenue")}>{item.text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
-
-      <aside className="grid gap-5 md:grid-cols-2 2xl:sticky 2xl:top-4 2xl:flex 2xl:flex-col">
-        <div className="flex flex-col gap-4 rounded-3xl border border-linea bg-white p-5 shadow-sm">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">Gestión técnica</p>
-            <h3 className="mt-1 text-lg font-bold text-tinta">Clasificación y responsable</h3>
-          </div>
-          <label className="flex flex-col gap-1 text-sm font-bold">Técnico
-            <Select value={t.assigned_to_id ?? ""} disabled={assign.isPending || t.status === "RESUELTO" || !!t.assigned_to_id} onChange={(e) => assign.mutate({ id: t.id, body: { technician_id: e.target.value || null } })}>
-              <option value="">Sin asignar</option>
-              {techs.data?.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.id === ai?.suggested_technician_id ? "★ " : ""}{s.full_name} ({s.open_tickets})</option>)}
-            </Select>
-          </label>
-          {t.assigned_to_id && <p className="rounded-xl bg-papel/50 p-3 text-xs leading-5 text-tenue">Para reasignar usa <strong className="text-tinta">Conversación y atención</strong>; ahí se registra el motivo y la IA genera un resumen de transferencia.</p>}
-          <label className="flex flex-col gap-1 text-sm font-bold">Categoría
-            <Select value={t.category} onChange={(e) => patch.mutate({ id: t.id, body: { category: e.target.value as TicketCategory } })}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-            </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-bold">Prioridad
-            <Select value={t.priority} onChange={(e) => patch.mutate({ id: t.id, body: { priority: e.target.value as TicketPriority } })}>
-              {(["BAJA", "MEDIA", "ALTA"] as TicketPriority[]).map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
-            </Select>
-          </label>
-          <div className="border-t border-linea pt-3">
-            <p className="text-xs text-tenue">Origen actual: <strong>{PRIORITY_SOURCE_LABEL[t.priority_source] ?? t.priority_source}</strong>.</p>
-            <p className="mt-1 text-xs text-tenue">Corregir la categoría o prioridad enseña a la IA.</p>
-          </div>
-        </div>
-
-        {ai && (
-          <div className="flex flex-col gap-4 rounded-3xl bg-tinta p-5 text-white shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-lg font-bold"><BrainCircuit className="size-5 text-sol" /> Asistente IA</h3>
               <button onClick={() => reanalyze.mutate({ id: t.id })} className="rounded-lg p-2 text-white/70 hover:bg-white/10" aria-label="Volver a analizar">
                 <RefreshCw className={cx("size-4", reanalyze.isPending && "animate-spin")} />
               </button>
             </div>
-            <p className="text-sm leading-6">{ai.briefing}</p>
-            <AiBlock title={`Categoría sugerida: ${CATEGORY_LABEL[ai.category]} (${pct(ai.category_confidence)})`} />
-            <AiBlock title={`Prioridad sugerida: ${PRIORITY_LABEL[ai.priority]} · puntaje ${pct(ai.priority_score)}`} items={ai.priority_reasons} />
-            {ai.priority !== t.priority ? (
-              <div className="rounded-xl border border-sol/40 bg-white/10 p-3">
-                <p className="text-sm font-bold text-sol">La IA discrepa de la prioridad actual</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                  <span>Actual:</span>
-                  <span className="rounded bg-white/10 px-2 py-1 font-bold">{PRIORITY_LABEL[t.priority]}</span>
-                  <span>→ IA:</span>
-                  <span className="rounded bg-sol/20 px-2 py-1 font-bold text-sol">{PRIORITY_LABEL[ai.priority]}</span>
-                </div>
-                <p className="mt-2 text-xs text-white/65">La IA no cambia la prioridad automáticamente. Al aceptar, su decisión quedará registrada a nombre del técnico.</p>
-                <Button
-                  className="mt-3 w-full"
-                  variant="secondary"
-                  loading={applyAiPriority.isPending}
-                  onClick={() => applyAiPriority.mutate({
-                    id: t.id,
-                    body: { priority: ai.priority, model_version: ai.model_version },
-                  })}
-                >
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <AiBlock title={`Categoría sugerida: ${CATEGORY_LABEL[ai.category]} (${pct(ai.category_confidence)})`} />
+              <AiBlock title={`Prioridad sugerida: ${PRIORITY_LABEL[ai.priority]} · ${pct(ai.priority_score)}`} items={ai.priority_reasons} />
+              {ai.suggested_technician_name && <AiBlock title={`Técnico sugerido: ${ai.suggested_technician_name}`} items={ai.technician_reasons} />}
+              {ai.equipment_risk != null && <AiBlock title={`Riesgo de nueva falla: ${pct(ai.equipment_risk)}`} items={ai.equipment_risk_factors} />}
+            </div>
+            {ai.priority !== t.priority && (
+              <div className="mt-4 rounded-xl border border-sol/40 bg-white/10 p-4">
+                <p className="text-sm font-bold text-sol">La IA propone una prioridad diferente</p>
+                <p className="mt-1 text-xs text-white/70">Actual: {PRIORITY_LABEL[t.priority]} · Sugerida: {PRIORITY_LABEL[ai.priority]}. La decisión final sigue siendo del personal TI.</p>
+                <Button className="mt-3" variant="secondary" loading={applyAiPriority.isPending} onClick={() => applyAiPriority.mutate({ id: t.id, body: { priority: ai.priority, model_version: ai.model_version } })}>
                   <ShieldCheck className="size-4" /> Aplicar recomendación IA
                 </Button>
               </div>
-            ) : (
-              <div className="rounded-lg border border-hecho/30 bg-white/10 p-2 text-xs text-white/75">La prioridad actual coincide con la recomendación de IA.</div>
-            )}
-            {ai.suggested_technician_name && <AiBlock title={`Técnico sugerido: ${ai.suggested_technician_name}`} items={ai.technician_reasons} />}
-            {ai.equipment_risk != null && (
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-bold">Riesgo de nueva falla (30 días): {pct(ai.equipment_risk)}</p>
-                <div className="h-2 overflow-hidden rounded-full bg-white/15"><div className={cx("h-full", ai.equipment_risk > 0.6 ? "bg-alerta" : ai.equipment_risk > 0.35 ? "bg-sol" : "bg-hecho")} style={{ width: pct(ai.equipment_risk) }} /></div>
-                {ai.equipment_risk_factors.length > 0 && <ul className="list-disc pl-5 text-xs text-white/75">{ai.equipment_risk_factors.map((f) => <li key={f}>{f}</li>)}</ul>}
-              </div>
-            )}
-            {(ai.historical_patterns.length > 0 || ai.historical_recommendations.length > 0) && (
-              <div className="flex flex-col gap-2 rounded-xl border border-sol/30 bg-white/10 p-3">
-                <p className="text-sm font-bold text-sol">Contexto histórico del equipo</p>
-                {ai.historical_patterns.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-white/60">Patrones detectados</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-white/85">{ai.historical_patterns.map((item) => <li key={item}>{item}</li>)}</ul>
-                  </div>
-                )}
-                {ai.historical_evidence.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-white/60">Evidencia</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-white/75">{ai.historical_evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-                  </div>
-                )}
-                {ai.historical_recommendations.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-white/60">Recomendación inicial</p>
-                    <ol className="mt-1 list-decimal pl-5 text-xs text-sol">{ai.historical_recommendations.map((item) => <li key={item}>{item}</li>)}</ol>
-                  </div>
-                )}
-              </div>
             )}
             {ai.similar_cases.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="mt-4 border-t border-white/15 pt-4">
                 <p className="text-sm font-bold">Casos parecidos resueltos</p>
-                {ai.similar_cases.map((c) => (
-                  <div key={c.ticket_id} className="rounded-lg bg-white/10 p-2 text-xs">
-                    <p className="font-bold">{c.number} ({pct(c.score)} similar)</p>
-                    <p className="text-white/80">{c.subject}</p>
-                    {c.resolution && <p className="mt-1 text-sol">Solución: {c.resolution}</p>}
-                  </div>
-                ))}
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {ai.similar_cases.map((c) => (
+                    <div key={c.ticket_id} className="rounded-xl bg-white/10 p-3 text-xs">
+                      <p className="font-bold">{c.number} · {pct(c.score)} similar</p>
+                      <p className="mt-1 text-white/80">{c.subject}</p>
+                      {c.resolution && <p className="mt-2 text-sol">Solución: {c.resolution}</p>}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-            <p className="text-xs text-white/50">Modelo {ai.model_version}</p>
+          </div>
+        </Accordion>
+      )}
+
+      <Accordion title={t.status === "RESUELTO" ? "Resultado y reapertura" : "Cerrar incidencia"} subtitle={t.status === "RESUELTO" ? "Solución registrada" : "Finaliza el caso cuando el problema esté atendido"} icon={<ShieldCheck className="size-5" />}>
+        {t.status !== "RESUELTO" ? (
+          <div className="grid gap-4">
+            <label className="flex flex-col gap-1.5 text-sm font-bold">Resultado de la atención
+              <Select value={resolutionType} onChange={(e) => setResolutionType(e.target.value as ResolutionType)}>
+                {RESOLUTION_TYPES.map((type) => <option key={type} value={type}>{RESOLUTION_LABEL[type]}</option>)}
+              </Select>
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-bold">Solución aplicada
+              <Textarea rows={4} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Describe qué se hizo y cómo quedó el equipo o servicio." />
+            </label>
+            {suggestedFix && !resolution && <Button size="sm" variant="ghost" className="w-fit" onClick={() => setResolution(suggestedFix)}>Usar solución de un caso parecido</Button>}
+            <Button variant="success" loading={resolve.isPending} disabled={!canClose} onClick={() => resolve.mutate({ id: t.id, body: { notes: resolution.trim(), tipo_resolucion: resolutionType } })}>Cerrar incidencia</Button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-hecho/30 bg-hecho-claro p-4">
+            {t.resolution?.tipo_resolucion && <p className="text-sm"><strong>Resultado:</strong> {RESOLUTION_LABEL[t.resolution.tipo_resolucion]}</p>}
+            <p className="mt-2 leading-6"><strong>Solución de {t.resolution?.resolved_by_name || "personal TI"}:</strong> {t.resolution?.notes || "Sin detalle de solución."}</p>
+            {t.resolution?.confirmed_by_user != null && <p className="mt-2 text-sm font-bold">{t.resolution.confirmed_by_user ? "La oficina confirmó que funciona." : "La oficina indicó que sigue fallando."}</p>}
+            <Button variant="secondary" size="sm" className="mt-4" loading={reopen.isPending} onClick={() => confirm(`¿Reabrir la incidencia ${t.number}?`) && reopen.mutate({ id: t.id })}>Reabrir incidencia</Button>
           </div>
         )}
-        {isAdmin && (
-          <Button variant="danger" size="sm" className="md:col-span-2 2xl:col-span-1" loading={remove.isPending} onClick={() => confirm(`¿Eliminar la incidencia ${t.number}? Quedará registrado en la auditoría.`) && remove.mutate()}>
+      </Accordion>
+
+      <Accordion title="Nota interna TI" subtitle="Información privada para el equipo de soporte" icon={<Wrench className="size-5" />}>
+        <Textarea rows={3} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Escribe una nota interna para el equipo TI" />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-tenue">No se muestra a la oficina. Para hablar con ella usa la conversación.</p>
+          <Button size="sm" loading={note.isPending} disabled={noteText.trim().length < 2} onClick={() => note.mutate({ id: t.id, body: { text: noteText.trim(), visible_to_office: false } }, { onSuccess: () => setNoteText("") })}>Guardar nota interna</Button>
+        </div>
+      </Accordion>
+
+      <Accordion title="Actividad y auditoría" subtitle={`${history.length} registros del caso`} icon={<History className="size-5" />}>
+        {auditTrail.error && <p className="mb-3 text-xs text-alerta">No se pudo cargar la auditoría completa.</p>}
+        <ol className="relative ml-2 flex flex-col border-l-2 border-linea pl-6">
+          {history.map((item) => (
+            <li key={item.key} className="relative pb-5 last:pb-0">
+              <span className={cx("absolute -left-[31px] top-1.5 size-3 rounded-full border-2 border-white", item.source === "audit" ? "bg-casma" : item.internal ? "bg-sol" : "bg-hecho")} aria-hidden />
+              <div className={cx("rounded-xl border p-3", item.source === "audit" ? "border-casma/20 bg-casma-claro/40" : "border-linea bg-white")}>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-tenue">
+                  <span>{fmtDateTime(item.at)}</span><span>•</span><span className="font-bold text-tinta">{item.actor}</span>
+                  {item.source === "audit" ? <Badge className="border-casma/30 bg-white text-casma"><ShieldCheck className="mr-1 size-3" /> Auditoría</Badge> : item.internal ? <Badge className="border-linea bg-papel text-tenue">Interno</Badge> : null}
+                </div>
+                <p className={cx("mt-1 text-sm leading-6", item.internal && item.source !== "audit" && "text-tenue")}>{item.text}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Accordion>
+
+      {isAdmin && (
+        <div className="flex justify-end pt-1">
+          <Button variant="danger" size="sm" loading={remove.isPending} onClick={() => confirm(`¿Eliminar la incidencia ${t.number}? Quedará registrado en la auditoría.`) && remove.mutate()}>
             <Trash className="size-4" /> Eliminar incidencia
           </Button>
-        )}
-      </aside>
+        </div>
+      )}
     </div>
   );
 }
+
+function Accordion({ title, subtitle, icon, children, defaultOpen = false }: { title: string; subtitle?: string; icon: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="overflow-hidden rounded-2xl border border-linea bg-white shadow-sm">
+      <button type="button" className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-papel/55 sm:px-5" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma-claro text-casma-oscuro">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-tinta">{title}</span>
+          {subtitle && <span className="mt-0.5 block truncate text-xs text-tenue">{subtitle}</span>}
+        </span>
+        <ChevronDown className={cx("size-5 shrink-0 text-tenue transition-transform", open && "rotate-180")} />
+      </button>
+      {open && <div className="border-t border-linea p-4 sm:p-5">{children}</div>}
+    </section>
+  );
+}
+
+function SummaryCard({ icon, label, value, helper }: { icon: ReactNode; label: string; value: string; helper?: string }) {
+  return (
+    <div className="rounded-2xl border border-linea bg-papel/35 p-4">
+      <div className="flex items-center gap-2 text-casma-oscuro">{icon}<p className="text-xs font-bold uppercase tracking-[0.06em]">{label}</p></div>
+      <p className="mt-2 break-words font-bold text-tinta">{value}</p>
+      {helper && <p className="mt-1 text-xs leading-5 text-tenue">{helper}</p>}
+    </div>
+  );
+}
+
+function InfoCard({ label, value, icon }: { label: string; value?: string | null; icon?: ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-linea bg-papel/35 p-4">
+      <div className="flex items-center gap-2 text-xs font-semibold text-tenue">{icon}{label}</div>
+      <p className="mt-1 break-words font-bold text-tinta">{value || "–"}</p>
+    </div>
+  );
+}
+
+const AiBlock = ({ title, items }: { title: string; items?: string[] }) => (
+  <div className="rounded-xl bg-white/10 p-3">
+    <p className="text-sm font-bold">{title}</p>
+    {items && items.length > 0 && <ul className="mt-1 list-disc pl-5 text-xs leading-5 text-white/75">{items.map((r) => <li key={r}>{r}</li>)}</ul>}
+  </div>
+);
 
 const AUDIT_ACTION_LABEL: Record<string, string> = {
   "ticket.created": "Ticket registrado",
@@ -498,9 +470,7 @@ function auditEventText(event: TicketAuditEvent): string {
     const previous = typeof event.details.previous_priority === "string" ? event.details.previous_priority : null;
     const applied = typeof event.details.applied_priority === "string" ? event.details.applied_priority : null;
     const score = typeof event.details.ai_score === "number" ? Math.round(event.details.ai_score * 100) : null;
-    if (previous && applied) {
-      return `El técnico aceptó la recomendación IA: ${previous} → ${applied}${score != null ? ` (puntaje ${score}%)` : ""}.`;
-    }
+    if (previous && applied) return `El técnico aceptó la recomendación IA: ${previous} → ${applied}${score != null ? ` (puntaje ${score}%)` : ""}.`;
     return "El técnico aceptó la recomendación de prioridad propuesta por la IA.";
   }
   if (event.action === "ticket.classification_updated") {
@@ -509,28 +479,8 @@ function auditEventText(event: TicketAuditEvent): string {
     const changes = [category && `categoría ${category}`, priority && `prioridad ${priority}`].filter(Boolean).join(", ");
     return changes ? `${base}: ${changes}.` : base;
   }
-  if (event.action === "ticket.note_added") {
-    return event.details.visible_to_office ? "Se registró una nota visible para la oficina." : "Se registró una nota interna.";
-  }
-  if (event.action === "ticket.resolved" && typeof event.details.resolution_type === "string") {
-    return `${base}: ${event.details.resolution_type.replaceAll("_", " ").toLowerCase()}.`;
-  }
-  if (event.action === "ticket.waiting" && typeof event.details.wait_reason === "string") {
-    return `${base}: ${event.details.wait_reason.replaceAll("_", " ").toLowerCase()}.`;
-  }
+  if (event.action === "ticket.note_added") return event.details.visible_to_office ? "Se registró una nota visible para la oficina." : "Se registró una nota interna.";
+  if (event.action === "ticket.resolved" && typeof event.details.resolution_type === "string") return `${base}: ${event.details.resolution_type.replaceAll("_", " ").toLowerCase()}.`;
+  if (event.action === "ticket.waiting" && typeof event.details.wait_reason === "string") return `${base}: ${event.details.wait_reason.replaceAll("_", " ").toLowerCase()}.`;
   return base;
 }
-
-const InfoCard = ({ label, value }: { label: string; value?: string | null }) => (
-  <div className="min-w-0 rounded-2xl border border-linea bg-papel/45 p-4">
-    <dt className="text-xs font-semibold text-tenue">{label}</dt>
-    <dd className="mt-1 break-words font-bold text-tinta">{value || "–"}</dd>
-  </div>
-);
-
-const AiBlock = ({ title, items }: { title: string; items?: string[] }) => (
-  <div>
-    <p className="text-sm font-bold">{title}</p>
-    {items && items.length > 0 && <ul className="list-disc pl-5 text-xs text-white/75">{items.map((r) => <li key={r}>{r}</li>)}</ul>}
-  </div>
-);
