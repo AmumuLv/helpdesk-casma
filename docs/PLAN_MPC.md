@@ -5,9 +5,9 @@ Este archivo es el registro de avance: se actualiza al cerrar cada tarea.
 
 ## Rama y base
 
-- Rama de trabajo: `etapa-1-estabilizacion`
-- Commit base: `1207114` (`main`, "Cambio del fronted")
-- Cambios de la etapa 1 quedan en esta rama para revisión. No se publica ni se integra a `main` sin encargo posterior.
+- Rama de trabajo: `main` (la etapa 1 se desarrolló en `etapa-1-estabilizacion` y se integró por fast-forward).
+- Commit base: `1207114` ("Cambio del fronted"). Commit de la etapa 1: `2043200`.
+- `main` local y remoto están sincronizados en `2043200`. La rama `etapa-1-estabilizacion` se conserva en el remoto como referencia.
 
 ## Etapa activa
 
@@ -66,7 +66,7 @@ Nota de entorno: el `backend/.venv` del repositorio usa Python 3.14 y no puede i
 ## Dependencias y límites del entorno
 
 - MongoDB local en `127.0.0.1:27017` disponible; las pruebas crean y eliminan su propia base en esa instancia.
-- Docker tiene un stack activo (`helpdesk_backend`, `helpdesk_frontend`, `helpdesk_mongo` en el puerto 27018) que no se usó para validar: no refleja estos cambios hasta reconstruir la imagen.
+- Docker: `docker compose up -d --build backend frontend` reconstruye y recrea los dos servicios desde el código actual; Mongo queda intacto. Verificado el 2026-10-01 con `GET /api/health` = `{"status":"ok","ai_ready":true}` y frontend en 200.
 - El CI del repositorio solo ejecuta el frontend (Node 22). No hay workflow de backend; las comprobaciones de Python son locales.
 
 ## Próxima tarea
