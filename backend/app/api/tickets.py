@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -13,7 +13,7 @@ from app.api.deps import OfficePrincipal, StaffPrincipal, parse_id, require_admi
 from app.core.config import get_settings
 from app.core.timeutil import aware, utcnow
 from app.models import AuditLog, Equipment, Office, StaffUser, Ticket
-from app.models.enums import QuickIssue, TicketCategory, TicketChannel, TicketPriority, TicketStatus
+from app.models.enums import TicketCategory, TicketPriority, TicketStatus
 from app.models.ticket import AIAnalysis, ResolutionType
 from app.schemas.admin import StaffOut
 from app.schemas.common import Message, Page
@@ -234,52 +234,21 @@ async def list_tickets(
     return Page[TicketOut](items=[ticket_out(t) for t in items], total=total, page=page, page_size=page_size)
 
 
-@router.post("", response_model=TicketOut, status_code=201)
-async def create_by_staff(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    office_id: str = Form(...),
-    description: str = Form(..., min_length=3, max_length=2000),
-    subject: str | None = Form(None, max_length=160),
-    quick_issue: QuickIssue | None = Form(None),
-    equipment_id: str | None = Form(None),
-    reporter_name: str | None = Form(None, max_length=80),
-    contact_phone: str | None = Form(None, max_length=20),
-    category: TicketCategory | None = Form(None),
-    priority: TicketPriority | None = Form(None),
-    hierarchy_level: Literal[
-        "PERSONAL",
-        "UNIDAD_ORGANIZACION",
-        "SUBGERENCIA",
-        "GERENCIA",
-        "GERENCIA_MUNICIPAL",
-        "ALCALDIA",
-    ] = Form("PERSONAL"),
-    technician_id: str | None = Form(None),
-    photo: UploadFile | None = File(None),
-    user: StaffUser = Depends(require_staff),
-):
-    if replayed := await _replayed_ticket(request):
-        return ticket_out(replayed)
-    office = await _office(office_id)
-    equipment = await _equipment_for(office, equipment_id)
-    ticket, duplicated = await ticket_service.create_ticket(ticket_service.NewTicket(
-        office=office, channel=TicketChannel.TELEFONO, description=description, quick_issue=quick_issue, subject=subject,
-        equipment=equipment, reporter_name=reporter_name, contact_phone=contact_phone,
-        photo=photo if photo and photo.filename else None, staff=user, category=category, priority=priority,
-        hierarchy_level=hierarchy_level,
+@router.post("/triage-preview", response_model=AIAnalysis)
+async def triage_preview(body: TriagePreviewIn, _: StaffUser = Depends(require_staff)):
+    office = await _office(body.office_id)
+    equipment = await _equipment_for(office, body.equipment_id)
+    return await get_engine().analyze(TriageRequest(
+        subject=body.subject or "", description=body.description, quick_issue=body.quick_issue,
+        office=office, equipment=equipment,
     ))
-    if technician_id and (tid := parse_id(technician_id)):
-        ticket = await ticket_service.assign(ticket, user, tid)
-    if not duplicated:
-        background_tasks.add_task(get_engine().analyze_ticket_background, str(ticket.id))
-    await audit.record(
-        request, "staff", "ticket.created",
-        actor_id=str(user.id), actor_name=user.full_name,
-        target_type="ticket", target_id=str(ticket.id),
-        **audit.offline_request_details(request),
-    )
-    return ticket_out(ticket)
+
+
+# El registro de incidencias por parte de TI tiene un único contrato en
+# POST /api/tickets, implementado en app.api.staff_ticket_entry.create_assisted_ticket
+# (solicitante registrado o ingreso manual, canal, equipo opcional y trazabilidad).
+# Este módulo conserva el resto de operaciones sobre incidencias; no declara otra
+# declaración POST "" para evitar rutas duplicadas con esquemas incompatibles.
 
 
 @router.get("/{ticket_id}", response_model=TicketOut)
@@ -378,10 +347,12 @@ async def add_note(request: Request, ticket_id: str, data: NoteIn, user: StaffUs
 
 
 @router.post("/{ticket_id}/resolve", response_model=TicketOut)
-async def resolve_ticket(request: Request, ticket_id: str, data: ResolveIn, background_tasks: BackgroundTasks, user: StaffUser = Depends(require_staff)):
+async def resolve_ticket(request: Request, ticket_id: str, data: ResolveIn, user: StaffUser = Depends(require_staff)):
     t = await _get(ticket_id)
+    # El reentrenamiento por resolución ya lo agenda ticket_service.resolve
+    # (services/tickets._maybe_retrain) según el umbral configurado, así que aquí
+    # no se fuerza un entrenamiento en cada cierre.
     t = await ticket_service.resolve(t, user, data.notes, data.tipo_resolucion)
-    background_tasks.add_task(get_engine().retrain)
     await audit.record(request, "staff", "ticket.resolved", actor_id=str(user.id), actor_name=user.full_name,
                        target_type="ticket", target_id=str(t.id), resolution_type=data.tipo_resolucion.value)
     return ticket_out(t)
@@ -397,17 +368,20 @@ async def reopen_ticket(request: Request, ticket_id: str, user: StaffUser = Depe
 
 
 @router.post("/{ticket_id}/reanalyze", response_model=TicketOut)
-async def reanalyze_ticket(request: Request, ticket_id: str, background_tasks: BackgroundTasks, user: StaffUser = Depends(require_staff)):
+async def reanalyze_ticket(request: Request, ticket_id: str, user: StaffUser = Depends(require_staff)):
     t = await _get(ticket_id)
-    analysis = get_engine().analyze_ticket(t)
-    await t.set({"ai": analysis})
+    await get_engine().analyze_ticket_background(str(t.id))
+    t = await _get(ticket_id)
+    analysis = t.ai
     await audit.record(request, "staff", "ticket.ai.reanalyzed", actor_id=str(user.id), actor_name=user.full_name,
-                       target_type="ticket", target_id=str(t.id), model_version=analysis.model_version)
-    background_tasks.add_task(get_engine().retrain)
+                       target_type="ticket", target_id=str(t.id),
+                       model_version=analysis.model_version if analysis else None)
     return ticket_out(t)
 
 
-@router.get("/{ticket_id}/attachment/{attachment_id}")
+# La URL que emite app.services.serializers para los adjuntos de la incidencia es
+# /api/tickets/{ticket_id}/attachments/{attachment_id}; la ruta debe coincidir con ella.
+@router.get("/{ticket_id}/attachments/{attachment_id}")
 async def ticket_attachment(ticket_id: str, attachment_id: str, principal: StaffPrincipal | OfficePrincipal = Depends(resolve_principal)):
     t = await _get(ticket_id)
     if isinstance(principal, OfficePrincipal) and t.office_id != principal.office.id:
@@ -415,7 +389,7 @@ async def ticket_attachment(ticket_id: str, attachment_id: str, principal: Staff
     attachment = next((a for a in t.attachments if a.id == attachment_id), None)
     if not attachment:
         raise HTTPException(status_code=404, detail="Adjunto no encontrado.")
-    path = attachment_path(attachment.stored_name)
+    path = attachment_path(attachment)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
-    return FileResponse(path, media_type=attachment.content_type, filename=attachment.original_name)
+    return FileResponse(path, media_type=attachment.content_type, filename=f"{attachment.id}.jpg")

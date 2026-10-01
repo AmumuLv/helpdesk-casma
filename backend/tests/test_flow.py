@@ -8,7 +8,6 @@ from app.core.security import hash_password
 from app.models import StaffUser
 from app.models.enums import StaffRole, TicketCategory
 from app.services.office_access import set_office_password
-from tests.conftest import HEADERS
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 ADMIN_PW = "Soporte#Casma-2026x"
@@ -46,8 +45,8 @@ async def test_full_flow(client):
                                                    "location": "Piso 2", "head_name": "José Ramírez"})
     assert r.status_code == 201, r.text
     office = r.json()
-    r = await client.post("/equipment", json={"patrimonial_code": "740880370001", "type": "PC", "brand": "HP", "model": "ProDesk 400 G6",
-                                              "ip_address": "10.10.2.45", "office_id": office["id"]})
+    r = await client.post("/equipment", json={"patrimonial_code": "740880370001", "type": "CPU", "brand": "HP", "model": "ProDesk 400 G6",
+                                              "ip_address": "10.10.2.45", "office_id": office["id"], "responsible_type": "OFICINA"})
     assert r.status_code == 201, r.text
     equipment = r.json()
 
