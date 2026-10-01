@@ -1,18 +1,45 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Bell, BrainCircuit, Building2, CheckCheck, ClipboardList, CloudUpload, Headset, Inbox, KeyRound, LogOut, Menu, MonitorSmartphone, Monitor, Plus, ScrollText, Search, Settings, Trash2, UserCheck, UserRound, Users, WifiOff, X, type LucideIcon } from "lucide-react";
+import {
+  Bell, BrainCircuit, Building2, CheckCheck, ChevronsLeft, ChevronsRight, ClipboardList, Headset, KeyRound,
+  LogOut, Menu, Monitor, MonitorSmartphone, Plus, Radar, ScrollText, Search, Settings, ShieldCheck, Trash2,
+  UserRound, Users, X,
+  type LucideIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useToast } from "../../components/Toasts";
-import { cx, Input } from "../../components/ui";
+import { Input, cx } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useLiveEvents, useLogout, useMe, type LiveEvent } from "../../lib/session";
 import type { Page, Ticket } from "../../lib/types";
 import { useDevices } from "./hooks";
 
-type NavItem = { to: string; label: string; icon: LucideIcon; admin?: boolean; end?: boolean; section: "Operación" | "Administración" };
+/* ------------------------------------------------------------- Navegación */
+
+type NavItem = { to: string; label: string; icon: LucideIcon; admin?: boolean; end?: boolean; group: NavGroup };
+type NavGroup = "Mesa de trabajo" | "Inventario" | "Administración";
+
+const NAV: NavItem[] = [
+  { to: "/soporte", label: "Incidencias", icon: ClipboardList, end: true, group: "Mesa de trabajo" },
+  { to: "/soporte/equipos", label: "Equipos", icon: Monitor, group: "Inventario" },
+  { to: "/soporte/ia", label: "Análisis IA", icon: BrainCircuit, group: "Mesa de trabajo" },
+  { to: "/soporte/espacios", label: "Espacios", icon: Building2, group: "Inventario" },
+  { to: "/soporte/dispositivos", label: "Dispositivos", icon: MonitorSmartphone, admin: true, group: "Administración" },
+  { to: "/soporte/personal", label: "Personal TI", icon: Users, admin: true, group: "Administración" },
+  { to: "/soporte/auditoria", label: "Auditoría", icon: ScrollText, admin: true, group: "Administración" },
+];
+
+const GROUPS: NavGroup[] = ["Mesa de trabajo", "Inventario", "Administración"];
+
+/* Preferencia de la barra lateral recordada entre sesiones. */
+const COLLAPSE_KEY = "helpdesk_sidebar_collapsed";
+
+/* -------------------------------------------------------- Notificaciones */
+
 type NotificationTone = "info" | "danger";
 type NotificationKind = "new" | "assigned" | "update";
 type NotificationView = "activity" | "assigned";
+
 type PanelNotification = {
   id: string;
   title: string;
@@ -22,38 +49,23 @@ type PanelNotification = {
   createdAt: number;
   read: boolean;
   target?: string;
-  ticketId?: string;
   dedupeKey?: string;
 };
 
-const NAV: NavItem[] = [
-  { to: "/soporte", label: "Incidencias", icon: ClipboardList, end: true, section: "Operación" },
-  { to: "/soporte/mis-incidencias", label: "Mis incidencias", icon: UserCheck, section: "Operación" },
-  { to: "/soporte/equipos", label: "Equipos", icon: Monitor, section: "Operación" },
-  { to: "/soporte/ia", label: "Análisis IA", icon: BrainCircuit, section: "Operación" },
-  { to: "/soporte/dispositivos", label: "Dispositivos", icon: MonitorSmartphone, admin: true, section: "Administración" },
-  { to: "/soporte/oficinas", label: "Oficinas", icon: Building2, admin: true, section: "Administración" },
-  { to: "/soporte/organizacion", label: "Organización", icon: Users, section: "Administración" },
-  { to: "/soporte/personal", label: "Personal TI", icon: Users, admin: true, section: "Administración" },
-  { to: "/soporte/auditoria", label: "Auditoría", icon: ScrollText, admin: true, section: "Administración" },
-];
-
 const MAX_NOTIFICATIONS = 30;
-const NOTIFICATION_STORAGE_PREFIX = "helpdesk_staff_notifications_";
-const NOTIFICATION_DEDUPE_MS = 10 * 60_000;
+const STORAGE_PREFIX = "helpdesk_staff_notifications_";
+const DEDUPE_MS = 10 * 60_000;
 
 const readSetting = (key: string, fallback = true) => {
   const value = localStorage.getItem(key);
-  if (value === null) return fallback;
-  return value !== "false";
+  return value === null ? fallback : value !== "false";
 };
 
-const readStoredNotifications = (staffId: string): PanelNotification[] => {
+function readStored(staffId: string): PanelNotification[] {
   try {
-    const raw = localStorage.getItem(`${NOTIFICATION_STORAGE_PREFIX}${staffId}`);
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}${staffId}`);
     const parsed = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return [];
-
     return parsed
       .filter((item) => item && typeof item.id === "string" && typeof item.title === "string" && typeof item.createdAt === "number")
       .filter((item) => item.audience !== "system" && item.audience !== "pending")
@@ -66,18 +78,16 @@ const readStoredNotifications = (staffId: string): PanelNotification[] => {
         createdAt: item.createdAt,
         read: item.read === true,
         target: typeof item.target === "string" ? item.target : undefined,
-        ticketId: typeof item.ticketId === "string" ? item.ticketId : undefined,
         dedupeKey: typeof item.dedupeKey === "string" ? item.dedupeKey : undefined,
       }))
       .slice(0, MAX_NOTIFICATIONS);
   } catch {
     return [];
   }
-};
+}
 
 function notificationTime(timestamp: number) {
-  const diff = Math.max(0, Date.now() - timestamp);
-  const minutes = Math.floor(diff / 60_000);
+  const minutes = Math.floor(Math.max(0, Date.now() - timestamp) / 60_000);
   if (minutes < 1) return "Ahora";
   if (minutes < 60) return `Hace ${minutes} min`;
   const hours = Math.floor(minutes / 60);
@@ -85,21 +95,22 @@ function notificationTime(timestamp: number) {
   return new Date(timestamp).toLocaleDateString("es-PE", { day: "2-digit", month: "short" }).replace(".", "");
 }
 
-function notificationLabel(kind: NotificationKind) {
-  if (kind === "assigned") return "Asignada a ti";
-  if (kind === "update") return "Seguimiento";
-  return "Nueva";
-}
+const KIND_LABEL: Record<NotificationKind, string> = { new: "Nueva", assigned: "Asignada a ti", update: "Seguimiento" };
+
+/* ---------------------------------------------------------------- Layout */
 
 export function StaffLayout() {
   const { data: me } = useMe();
   const isAdmin = me?.staff?.role === "ADMIN";
+  const staffId = me?.staff?.id;
+
   const pendingDevices = useDevices("PENDIENTE", isAdmin);
   const pendingDeviceCount = isAdmin ? pendingDevices.data?.length ?? 0 : 0;
-  const assignedQuery = useQuery<Page<Ticket>>({
+
+  const assigned = useQuery<Page<Ticket>>({
     queryKey: ["tickets", "notification-panel", "assigned-to-me"],
     queryFn: () => api<Page<Ticket>>("/tickets?active=true&assigned=me&page=1&page_size=6"),
-    enabled: !!me?.staff,
+    enabled: !!staffId,
     staleTime: 15_000,
   });
 
@@ -111,156 +122,124 @@ export function StaffLayout() {
 
   const [online, setOnline] = useState(() => navigator.onLine);
   const [offlinePending, setOfflinePending] = useState(0);
-  const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(() => {
-    const value = localStorage.getItem("helpdesk_offline_cached_at");
-    const parsed = value ? Number(value) : 0;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [headerSearch, setHeaderSearch] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationView, setNotificationView] = useState<NotificationView>("activity");
-  const [panelNotifications, setPanelNotifications] = useState<PanelNotification[]>([]);
-  const [notificationsHydrated, setNotificationsHydrated] = useState(false);
+  const [items, setItems] = useState<PanelNotification[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => readSetting("helpdesk_notifications_enabled"));
   const [showConnection, setShowConnection] = useState(() => readSetting("helpdesk_show_connection"));
 
-  useEffect(() => {
-    if (!me?.staff?.id) return;
-    setPanelNotifications(readStoredNotifications(me.staff.id));
-    setNotificationsHydrated(true);
-  }, [me?.staff?.id]);
+  /* --- Barra lateral: plegada a solo iconos, con preferencia recordada --- */
+  const [collapsed, setCollapsed] = useState(() => readSetting(COLLAPSE_KEY));
+  const toggleCollapsed = useCallback(() => setCollapsed((v) => !v), []);
 
   useEffect(() => {
-    if (!notificationsHydrated || !me?.staff?.id) return;
-    localStorage.setItem(`${NOTIFICATION_STORAGE_PREFIX}${me.staff.id}`, JSON.stringify(panelNotifications.slice(0, MAX_NOTIFICATIONS)));
-  }, [panelNotifications, notificationsHydrated, me?.staff?.id]);
+    localStorage.setItem(COLLAPSE_KEY, String(collapsed));
+  }, [collapsed]);
+
+  /* --- Notificaciones: persistencia --- */
+  useEffect(() => {
+    if (!staffId) return;
+    setItems(readStored(staffId));
+    setHydrated(true);
+  }, [staffId]);
 
   useEffect(() => {
-    if (notificationsOpen && notificationView === "assigned") void assignedQuery.refetch();
+    if (!hydrated || !staffId) return;
+    localStorage.setItem(`${STORAGE_PREFIX}${staffId}`, JSON.stringify(items.slice(0, MAX_NOTIFICATIONS)));
+  }, [items, hydrated, staffId]);
+
+  useEffect(() => {
+    if (notificationsOpen && notificationView === "assigned") void assigned.refetch();
   }, [notificationsOpen, notificationView]);
 
-  const addPanelNotification = useCallback((notification: Omit<PanelNotification, "id" | "createdAt" | "read">) => {
+  const addNotification = useCallback((notification: Omit<PanelNotification, "id" | "createdAt" | "read">) => {
     const now = Date.now();
-    const item: PanelNotification = {
-      ...notification,
-      id: `${now}-${Math.random().toString(36).slice(2)}`,
-      createdAt: now,
-      read: false,
-    };
-    setPanelNotifications((current) => {
+    const item: PanelNotification = { ...notification, id: `${now}-${Math.random().toString(36).slice(2)}`, createdAt: now, read: false };
+    setItems((current) => {
       const duplicate = notification.dedupeKey
-        ? current.find((entry) => entry.dedupeKey === notification.dedupeKey && now - entry.createdAt <= NOTIFICATION_DEDUPE_MS)
+        ? current.find((entry) => entry.dedupeKey === notification.dedupeKey && now - entry.createdAt <= DEDUPE_MS)
         : undefined;
       const rest = duplicate ? current.filter((entry) => entry.id !== duplicate.id) : current;
       return [item, ...rest].slice(0, MAX_NOTIFICATIONS);
     });
   }, []);
 
+  /* --- Eventos en vivo --- */
   const onEvent = useCallback((event: LiveEvent) => {
     if (!notificationsEnabled) return;
-    const staffId = me?.staff?.id;
     const assignedToMe = !!staffId && event.assigned_to_id === staffId;
-    const target = event.ticket_id
-      ? `/soporte?source=notifications&ticket=${encodeURIComponent(event.ticket_id)}`
-      : `/soporte?q=${encodeURIComponent(event.number ?? "")}`;
-    const baseBody = `${event.office ?? "Oficina"}: ${event.subject ?? "Incidencia"}`;
+    const target = event.ticket_id ? `/soporte?ticket=${encodeURIComponent(event.ticket_id)}` : `/soporte?q=${encodeURIComponent(event.number ?? "")}`;
+    const body = `${event.office ?? "Oficina"}: ${event.subject ?? "Incidencia"}`;
+    const notify = assignedToMe || isAdmin;
+
+    const push = (kind: NotificationKind, tone: NotificationTone, title: string, detail?: string, key?: string) => {
+      addNotification({ kind, tone, title, body: detail ?? body, target, dedupeKey: key });
+    };
 
     if (event.type === "ticket.created") {
       const tone: NotificationTone = event.priority === "ALTA" ? "danger" : "info";
-      toast({ tone, title: `Nueva incidencia ${event.number ?? ""}`, body: baseBody });
-      addPanelNotification({ tone, kind: "new", title: `Nueva incidencia ${event.number ?? ""}`, body: baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:created` });
+      toast({ tone, title: `Nueva incidencia ${event.number ?? ""}`, body });
+      push("new", tone, `Nueva incidencia ${event.number ?? ""}`, body, `${event.ticket_id}:created`);
     }
-
     if (event.type === "ticket.assigned" || event.type === "ticket.reassigned") {
       if (assignedToMe) {
-        const title = event.type === "ticket.reassigned" ? `Reasignada a ti ${event.number ?? ""}` : `Asignada a ti ${event.number ?? ""}`;
-        toast({ tone: "info", title, body: baseBody });
-        addPanelNotification({ tone: "info", kind: "assigned", title, body: baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:assigned:${staffId}` });
+        const title = `${event.type === "ticket.reassigned" ? "Reasignada a ti" : "Asignada a ti"} ${event.number ?? ""}`;
+        toast({ tone: "info", title, body });
+        push("assigned", "info", title, body, `${event.ticket_id}:assigned:${staffId}`);
       } else if (isAdmin) {
-        addPanelNotification({ tone: "info", kind: "update", title: `Responsable actualizado · ${event.number ?? ""}`, body: event.assigned_to_name ? `${event.assigned_to_name} atenderá el caso.` : baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:assignment` });
+        push("update", "info", `Responsable actualizado · ${event.number ?? ""}`, event.assigned_to_name ? `${event.assigned_to_name} atenderá el caso.` : body, `${event.ticket_id}:assignment`);
       }
-      void assignedQuery.refetch();
+      void assigned.refetch();
     }
-
     if (event.type === "ticket.unassigned") {
-      if (isAdmin) addPanelNotification({ tone: "danger", kind: "update", title: `Incidencia sin responsable · ${event.number ?? ""}`, body: baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:assignment` });
-      void assignedQuery.refetch();
+      if (isAdmin) push("update", "danger", `Incidencia sin responsable · ${event.number ?? ""}`, body, `${event.ticket_id}:assignment`);
+      void assigned.refetch();
     }
-
-    if (event.type === "ticket.note" && (assignedToMe || isAdmin)) {
-      const title = `Nueva nota · ${event.number ?? ""}`;
-      addPanelNotification({ tone: "info", kind: "update", title, body: event.message || baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:note` });
-    }
-
-    if (event.type === "ticket.waiting") {
-      const title = `En espera · ${event.number ?? ""}`;
-      if (assignedToMe || isAdmin) addPanelNotification({ tone: "info", kind: "update", title, body: event.wait_reason_label || event.message || baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:waiting` });
-    }
-
-    if (event.type === "ticket.resumed") {
-      if (assignedToMe || isAdmin) addPanelNotification({ tone: "info", kind: "update", title: `Atención reanudada · ${event.number ?? ""}`, body: baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:waiting` });
-    }
-
-    if (event.type === "ticket.resolved") {
-      addPanelNotification({ tone: "info", kind: "update", title: `Incidencia cerrada · ${event.number ?? ""}`, body: baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:resolved` });
-      void assignedQuery.refetch();
-    }
-
+    if (event.type === "ticket.note" && notify) push("update", "info", `Nueva nota · ${event.number ?? ""}`, event.message || body, `${event.ticket_id}:note`);
+    if (event.type === "ticket.waiting" && notify) push("update", "info", `En espera · ${event.number ?? ""}`, event.wait_reason_label || event.message || body, `${event.ticket_id}:waiting`);
+    if (event.type === "ticket.resumed" && notify) push("update", "info", `Atención reanudada · ${event.number ?? ""}`, body, `${event.ticket_id}:waiting`);
+    if (event.type === "ticket.resolved") { push("update", "info", `Incidencia cerrada · ${event.number ?? ""}`, body, `${event.ticket_id}:resolved`); void assigned.refetch(); }
     if (event.type === "ticket.reopened") {
-      const title = `Incidencia reabierta · ${event.number ?? ""}`;
-      toast({ tone: "info", title, body: baseBody });
-      addPanelNotification({ tone: "info", kind: "update", title, body: baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:reopened` });
-      void assignedQuery.refetch();
+      toast({ tone: "info", title: `Incidencia reabierta · ${event.number ?? ""}`, body });
+      push("update", "info", `Incidencia reabierta · ${event.number ?? ""}`, body, `${event.ticket_id}:reopened`);
+      void assigned.refetch();
     }
-
-    if (event.type === "ticket.followup_due" && (assignedToMe || isAdmin)) {
+    if (event.type === "ticket.followup_due" && notify) {
       const title = `${event.follow_up_label ?? "Revisar seguimiento"} · ${event.number ?? ""}`;
-      toast({ tone: "danger", title, body: event.message || baseBody });
-      addPanelNotification({ tone: "danger", kind: "update", title, body: event.message || baseBody, target, ticketId: event.ticket_id, dedupeKey: `${event.ticket_id}:followup:${event.follow_up_state ?? "review"}` });
+      toast({ tone: "danger", title, body: event.message || body });
+      push("update", "danger", title, event.message || body, `${event.ticket_id}:followup:${event.follow_up_state ?? "review"}`);
     }
+    if (event.type === "device.pending" && isAdmin) toast({ tone: "info", title: "Equipo esperando autorización", body: `${event.office} con el código ${event.pair_code}` });
+    if (event.type === "alert.created") toast({ tone: "danger", title: event.title ?? "Alerta", body: event.message });
+  }, [toast, isAdmin, staffId, notificationsEnabled, addNotification, assigned]);
 
-    if (event.type === "device.pending" && isAdmin) {
-      toast({ tone: "info", title: "Equipo esperando autorización", body: `${event.office} con el código ${event.pair_code}` });
-    }
-
-    if (event.type === "alert.created") {
-      toast({ tone: "danger", title: event.title ?? "Alerta", body: event.message });
-    }
-  }, [toast, isAdmin, me?.staff?.id, notificationsEnabled, addPanelNotification, assignedQuery]);
   useLiveEvents(true, onEvent);
 
+  /* --- Conectividad y cola offline --- */
   useEffect(() => {
-    const onOnline = () => setOnline(true);
-    const onOffline = () => setOnline(false);
     const onSync = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        type?: string;
-        pending?: number;
-        scope?: string;
-        cachedAt?: number;
-        payload?: { number?: string };
-      }>).detail;
-
+      const detail = (event as CustomEvent<{ type?: string; pending?: number; scope?: string; payload?: { number?: string } }>).detail;
       if (detail?.type === "OFFLINE_QUEUE_CHANGED") setOfflinePending(Number(detail.pending ?? 0));
-      if ((detail?.type === "OFFLINE_READ_USED" || detail?.type === "OFFLINE_READ_CACHE_READY") && detail.cachedAt) setOfflineCachedAt(Number(detail.cachedAt));
-      if (detail?.type === "OFFLINE_READ_CACHE_CLEARED") setOfflineCachedAt(null);
-      if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_SENT") toast({ tone: "success", title: "Cambio sincronizado", body: detail.payload?.number ? `Se actualizó ${detail.payload.number}.` : "La acción pendiente se envió al servidor." });
-      if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_REJECTED") toast({ tone: "danger", title: "No se pudo sincronizar un cambio", body: "El servidor rechazó una acción guardada sin conexión. Revise el ticket." });
-      if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_AUTH_REQUIRED") toast({ tone: "danger", title: "Sincronización detenida", body: "Debe volver a iniciar sesión para enviar los cambios pendientes." });
-      if (detail?.scope === "staff" && detail.type === "OFFLINE_REQUEST_USER_MISMATCH") toast({ tone: "danger", title: "Cambios pendientes de otro técnico", body: "Estas acciones solo se sincronizarán cuando vuelva a iniciar sesión el técnico que las realizó." });
+      if (detail?.scope !== "staff") return;
+      if (detail.type === "OFFLINE_REQUEST_SENT") toast({ tone: "success", title: "Cambio sincronizado", body: detail.payload?.number ? `Se actualizó ${detail.payload.number}.` : "La acción pendiente se envió al servidor." });
+      if (detail.type === "OFFLINE_REQUEST_REJECTED") toast({ tone: "danger", title: "No se pudo sincronizar un cambio", body: "El servidor rechazó una acción guardada sin conexión. Revise el ticket." });
+      if (detail.type === "OFFLINE_REQUEST_AUTH_REQUIRED") toast({ tone: "danger", title: "Sincronización detenida", body: "Debe volver a iniciar sesión para enviar los cambios pendientes." });
     };
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
 
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
     window.addEventListener("helpdesk-offline-sync", onSync);
     navigator.serviceWorker?.controller?.postMessage({ type: "GET_OFFLINE_QUEUE_COUNT" });
     if (navigator.onLine) navigator.serviceWorker?.controller?.postMessage({ type: "WARM_OFFLINE_DATA" });
-
     return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
       window.removeEventListener("helpdesk-offline-sync", onSync);
     };
   }, [toast]);
@@ -293,96 +272,275 @@ export function StaffLayout() {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (location.pathname === "/soporte") setHeaderSearch(new URLSearchParams(location.search).get("q") ?? "");
+    if (location.pathname === "/soporte") setSearch(new URLSearchParams(location.search).get("q") ?? "");
   }, [location.pathname, location.search]);
 
+  /* --- Derivados --- */
   const initials = me?.staff?.full_name ? me.staff.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() : "TI";
-  const unreadCount = panelNotifications.filter((notification) => !notification.read).length;
-  const readCount = panelNotifications.length - unreadCount;
-  const assignedTickets = assignedQuery.data?.items ?? [];
-  const assignedCount = assignedQuery.data?.total ?? 0;
-  const notificationBadge = Math.min(99, unreadCount);
-  const openNewTicket = () => navigate("/soporte?new=1");
-  const groups = ["Operación", "Administración"] as const;
+  const unread = items.filter((item) => !item.read).length;
+  const read = items.length - unread;
+  const assignedCount = assigned.data?.total ?? 0;
+
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const term = search.trim();
+    navigate(term ? `/soporte?q=${encodeURIComponent(term)}` : "/soporte");
+  };
 
   const closeSession = async () => {
     await logout();
     navigate("/soporte/ingresar");
   };
 
-  const submitHeaderSearch = (event: FormEvent) => {
-    event.preventDefault();
-    const term = headerSearch.trim();
-    navigate(term ? `/soporte?q=${encodeURIComponent(term)}` : "/soporte");
+  const goTo = (target: string) => { setNotificationsOpen(false); navigate(target); };
+  const openNotification = (item: PanelNotification) => {
+    setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, read: true } : entry)));
+    if (item.target) goTo(item.target);
   };
-
-  const goFromNotifications = (target: string) => { setNotificationsOpen(false); navigate(target); };
-  const openPanelNotification = (notification: PanelNotification) => {
-    setPanelNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read: true } : item));
-    if (notification.target) goFromNotifications(notification.target);
-  };
-  const removePanelNotification = (id: string) => setPanelNotifications((current) => current.filter((notification) => notification.id !== id));
-  const markAllRead = () => setPanelNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
-  const removeReadNotifications = () => setPanelNotifications((current) => current.filter((notification) => !notification.read));
 
   return (
     <div className="min-h-dvh bg-papel text-tinta">
-      <div className={cx("fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm transition lg:hidden", sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0")} onClick={() => setSidebarOpen(false)} />
+      <div className={cx("fixed inset-0 z-40 bg-tinta/45 backdrop-blur-[2px] transition lg:hidden", sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0")} onClick={() => setSidebarOpen(false)} />
 
-      <aside className={cx("fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-[#111827] text-white shadow-[12px_0_35px_rgba(2,6,23,0.24)] transition-transform duration-200 lg:w-64 lg:translate-x-0 xl:w-72", sidebarOpen ? "translate-x-0" : "-translate-x-full")}>
-        <div className="flex items-center justify-between px-5 py-5 shadow-[0_12px_26px_-20px_rgba(245,158,11,0.24)]">
-          <div className="flex min-w-0 items-center gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] text-[#111827] shadow-[0_8px_20px_rgba(234,179,8,0.16)]"><Headset className="size-5" aria-hidden /></span><div className="min-w-0"><p className="truncate text-base font-bold tracking-[-0.02em] text-white">Help Desk Municipal</p><p className="mt-0.5 truncate text-xs font-medium text-[#94A3B8]">Municipalidad Provincial de Casma</p></div></div>
-          <button className="grid size-11 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-800 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú"><X className="size-5" /></button>
+      {/* ------------------------------------------------------- Menú lateral */}
+      <aside
+        data-collapsed={collapsed}
+        className={cx(
+          "barra fixed inset-y-0 left-0 z-50 flex flex-col border-r border-barra-linea text-slate-200 transition-[width,transform] duration-200 ease-out lg:translate-x-0",
+          "w-[16.5rem]",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          collapsed ? "lg:w-[4.75rem]" : "lg:w-[16.5rem]",
+        )}
+      >
+        {/* Identidad */}
+        <div className={cx("flex items-center gap-2.5 px-4 py-4", collapsed && "lg:justify-center lg:px-0")}>
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[linear-gradient(135deg,var(--color-vivo),var(--color-casma))] text-white shadow-[var(--glow-vivo)]">
+            <Headset className="size-4.5" aria-hidden />
+          </span>
+          <div className={cx("min-w-0", collapsed && "lg:hidden")}>
+            <p className="truncate text-[0.86rem] font-bold tracking-[-0.015em] text-white">Mesa de Ayuda TI</p>
+            <p className="truncate text-[0.72rem] text-slate-400">Municipalidad de Casma</p>
+          </div>
+          <button className="ml-auto grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/5 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú"><X className="size-4.5" /></button>
         </div>
+        <div className="barra-marca h-0.5 w-full shrink-0" aria-hidden />
 
-        <nav className="flex-1 overflow-y-auto px-3 py-5 xl:px-4" aria-label="Navegación principal">
-          {groups.map((group) => {
-            const items = NAV.filter((item) => item.section === group && (!item.admin || isAdmin));
-            if (!items.length) return null;
-            return <div key={group} className={cx("mb-6", group === "Administración" && "pt-5 shadow-[0_-12px_26px_-22px_rgba(245,158,11,0.18)]")}><p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{group}</p><div className="space-y-1">{items.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => cx("group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150", isActive ? "bg-[#1F2937] pl-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : "text-[#94A3B8] hover:bg-white/[0.05] hover:text-white")}>{({ isActive }) => <>{isActive && <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-[#D97706]" aria-hidden />}<Icon className={cx("size-5 shrink-0 transition-colors", isActive ? "text-[#F59E0B]" : "text-[#94A3B8] group-hover:text-white")} aria-hidden /><span className="min-w-0 flex-1 truncate">{label}</span>{to === "/soporte/dispositivos" && pendingDeviceCount > 0 && <span className="rounded-full bg-[#EAB308] px-2 py-1 text-xs font-bold leading-none text-[#111827]">{pendingDeviceCount}</span>}</>}</NavLink>)}</div></div>;
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-3" aria-label="Navegación principal">
+          {GROUPS.map((group) => {
+            const entries = NAV.filter((item) => item.group === group && (!item.admin || isAdmin));
+            if (!entries.length) return null;
+            return (
+              <div key={group} className="mb-4">
+                <p className={cx("mb-1 px-2.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-slate-500", collapsed && "lg:text-center lg:text-[0.58rem]")}>
+                  {collapsed ? group.split(" ")[0] : group}
+                </p>
+                <div className="space-y-0.5">
+                  {entries.map(({ to, label, icon: Icon, end }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      title={collapsed ? label : undefined}
+                      className={({ isActive }) => cx("nav-item", isActive ? "text-white" : "text-slate-400 hover:text-white", collapsed && "lg:px-0")}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon className={cx("size-4 shrink-0", isActive ? "text-vivo" : "text-slate-500")} aria-hidden />
+                          <span className={cx("min-w-0 flex-1 truncate", collapsed && "lg:hidden")}>{label}</span>
+                          {to === "/soporte/dispositivos" && pendingDeviceCount > 0 && (
+                            <span className={cx("shrink-0 rounded-full bg-amber-400 px-1.5 text-[0.65rem] font-bold leading-5 text-[#0a1226]", collapsed && "lg:absolute lg:right-1.5 lg:top-1 lg:px-1.5 lg:text-[0.6rem]")}>
+                              {pendingDeviceCount}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            );
           })}
         </nav>
 
-        <div className="mt-auto px-4 py-4 shadow-[0_-14px_30px_-22px_rgba(245,158,11,0.24)] xl:px-5">
-          <button type="button" onClick={() => navigate("/soporte/perfil")} className="flex min-h-14 w-full items-center gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-white/[0.05] focus-visible:outline-amber-400" aria-label="Abrir mi perfil"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#EAB308] font-bold text-[#111827] shadow-sm">{initials}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-white">{me?.staff?.full_name ?? "Administrador TI"}</span><span className="mt-0.5 block text-xs font-medium text-[#94A3B8]">{isAdmin ? "Administrador TI" : "Técnico"}</span></span><UserRound className="size-4 shrink-0 text-slate-500" aria-hidden /></button>
-          <button onClick={closeSession} className="mt-4 flex min-h-11 w-full items-center justify-start gap-2 rounded-xl border border-black bg-black px-3.5 py-2.5 text-sm font-semibold text-white transition hover:border-red-900/70 hover:bg-red-950/80 hover:text-white focus-visible:outline-red-400" aria-label="Cerrar sesión"><LogOut className="size-4" aria-hidden /> Cerrar sesión</button>
+        {/* Pies: perfil y salida. En modo rail quedan como botones de icono. */}
+        <div className="border-t border-white/[0.08] p-3">
+          <button
+            type="button"
+            onClick={() => navigate("/soporte/perfil")}
+            title={collapsed ? "Mi perfil" : undefined}
+            className={cx("flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-white/[0.06]", collapsed && "lg:justify-center lg:px-0")}
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[0.72rem] font-bold text-white">{initials}</span>
+            <span className={cx("min-w-0 flex-1", collapsed && "lg:hidden")}>
+              <span className="block truncate text-[0.8rem] font-semibold text-white">{me?.staff?.full_name ?? "Administrador TI"}</span>
+              <span className="block text-[0.7rem] text-slate-400">{isAdmin ? "Administrador" : "Técnico"}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={closeSession}
+            title={collapsed ? "Cerrar sesión" : undefined}
+            className={cx("mt-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[0.8rem] font-semibold text-slate-400 transition hover:bg-red-500/15 hover:text-red-300", collapsed && "lg:justify-center lg:px-0")}
+          >
+            <LogOut className="size-4 shrink-0" aria-hidden /> <span className={cx(collapsed && "lg:hidden")}>Cerrar sesión</span>
+          </button>
         </div>
       </aside>
 
-      <div className="lg:pl-64 xl:pl-72">
-        <header className="sticky top-0 z-30 border-b border-linea bg-white/94 backdrop-blur-md">
-          <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
-            <button className="grid size-11 shrink-0 place-items-center rounded-xl border border-linea bg-white text-tinta shadow-sm hover:border-slate-400 hover:text-slate-900 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"><Menu className="size-5" /></button>
-            <form onSubmit={submitHeaderSearch} role="search" className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-tenue" aria-hidden /><Input value={headerSearch} onChange={(event) => setHeaderSearch(event.target.value)} placeholder="Buscar incidencias, equipos, oficinas o usuarios" aria-label="Buscar en el sistema" className="h-12 bg-[#F3F4F6] pl-11 pr-4 shadow-none hover:border-slate-400 focus:bg-white" /></form>
+      {/* ------------------------------------------------------------- Main */}
+      <div className={cx("transition-[padding] duration-200 ease-out", collapsed ? "lg:pl-[4.75rem]" : "lg:pl-[16.5rem]")}>
+        <header className="sticky top-0 z-30 border-b border-linea bg-white/85 backdrop-blur-md">
+          <div className="mx-auto flex max-w-[1560px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5">
+            <button className="grid size-10 shrink-0 place-items-center rounded-lg border border-linea bg-white text-tinta-2 transition hover:bg-papel-2 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"><Menu className="size-4.5" /></button>
 
-            <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3" ref={utilityRef}>
-              <button onClick={openNewTicket} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[#166534] bg-[#15803D] px-3.5 text-sm font-bold text-white shadow-[0_8px_20px_rgba(21,128,61,0.20)] transition hover:bg-[#166534] sm:px-4" aria-label="Nueva incidencia"><Plus className="size-4" /><span className="hidden sm:inline">Nueva incidencia</span><span className="sm:hidden">Nueva</span></button>
-              {showConnection && <div className="hidden min-h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm md:inline-flex"><span className={cx("mr-2 inline-block size-2 rounded-full", online ? "bg-emerald-500" : "bg-amber-500")} aria-hidden />{online ? "En línea" : "Offline"}</div>}
+            {/* Plegar / desplegar la barra de navegación */}
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Desplegar el menú lateral" : "Plegar el menú lateral"}
+              aria-pressed={collapsed}
+              title={collapsed ? "Desplegar el menú lateral" : "Plegar el menú lateral"}
+              className="hidden size-10 shrink-0 place-items-center rounded-lg border border-linea bg-white text-tenue transition hover:border-casma/40 hover:bg-casma-claro/50 hover:text-casma-oscuro lg:grid"
+            >
+              {collapsed ? <ChevronsRight className="size-4.5" aria-hidden /> : <ChevronsLeft className="size-4.5" aria-hidden />}
+            </button>
 
-              <div className="relative flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-                <button type="button" className={cx("relative grid size-10 place-items-center rounded-lg transition", notificationsOpen ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900")} aria-label="Abrir notificaciones" aria-expanded={notificationsOpen} aria-controls="notifications-menu" title="Notificaciones" onClick={() => { setNotificationsOpen((current) => !current); setSettingsOpen(false); }}><Bell className="size-5" aria-hidden />{notificationBadge > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-amber-500 px-1 text-center text-[11px] font-bold leading-5 text-[#111827] ring-2 ring-white" aria-label={`${notificationBadge} notificaciones sin leer`}>{notificationBadge > 9 ? "9+" : notificationBadge}</span>}</button>
-                <button type="button" className="grid size-10 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900" aria-label="Abrir configuración" aria-expanded={settingsOpen} aria-controls="settings-menu" title="Configuración" onClick={() => { setSettingsOpen((current) => !current); setNotificationsOpen(false); }}><Settings className="size-5" aria-hidden /></button>
+            <form onSubmit={submitSearch} role="search" className="relative min-w-0 flex-1 sm:max-w-md">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-tenue-2" aria-hidden />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar incidencias, equipos, oficinas o personas" aria-label="Buscar en el sistema" className="pl-8" />
+            </form>
 
-                {notificationsOpen && <div id="notifications-menu" className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-[min(27rem,calc(100vw-1rem))] overflow-hidden rounded-[1.4rem] border border-slate-200 bg-white shadow-[0_28px_75px_rgba(15,23,42,0.24)]">
-                  <div className="border-b border-slate-200 bg-white px-4 pb-0 pt-4">
-                    <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-slate-900 text-white shadow-sm"><Bell className="size-4" aria-hidden /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-extrabold tracking-[-0.01em] text-slate-950">Notificaciones</p>{unreadCount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">{unreadCount} nuevas</span>}</div><p className="mt-0.5 text-xs leading-5 text-slate-500">Creación, asignación, seguimiento, espera, cierre y reapertura.</p></div></div><button type="button" className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-900" onClick={() => setNotificationsOpen(false)} aria-label="Cerrar notificaciones"><X className="size-4" /></button></div>
-                    <div className="mt-4 flex gap-5" role="tablist" aria-label="Vista de notificaciones"><button type="button" role="tab" aria-selected={notificationView === "activity"} onClick={() => setNotificationView("activity")} className={cx("relative min-h-10 pb-3 text-sm font-bold transition", notificationView === "activity" ? "text-slate-950" : "text-slate-400 hover:text-slate-700")}>Actividad{notificationView === "activity" && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-amber-500" aria-hidden />}</button><button type="button" role="tab" aria-selected={notificationView === "assigned"} onClick={() => setNotificationView("assigned")} className={cx("relative min-h-10 pb-3 text-sm font-bold transition", notificationView === "assigned" ? "text-slate-950" : "text-slate-400 hover:text-slate-700")}>Asignadas a mí{assignedCount > 0 && <span className="ml-1.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700">{assignedCount}</span>}{notificationView === "assigned" && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-emerald-600" aria-hidden />}</button></div>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5" ref={utilityRef}>
+              <button type="button" onClick={() => navigate("/soporte?new=1")} className="hidden min-h-10 items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,var(--color-vivo),var(--color-casma)_60%,var(--color-casma-oscuro))] px-3 text-[0.83rem] font-semibold text-white shadow-[var(--glow-marca)] transition hover:brightness-110 sm:inline-flex">
+                <Plus className="size-4" aria-hidden /> Nueva incidencia
+              </button>
+              <button type="button" onClick={() => navigate("/soporte?new=1")} className="grid size-10 place-items-center rounded-lg bg-casma text-white shadow-[var(--glow-marca)] transition hover:brightness-110 sm:hidden" aria-label="Nueva incidencia"><Plus className="size-4" /></button>
+
+              {showConnection && (
+                <span className="hidden min-h-10 items-center gap-1.5 rounded-lg border border-linea px-2.5 text-[0.78rem] font-medium text-tenue md:inline-flex">
+                  <span className={cx("size-1.5 rounded-full", online ? "bg-emerald-500" : "bg-amber-500")} aria-hidden />
+                  {online ? "En línea" : "Offline"}
+                </span>
+              )}
+
+              {/* Notificaciones */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setNotificationsOpen((v) => !v); setSettingsOpen(false); }}
+                  className={cx("relative grid size-10 place-items-center rounded-lg border transition", notificationsOpen ? "border-tinta bg-tinta text-white" : "border-linea bg-white text-tenue hover:bg-papel-2 hover:text-tinta")}
+                  aria-label={unread > 0 ? `Notificaciones, ${unread} sin leer` : "Notificaciones"}
+                  aria-expanded={notificationsOpen}
+                  aria-controls="notifications-menu"
+                >
+                  <Bell className="size-4.5" aria-hidden />
+                  {unread > 0 && <span className="absolute -right-1 -top-1 grid min-w-[1.1rem] place-items-center rounded-full bg-amber-500 px-1 text-[0.62rem] font-bold leading-4 text-[#0a1226] ring-2 ring-white">{unread > 9 ? "9+" : unread}</span>}
+                </button>
+
+                {notificationsOpen && (
+                  <div id="notifications-menu" className="popover animate-rise absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(24rem,calc(100vw-1.5rem))]">
+                    <div className="flex items-center justify-between gap-2 border-b border-linea px-3 py-2.5">
+                      <div className="segmented" role="tablist" aria-label="Vista de notificaciones">
+                        <button type="button" role="tab" aria-selected={notificationView === "activity"} onClick={() => setNotificationView("activity")}>Actividad{unread > 0 && <span className="ml-1.5 text-[0.68rem] opacity-70">{unread}</span>}</button>
+                        <button type="button" role="tab" aria-selected={notificationView === "assigned"} onClick={() => setNotificationView("assigned")}>Asignadas a mí{assignedCount > 0 && <span className="ml-1.5 text-[0.68rem] opacity-70">{assignedCount}</span>}</button>
+                      </div>
+                      <div className="notif-bar border-0 bg-transparent p-0">
+                        {unread > 0 && <button type="button" onClick={() => setItems((c) => c.map((i) => ({ ...i, read: true })))} aria-label="Marcar todas como leídas" title="Marcar leídas"><CheckCheck className="size-4" /></button>}
+                        {read > 0 && <button type="button" onClick={() => setItems((c) => c.filter((i) => !i.read))} aria-label="Limpiar leídas" title="Limpiar leídas"><Trash2 className="size-4" /></button>}
+                      </div>
+                    </div>
+
+                    {notificationView === "activity" ? (
+                      <ul className="max-h-[22rem] overflow-y-auto p-1.5">
+                        {items.map((item) => (
+                          <li key={item.id} className="group relative">
+                            <button type="button" onClick={() => openNotification(item)} className={cx("flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 pr-9 text-left transition hover:bg-papel-2", item.read ? "opacity-70" : "bg-casma-claro/45")}>
+                              <span className={cx("mt-0.5 grid size-6 shrink-0 place-items-center rounded-md", item.kind === "assigned" ? "bg-emerald-100 text-emerald-700" : item.tone === "danger" ? "bg-red-100 text-red-700" : item.kind === "update" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700")}>
+                                {item.kind === "assigned" ? <UserRound className="size-3.5" /> : item.kind === "update" ? <CheckCheck className="size-3.5" /> : <ClipboardList className="size-3.5" />}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[0.82rem] font-semibold text-tinta">{item.title}</span>
+                                {item.body && <span className="mt-0.5 line-clamp-2 block text-[0.75rem] leading-4 text-tenue">{item.body}</span>}
+                                <span className="mt-1 block text-[0.68rem] font-medium text-tenue-2">{KIND_LABEL[item.kind]} · {notificationTime(item.createdAt)}</span>
+                              </span>
+                            </button>
+                            <button type="button" onClick={() => setItems((c) => c.filter((n) => n.id !== item.id))} className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-md text-tenue-2 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100" aria-label={`Descartar ${item.title}`}>
+                              <X className="size-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                        {!items.length && (
+                          <li className="px-4 py-10 text-center">
+                            <Bell className="mx-auto size-5 text-tenue-2" aria-hidden />
+                            <p className="mt-2 text-[0.82rem] font-semibold text-tinta">Sin novedades</p>
+                            <p className="mt-0.5 text-[0.75rem] text-tenue">Aquí verá las incidencias nuevas, asignaciones y cierres.</p>
+                          </li>
+                        )}
+                      </ul>
+                    ) : (
+                      <ul className="max-h-[22rem] overflow-y-auto p-1.5">
+                        {(assigned.data?.items ?? []).map((ticket) => (
+                          <li key={ticket.id}>
+                            <button type="button" onClick={() => goTo(`/soporte?ticket=${encodeURIComponent(ticket.id)}`)} className="w-full rounded-lg px-2.5 py-2 text-left transition hover:bg-papel-2">
+                              <span className="block truncate text-[0.82rem] font-semibold text-tinta">{ticket.subject}</span>
+                              <span className="mt-0.5 block truncate text-[0.75rem] text-tenue">{ticket.number} · {ticket.office_name}</span>
+                            </button>
+                          </li>
+                        ))}
+                        {assignedCount === 0 && <li className="px-4 py-10 text-center text-[0.78rem] text-tenue">No tienes incidencias asignadas.</li>}
+                      </ul>
+                    )}
                   </div>
+                )}
+              </div>
 
-                  {notificationView === "activity" ? <><div className="flex items-center justify-end gap-1 border-b border-slate-100 bg-slate-50/60 px-3 py-2">{unreadCount > 0 && <button type="button" onClick={markAllRead} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-slate-500 transition hover:bg-white hover:text-slate-900"><CheckCheck className="size-4" /> Marcar leídas</button>}{readCount > 0 && <button type="button" onClick={removeReadNotifications} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-slate-500 transition hover:bg-white hover:text-red-700"><Trash2 className="size-4" /> Limpiar leídas</button>}</div><div className="max-h-[25rem] overflow-y-auto p-2">{panelNotifications.map((notification) => <div key={notification.id} className={cx("group relative mb-1 overflow-hidden rounded-2xl border transition", notification.read ? "border-transparent bg-white hover:border-slate-100 hover:bg-slate-50" : "border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.04)]")}>
-                    {!notification.read && <span className={cx("absolute inset-y-3 left-0 w-1 rounded-r-full", notification.kind === "assigned" ? "bg-emerald-500" : notification.tone === "danger" ? "bg-red-500" : notification.kind === "update" ? "bg-amber-500" : "bg-sky-500")} aria-hidden />}
-                    <button type="button" onClick={() => openPanelNotification(notification)} className="flex min-w-0 w-full items-start gap-3 px-3 py-3 pr-11 text-left"><span className={cx("mt-0.5 grid size-9 shrink-0 place-items-center rounded-2xl", notification.kind === "assigned" ? "bg-emerald-50 text-emerald-700" : notification.tone === "danger" ? "bg-red-50 text-red-700" : notification.kind === "update" ? "bg-amber-50 text-amber-700" : "bg-sky-50 text-sky-700")}>{notification.kind === "assigned" ? <UserCheck className="size-4" /> : notification.kind === "update" ? <Activity className="size-4" /> : <Inbox className="size-4" />}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="text-sm font-extrabold leading-5 text-slate-950">{notification.title}</span><span className={cx("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em]", notification.kind === "assigned" ? "bg-emerald-50 text-emerald-700" : notification.kind === "update" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600")}>{notificationLabel(notification.kind)}</span></span>{notification.body && <span className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-600">{notification.body}</span>}<span className="mt-1.5 block text-[11px] font-semibold text-slate-400">{notificationTime(notification.createdAt)}</span></span></button><button type="button" onClick={() => removePanelNotification(notification.id)} className="absolute right-2 top-2 grid size-8 place-items-center rounded-xl text-slate-300 transition hover:bg-red-50 hover:text-red-700 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label={`Eliminar ${notification.title}`} title="Eliminar notificación"><X className="size-4" /></button></div>)}{panelNotifications.length === 0 && <div className="px-5 py-10 text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-400"><Bell className="size-5" aria-hidden /></span><p className="mt-3 text-sm font-bold text-slate-900">No hay actividad pendiente</p><p className="mx-auto mt-1 max-w-64 text-xs leading-5 text-slate-500">Los cambios importantes de incidencias aparecerán aquí sin repetir avisos del mismo evento.</p></div>}</div></> : <><div className="border-b border-slate-100 bg-emerald-50/40 px-4 py-3"><p className="text-xs font-bold text-emerald-800">{assignedCount} {assignedCount === 1 ? "incidencia asignada" : "incidencias asignadas"} actualmente</p><p className="mt-0.5 text-[11px] leading-4 text-slate-500">Solo se muestran casos abiertos que están bajo tu responsabilidad.</p></div><div className="max-h-[23rem] overflow-y-auto p-2">{assignedQuery.isLoading ? <div className="px-4 py-9 text-center text-sm text-slate-500">Cargando incidencias asignadas…</div> : assignedQuery.error ? <div className="px-4 py-9 text-center"><p className="text-sm font-bold text-red-700">No se pudieron cargar tus incidencias</p><button type="button" onClick={() => void assignedQuery.refetch()} className="mt-2 text-xs font-bold text-casma-oscuro hover:underline">Reintentar</button></div> : assignedTickets.length === 0 ? <div className="px-5 py-10 text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-600"><UserCheck className="size-5" aria-hidden /></span><p className="mt-3 text-sm font-bold text-slate-900">No tienes incidencias abiertas asignadas</p></div> : assignedTickets.map((ticket) => <button key={ticket.id} type="button" onClick={() => goFromNotifications(`/soporte?source=notifications&ticket=${encodeURIComponent(ticket.id)}`)} className="mb-1 flex w-full items-start gap-3 rounded-2xl border border-transparent px-3 py-3 text-left transition hover:border-emerald-100 hover:bg-emerald-50/40"><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><UserCheck className="size-4" aria-hidden /></span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-xs font-extrabold uppercase tracking-[0.06em] text-emerald-700">{ticket.number}</span><span className={cx("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", ticket.priority === "ALTA" ? "bg-red-50 text-red-700" : ticket.priority === "MEDIA" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600")}>{ticket.priority === "ALTA" ? "Alta" : ticket.priority === "MEDIA" ? "Media" : "Baja"}</span></span><span className="mt-1 block line-clamp-2 text-sm font-bold leading-5 text-slate-950">{ticket.subject}</span><span className="mt-1 block truncate text-xs text-slate-500">{ticket.office_name}</span></span></button>)}</div><div className="border-t border-slate-100 bg-slate-50/60 p-2.5"><button type="button" onClick={() => goFromNotifications("/soporte/mis-incidencias")} className="min-h-10 w-full rounded-xl bg-white px-3 text-sm font-bold text-emerald-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-emerald-50">Abrir Mis incidencias</button></div></>}
-                </div>}
+              {/* Ajustes rápidos */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setSettingsOpen((v) => !v); setNotificationsOpen(false); }}
+                  className={cx("grid size-10 place-items-center rounded-lg border transition", settingsOpen ? "border-tinta bg-tinta text-white" : "border-linea bg-white text-tenue hover:bg-papel-2 hover:text-tinta")}
+                  aria-label="Abrir configuración" aria-expanded={settingsOpen} aria-controls="settings-menu"
+                >
+                  <Settings className="size-4.5" aria-hidden />
+                </button>
 
-                {settingsOpen && <div id="settings-menu" className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_20px_55px_rgba(15,23,42,0.18)]"><div className="px-3 py-2"><p className="font-bold text-tinta">Configuración</p><p className="text-xs text-tenue">Cuenta y accesos rápidos</p></div><button type="button" onClick={() => navigate("/soporte/perfil")} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"><UserRound className="size-4 text-slate-500" aria-hidden /> Mi perfil</button><button type="button" onClick={() => navigate("/soporte/clave")} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"><KeyRound className="size-4 text-slate-500" aria-hidden /> Seguridad y contraseña</button><button type="button" onClick={() => navigate("/soporte/configuracion")} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"><Settings className="size-4 text-slate-500" aria-hidden /> Preferencias del sistema</button></div>}
+                {settingsOpen && (
+                  <div id="settings-menu" className="popover animate-rise absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(15rem,calc(100vw-1.5rem))] p-1.5">
+                    <p className="px-2.5 py-2 text-[0.68rem] font-bold uppercase tracking-[0.09em] text-tenue-2">Cuenta</p>
+                    <MenuLink icon={<UserRound className="size-4" />} onClick={() => navigate("/soporte/perfil")}>Mi perfil</MenuLink>
+                    <MenuLink icon={<KeyRound className="size-4" />} onClick={() => navigate("/soporte/clave")}>Cambiar contraseña</MenuLink>
+                    <MenuLink icon={<ShieldCheck className="size-4" />} onClick={() => navigate("/soporte/configuracion")}>Preferencias</MenuLink>
+                    {isAdmin && <MenuLink icon={<Radar className="size-4" />} onClick={() => navigate("/soporte/ia")}>Análisis con IA</MenuLink>}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </header>
 
-        {(!online || offlinePending > 0) && <div className="border-b border-linea bg-white/80"><div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-4 py-3 text-sm text-tenue sm:px-6">{!online ? <WifiOff className="size-4 text-casma-oscuro" /> : <CloudUpload className="size-4 text-casma-oscuro" />}<span className="font-bold text-tinta">{!online ? "Modo offline" : "Sincronizando cambios"}</span><span>{offlinePending > 0 ? `· ${offlinePending} acción${offlinePending === 1 ? "" : "es"} pendiente${offlinePending === 1 ? "" : "s"}` : !online ? "· los cambios nuevos se guardarán en este dispositivo" : ""}</span>{!online && offlineCachedAt && <span>· mostrando copia local de {new Date(offlineCachedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</span>}</div></div>}
-        <main className="mx-auto max-w-[1600px] px-3 py-5 sm:px-6 sm:py-6 lg:py-8"><Outlet /></main>
+        {!online && (
+          <div className="border-b border-linea bg-amber-50">
+            <p className="mx-auto flex max-w-[1560px] items-center gap-2 px-4 py-2 text-[0.78rem] font-semibold text-amber-900 sm:px-6">
+              Modo offline · los cambios nuevos se guardarán en este dispositivo
+              {offlinePending > 0 && <span className="font-normal">· {offlinePending} pendiente{offlinePending === 1 ? "" : "s"}</span>}
+            </p>
+          </div>
+        )}
+
+        <main className="mx-auto max-w-[1560px] px-3 py-4 sm:px-5 sm:py-5 lg:py-6">
+          <Outlet />
+        </main>
       </div>
     </div>
+  );
+}
+
+function MenuLink({ icon, onClick, children }: { icon: React.ReactNode; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[0.82rem] font-medium text-tinta-2 transition hover:bg-papel-2">
+      <span className="text-tenue-2" aria-hidden>{icon}</span>
+      {children}
+    </button>
   );
 }

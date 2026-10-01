@@ -83,7 +83,7 @@ function ZoneProfileView({ data }: { data: ZoneProfile }) {
               type="button"
               key={office.id}
               onClick={() => navigate(`/soporte/organizacion/oficina/${office.id}`)}
-              className="rounded-2xl border border-linea bg-white p-4 text-left transition hover:border-casma hover:shadow-sm"
+              className="rounded-xl border border-linea bg-white p-4 text-left transition hover:border-casma hover:shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -151,7 +151,7 @@ function OfficeProfileView({ data }: { data: OfficeProfile }) {
               type="button"
               key={user.id}
               onClick={() => navigate(`/soporte/organizacion/usuario/${user.id}`)}
-              className="flex items-center gap-3 rounded-2xl border border-linea bg-white p-4 text-left transition hover:border-casma"
+              className="flex items-center gap-3 rounded-xl border border-linea bg-white p-4 text-left transition hover:border-casma"
             >
               <UserAvatar user={user} />
               <div className="min-w-0">
@@ -266,7 +266,7 @@ function UserProfileView({ data, isAdmin }: { data: MunicipalUserProfile; isAdmi
 function ProfileHeader({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return (
     <Card className="flex items-center gap-4 p-5">
-      <div className="flex size-14 items-center justify-center rounded-2xl bg-casma-claro text-casma-oscuro">{icon}</div>
+      <div className="flex size-14 items-center justify-center rounded-xl bg-casma-claro text-casma-oscuro">{icon}</div>
       <div>
         <p className="text-sm font-bold uppercase tracking-wide text-tenue">{subtitle}</p>
         <h1 className="text-2xl font-bold">{title}</h1>
@@ -296,9 +296,9 @@ function UserAvatar({ user, large = false }: { user: MunicipalUser; large?: bool
   const initials = user.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   const size = large ? "size-28 text-3xl" : "size-14 text-lg";
   return user.photo_url ? (
-    <img src={user.photo_url} alt={`Foto de ${user.full_name}`} className={`${size} shrink-0 rounded-2xl border border-linea object-cover`} />
+    <img src={user.photo_url} alt={`Foto de ${user.full_name}`} className={`${size} shrink-0 rounded-xl border border-linea object-cover`} />
   ) : (
-    <div className={`${size} flex shrink-0 items-center justify-center rounded-2xl bg-casma-claro font-bold text-casma-oscuro`}>
+    <div className={`${size} flex shrink-0 items-center justify-center rounded-xl bg-casma-claro font-bold text-casma-oscuro`}>
       {initials || <UserRound className="size-6" />}
     </div>
   );

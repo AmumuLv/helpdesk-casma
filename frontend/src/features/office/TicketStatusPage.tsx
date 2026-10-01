@@ -49,7 +49,7 @@ export function TicketStatusPage() {
       </Link>
 
       {banner && (
-        <div className="flex flex-col items-center gap-3 rounded-3xl bg-hecho-claro p-6 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl bg-hecho-claro p-6 text-center">
           <CircleCheck className="size-16 text-hecho" aria-hidden />
           <p className="text-3xl font-bold">{banner === "repetido" ? "Ya teníamos su reporte" : "¡Reporte enviado!"}</p>
           <p className="text-xl">{banner === "repetido" ? "Agregamos lo que nos dijo al reporte que ya existía." : "Soporte TI ya fue avisado."}</p>
@@ -75,12 +75,12 @@ export function TicketStatusPage() {
         ))}
       </ol>
 
-      {statusMessage && <p className="rounded-2xl border border-linea bg-white p-5 text-xl">{statusMessage}</p>}
+      {statusMessage && <p className="rounded-xl border border-linea bg-white p-5 text-xl">{statusMessage}</p>}
 
       <OfficeTicketConversation ticketId={t.id} closed={t.status === "RESUELTO"} />
 
       {t.status === "RESUELTO" && (
-        <section className="flex flex-col gap-4 rounded-3xl border-2 border-casma bg-white p-5">
+        <section className="flex flex-col gap-4 rounded-xl border-2 border-casma bg-white p-5">
           {t.resolution_notes && <p className="text-xl"><strong>Lo que hizo Soporte TI:</strong> {t.resolution_notes}</p>}
           {t.confirmed_by_user === null ? (
             <>
@@ -102,7 +102,7 @@ export function TicketStatusPage() {
       )}
 
       {t.status !== "RESUELTO" && t.user_tips.length > 0 && (
-        <section className="flex flex-col gap-3 rounded-2xl bg-sol-claro p-5">
+        <section className="flex flex-col gap-3 rounded-xl bg-sol-claro p-5">
           <h2 className="flex items-center gap-2 text-2xl font-bold"><Lightbulb className="size-7" aria-hidden /> Mientras espera, puede probar</h2>
           <ul className="flex list-disc flex-col gap-2 pl-6 text-xl">
             {t.user_tips.map((tip) => <li key={tip}>{tip}</li>)}
@@ -110,7 +110,7 @@ export function TicketStatusPage() {
         </section>
       )}
 
-      {t.attachments[0] && <img src={t.attachments[0].url} alt="Foto enviada" className="max-h-72 w-full rounded-2xl object-cover" />}
+      {t.attachments[0] && <img src={t.attachments[0].url} alt="Foto enviada" className="max-h-72 w-full rounded-xl object-cover" />}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-2xl font-bold">Historial</h2>

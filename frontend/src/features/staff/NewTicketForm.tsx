@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardCheck, Layers3, MapPin, PhoneCall, Search, Sparkles, UserRound, UserRoundPlus, WifiOff, Wrench } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown, ClipboardCheck, Layers3, MapPin, PhoneCall, Search, Sparkles, UserRound, UserRoundPlus, WifiOff, Wrench } from "lucide-react";
 import { useDeferredValue, useState, type FormEvent, type ReactNode } from "react";
 import { PhotoPicker } from "../../components/PhotoPicker";
 import { useToast } from "../../components/Toasts";
@@ -188,13 +188,11 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
 
   const formBody = reviewing ? (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-casma/20 bg-casma-claro/55 p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma text-white shadow-sm"><ClipboardCheck className="size-5" /></span>
-          <div>
-            <p className="font-bold text-tinta">Revise antes de registrar</p>
-            <p className="mt-1 text-sm leading-5 text-tenue">Confirme la ruta Zona → Oficina → Usuario y los datos de atención antes de crear la incidencia.</p>
-          </div>
+      <div className="overflow-hidden rounded-xl border border-casma/25 bg-casma-claro/60">
+        <div className="barra-marca h-1 w-full" aria-hidden />
+        <div className="p-4">
+          <p className="flex items-center gap-2 text-[0.88rem] font-bold text-tinta"><ClipboardCheck className="size-4 text-casma" aria-hidden />Revise antes de registrar</p>
+          <p className="mt-1 text-[0.8rem] leading-5 text-tenue">Confirme la ruta Zona → Oficina → Usuario y los datos de atención antes de crear la incidencia.</p>
         </div>
       </div>
 
@@ -208,9 +206,9 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
         <ReviewItem label="Responsable" value={selectedTech?.full_name ?? "Sin asignar"} detail={selectedTech ? `${selectedTech.open_tickets} incidencias abiertas` : "Disponible para asignación posterior"} />
       </div>
 
-      <div className="rounded-2xl border border-linea bg-white p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-[0.1em] text-tenue">Descripción</p>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-tinta">{f.description.trim()}</p>
+      <div className="rounded-xl border border-linea bg-white p-4">
+        <p className="text-[0.68rem] font-bold uppercase tracking-[0.07em] text-tenue-2">Descripción</p>
+        <p className="mt-1.5 whitespace-pre-wrap text-[0.85rem] leading-6 text-tinta">{f.description.trim()}</p>
       </div>
 
       {create.error && <ErrorBox message={errorMessage(create.error)} />}
@@ -221,81 +219,47 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
     </div>
   ) : (
     <form onSubmit={submit} className="flex flex-col gap-5">
-      <details
-        className="group overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 shadow-[0_10px_30px_rgba(217,119,6,0.08)]"
-      >
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-amber-500 text-white shadow-sm">
-            <ClipboardCheck className="size-5" aria-hidden />
+      <details className="group overflow-hidden rounded-xl border border-sol/45 bg-sol-claro">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-sol/15 text-[#8a5a04]"><ClipboardCheck className="size-4" aria-hidden /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.83rem] font-bold text-[#7a5004]">Registro manual asistido por el área TI</span>
+            <span className="mt-0.5 block text-[0.75rem] leading-4 text-[#93610a]">Úselo cuando el reporte llegue por teléfono, de forma presencial o si TI detecta el problema.</span>
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800">
-                Aviso importante
-              </span>
-              <span className="text-xs font-medium text-slate-500">Registro asistido por el Área TI</span>
-            </div>
-            <h3 className="text-sm font-extrabold text-slate-900 sm:text-base">Registro manual asistido</h3>
-            <p className="mt-0.5 text-xs text-slate-500 group-open:hidden">Pulse para ver cuándo usarlo y la jerarquía de registro.</p>
-          </div>
-          <span className="flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-amber-200 bg-white px-3 text-xs font-bold text-amber-800 shadow-sm transition hover:bg-amber-50">
-            <span className="group-open:hidden">Ver guía</span>
-            <span className="hidden group-open:inline">Ocultar</span>
-            <span className="text-base transition-transform duration-200 group-open:rotate-180" aria-hidden>⌄</span>
-          </span>
+          <ChevronDown className="size-4 shrink-0 text-[#8a5a04] transition-transform group-open:rotate-180" aria-hidden />
         </summary>
 
-        <div className="border-t border-amber-100/80">
-          <div className="px-4 pt-4 sm:px-5">
-            <p className="text-sm leading-6 text-slate-700">
-              Use este formulario cuando la incidencia se reporte por teléfono, de forma presencial o cuando el equipo de TI detecte el problema directamente.
+        <div className="grid gap-3 border-t border-sol/35 bg-white px-3.5 py-3.5 sm:grid-cols-2">
+          <div>
+            <p className="text-[0.68rem] font-bold uppercase tracking-[0.07em] text-tenue-2">Cuándo usarlo</p>
+            <ul className="mt-1.5 space-y-1.5 text-[0.8rem] leading-5 text-tenue">
+              <li className="flex items-start gap-1.5"><PhoneCall className="mt-0.5 size-3.5 shrink-0 text-casma" aria-hidden />El reporte llega por teléfono.</li>
+              <li className="flex items-start gap-1.5"><UserRound className="mt-0.5 size-3.5 shrink-0 text-casma" aria-hidden />El usuario informa el problema presencialmente.</li>
+              <li className="flex items-start gap-1.5"><Wrench className="mt-0.5 size-3.5 shrink-0 text-casma" aria-hidden />TI detecta la incidencia por cuenta propia.</li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-[0.68rem] font-bold uppercase tracking-[0.07em] text-tenue-2">Regla de registro</p>
+            <p className="mt-1.5 text-[0.8rem] leading-5 text-tenue">
+              Respete la jerarquía oficial. Si el trabajador ya está registrado, selectionelo para asociar bien la incidencia.
             </p>
-          </div>
-
-          <div className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm">
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-700">¿Cuándo usar este formulario?</p>
-              <ul className="space-y-2 text-sm text-slate-700">
-                <li className="flex items-start gap-2">
-                  <PhoneCall className="mt-0.5 size-4 shrink-0 text-casma-oscuro" aria-hidden />
-                  <span>Cuando el reporte llega por teléfono.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <UserRound className="mt-0.5 size-4 shrink-0 text-casma-oscuro" aria-hidden />
-                  <span>Cuando el usuario informa el problema presencialmente.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Wrench className="mt-0.5 size-4 shrink-0 text-casma-oscuro" aria-hidden />
-                  <span>Cuando el personal TI detecta la incidencia por cuenta propia.</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm">
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-700">Regla de registro</p>
-              <p className="text-sm leading-6 text-slate-700">
-                Para mantener el orden institucional, la ubicación debe seleccionarse respetando la jerarquía oficial del sistema:
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-slate-800">1. Zona</span>
-                <span className="text-amber-500" aria-hidden>→</span>
-                <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-slate-800">2. Oficina</span>
-                <span className="text-amber-500" aria-hidden>→</span>
-                <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-slate-800">3. Usuario</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-amber-100/80 bg-amber-50/60 px-4 py-3 text-xs leading-5 text-slate-600 sm:px-5">
-            <strong className="text-slate-800">Importante:</strong> si el trabajador ya está registrado, selecciónelo desde la jerarquía para asociar correctamente la incidencia y evitar errores en la trazabilidad.
+            <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.78rem] font-semibold text-tinta-2">
+              <span className="rounded-md border border-casma/25 bg-casma-claro px-2 py-1 text-casma-oscuro">1. Zona</span>
+              <ArrowRight className="size-3.5 text-tenue-2" aria-hidden />
+              <span className="rounded-md border border-casma/25 bg-casma-claro px-2 py-1 text-casma-oscuro">2. Oficina</span>
+              <ArrowRight className="size-3.5 text-tenue-2" aria-hidden />
+              <span className="rounded-md border border-casma/25 bg-casma-claro px-2 py-1 text-casma-oscuro">3. Usuario</span>
+            </p>
           </div>
         </div>
       </details>
 
       <SectionBlock icon={<MapPin className="size-4" />} title="1. Ubicación y solicitante" subtitle="Siga el orden Zona → Oficina → Usuario para evitar registros en áreas equivocadas">
-        <div className="mb-5 grid gap-2 sm:grid-cols-3">
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center">
           <HierarchyStep number="1" label="Zona" active={!!f.zoneId} />
+          <StepArrow done={!!f.zoneId} />
           <HierarchyStep number="2" label="Oficina" active={!!f.officeId} disabled={!f.zoneId} />
+          <StepArrow done={!!f.officeId} />
           <HierarchyStep number="3" label="Usuario" active={!!f.userId || (reporterMode === "manual" && !!f.reporter)} disabled={!f.officeId} />
         </div>
 
@@ -319,9 +283,10 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
           </Field>
 
           {selectedZone && selectedOffice && (
-            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-700">
-              <span className="font-bold text-slate-900">Ruta seleccionada:</span> {selectedZone.name} <span className="px-1.5 text-slate-400">›</span> {selectedOffice.name}
-              {selectedOffice.location && <span className="ml-2 text-slate-500">· {selectedOffice.location}</span>}
+            <div className="md:col-span-2 flex items-center gap-2 rounded-xl border border-casma/25 bg-casma-claro/60 px-3.5 py-3 text-sm text-tinta-2">
+              <MapPin className="size-4 shrink-0 text-casma" aria-hidden />
+              <span className="font-bold text-tinta">Ruta:</span> {selectedZone.name} <span className="px-1 text-tenue-2">›</span> <span className="font-semibold text-casma-oscuro">{selectedOffice.name}</span>
+              {selectedOffice.location && <span className="ml-1 text-tenue">· {selectedOffice.location}</span>}
             </div>
           )}
 
@@ -331,14 +296,14 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
                 <p className="text-sm font-bold tracking-[-0.01em] text-tinta">Usuario que reporta</p>
                 <p className="mt-1 text-xs leading-5 text-tenue">Seleccione una cuenta de la oficina o registre manualmente a quien llamó.</p>
               </div>
-              <div className="inline-flex w-full rounded-xl border border-linea bg-slate-50 p-1 sm:w-auto">
+              <div className="inline-flex w-full rounded-xl border border-linea bg-papel-2 p-1 sm:w-auto">
                 <button
                   type="button"
                   onClick={useRegisteredReporter}
                   disabled={!f.officeId}
                   className={cx(
                     "min-h-9 flex-1 rounded-lg px-3 text-xs font-bold transition sm:flex-none",
-                    reporterMode === "registered" ? "bg-white text-casma-oscuro shadow-sm" : "text-tenue hover:text-tinta",
+                    reporterMode === "registered" ? "bg-white text-casma-oscuro shadow-[var(--shadow-panel)]" : "text-tenue hover:text-tinta",
                     !f.officeId && "cursor-not-allowed opacity-50",
                   )}
                 >
@@ -350,7 +315,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
                   disabled={!f.officeId}
                   className={cx(
                     "min-h-9 flex-1 rounded-lg px-3 text-xs font-bold transition sm:flex-none",
-                    reporterMode === "manual" ? "bg-white text-casma-oscuro shadow-sm" : "text-tenue hover:text-tinta",
+                    reporterMode === "manual" ? "bg-white text-casma-oscuro shadow-[var(--shadow-panel)]" : "text-tenue hover:text-tinta",
                     !f.officeId && "cursor-not-allowed opacity-50",
                   )}
                 >
@@ -360,11 +325,11 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
             </div>
 
             {!f.officeId ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-tenue">
+              <div className="rounded-xl border border-dashed border-linea-fuerte bg-papel-2/70 px-4 py-6 text-center text-sm text-tenue">
                 Seleccione una zona y una oficina para ver sus usuarios.
               </div>
             ) : reporterMode === "registered" ? (
-              <div className="space-y-3 rounded-2xl border border-linea bg-slate-50/60 p-3.5">
+              <div className="space-y-3 rounded-xl border border-linea bg-papel-2/60 p-3.5">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-tenue" aria-hidden />
                   <Input
@@ -379,7 +344,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
                 {users.isLoading ? (
                   <p className="px-2 py-5 text-center text-sm text-tenue">Cargando usuarios de la oficina…</p>
                 ) : filteredUsers.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center">
+                  <div className="rounded-xl border border-dashed border-linea-fuerte bg-white px-4 py-6 text-center">
                     <p className="text-sm font-bold text-tinta">No se encontraron usuarios</p>
                     <p className="mt-1 text-xs leading-5 text-tenue">Puede cambiar a “Ingreso manual” si la persona aún no tiene cuenta registrada.</p>
                   </div>
@@ -396,17 +361,17 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
                             "flex min-h-20 items-start gap-3 rounded-xl border bg-white p-3 text-left transition",
                             active
                               ? "border-casma bg-casma-claro/45 ring-2 ring-casma/10"
-                              : "border-slate-200 hover:border-slate-300 hover:bg-white",
+                              : "border-linea hover:border-casma/40 hover:bg-casma-claro/25",
                           )}
                           aria-pressed={active}
                         >
-                          <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", active ? "bg-casma text-white" : "bg-slate-100 text-slate-600")}>
+                          <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", active ? "bg-casma text-white" : "bg-papel-2 text-tenue")}>
                             {active ? <CheckCircle2 className="size-4" /> : <UserRound className="size-4" />}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-bold text-tinta">{user.full_name}</span>
                             <span className="mt-0.5 block truncate text-xs text-tenue">{user.job_title ?? "Cargo no registrado"}</span>
-                            <span className="mt-1 block truncate text-[11px] font-medium text-slate-500">
+                            <span className="mt-1 block truncate text-[11px] font-medium text-tenue">
                               {user.employee_code ? `Código ${user.employee_code}` : "Sin código"}
                               {user.phone ? ` · ${user.phone}` : ""}
                             </span>
@@ -431,7 +396,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
                 )}
               </div>
             ) : (
-              <div className="grid gap-4 rounded-2xl border border-linea bg-slate-50/60 p-3.5 md:grid-cols-2">
+              <div className="grid gap-4 rounded-xl border border-linea bg-papel-2/60 p-3.5 md:grid-cols-2">
                 <Field label="Nombre de quien reporta" hint="Para personas que aún no cuentan con usuario registrado.">
                   {(id) => <Input id={id} value={f.reporter} onChange={set("reporter")} maxLength={80} required placeholder="Nombre y apellido" className="bg-white" />}
                 </Field>
@@ -466,8 +431,8 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
       </SectionBlock>
 
       {(ai || preview.isFetching) && (
-        <div className="rounded-2xl border border-casma/15 bg-casma-claro/70 p-4 shadow-sm" aria-live="polite">
-          <p className="flex items-center gap-2 font-bold text-casma-oscuro"><Sparkles className="size-4" /> {preview.isFetching && !ai ? "Analizando incidencia..." : "Sugerencia de la IA"}</p>
+        <div className="overflow-hidden rounded-xl border border-vivo/40 bg-vivo-claro p-4 shadow-[var(--shadow-panel)]" aria-live="polite">
+          <p className="flex items-center gap-2 font-bold text-[#0b6b80]"><span className="grid size-6 place-items-center rounded-md bg-vivo text-white"><Sparkles className="size-3.5" /></span> {preview.isFetching && !ai ? "Analizando incidencia..." : "Sugerencia de la IA"}</p>
           {ai && <>
             <p className="mt-2 text-sm leading-6 text-tinta/85">{CATEGORY_LABEL[ai.category]} ({pct(ai.category_confidence)}), prioridad {PRIORITY_LABEL[ai.priority].toLowerCase()}{ai.suggested_technician_name && `, técnico sugerido: ${ai.suggested_technician_name}`}</p>
             {ai.similar_cases[0]?.resolution && <p className="mt-1 text-sm text-tenue">Caso parecido: {ai.similar_cases[0].resolution}</p>}
@@ -523,7 +488,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
       <SectionBlock icon={<UserRoundPlus className="size-4" />} title="4. Evidencia" subtitle="Adjunte una foto si ayuda a diagnosticar más rápido">
         <div className="rounded-xl border border-linea bg-papel/65 p-3.5">
           <div className="mb-3 flex items-center gap-2">
-            <span className="grid size-8 place-items-center rounded-xl bg-white text-casma shadow-sm"><Wrench className="size-4" /></span>
+            <span className="grid size-8 place-items-center rounded-xl bg-white text-casma"><Wrench className="size-4" /></span>
             <div>
               <p className="text-sm font-bold text-tinta">Foto opcional</p>
               <p className="text-xs text-tenue">Útil para errores en pantalla, conexiones, impresoras o daños visibles.</p>
@@ -534,7 +499,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
       </SectionBlock>
 
       {!navigator.onLine && (
-        <div className="flex items-center gap-2 rounded-2xl border border-sol/55 bg-sol-claro px-4 py-3 text-sm text-[#92400e] shadow-sm">
+        <div className="flex items-center gap-2 rounded-xl border border-sol/55 bg-sol-claro px-4 py-3 text-sm text-[#92400e]">
           <WifiOff className="size-5 shrink-0" />
           <span><strong>Sin conexión.</strong> Puede preparar la incidencia; quedará guardada en este equipo hasta recuperar internet.</span>
         </div>
@@ -558,7 +523,7 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
         aria-expanded={open}
       >
         <span className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-casma text-white shadow-sm">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,var(--color-casma),var(--color-casma-oscuro))] text-white shadow-[var(--glow-marca)]">
             <PhoneCall className="size-5" aria-hidden />
           </span>
           <span className="min-w-0">
@@ -577,15 +542,15 @@ export function NewTicketForm({ onCreated, variant = "panel" }: { onCreated: (id
 
 function SectionBlock({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-linea bg-white p-4 shadow-[0_8px_24px_rgba(17,24,39,0.04)]">
-      <div className="mb-4 flex items-center gap-3">
-        <span className="grid size-9 place-items-center rounded-xl bg-casma-claro text-casma-oscuro">{icon}</span>
-        <div>
+    <section className="overflow-hidden rounded-xl border border-linea bg-white shadow-[var(--shadow-panel)]">
+      <div className="flex items-center gap-3 border-b border-linea bg-gradient-to-r from-papel-2/70 to-white px-4 py-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[linear-gradient(135deg,var(--color-casma),var(--color-casma-oscuro))] text-white shadow-[var(--glow-marca)]">{icon}</span>
+        <div className="min-w-0">
           <p className="text-sm font-bold text-tinta">{title}</p>
-          <p className="text-xs text-tenue">{subtitle}</p>
+          <p className="text-xs leading-5 text-tenue">{subtitle}</p>
         </div>
       </div>
-      {children}
+      <div className="p-4">{children}</div>
     </section>
   );
 }
@@ -594,22 +559,30 @@ function HierarchyStep({ number, label, active, disabled = false }: { number: st
   return (
     <div className={cx(
       "flex items-center gap-2 rounded-xl border px-3 py-2.5 transition",
-      active ? "border-casma/25 bg-casma-claro/55 text-casma-oscuro" : disabled ? "border-slate-200 bg-slate-50 text-slate-400" : "border-slate-200 bg-white text-slate-600",
+      active ? "border-casma/30 bg-casma-claro/60 text-casma-oscuro shadow-[var(--shadow-panel)]" : disabled ? "border-linea bg-papel-2 text-tenue-2" : "border-linea bg-white text-tenue",
     )}>
       <span className={cx(
         "grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold",
-        active ? "bg-casma text-white" : "bg-slate-200 text-slate-600",
+        active ? "bg-casma text-white" : "bg-papel-2 text-tenue-2",
       )}>{number}</span>
       <span className="text-xs font-bold uppercase tracking-[0.06em]">{label}</span>
     </div>
   );
 }
 
+function StepArrow({ done }: { done: boolean }) {
+  return (
+    <div className="flex shrink-0 items-center justify-center sm:px-0.5" aria-hidden>
+      <ArrowRight className={cx("size-4 transition-colors", done ? "text-casma" : "text-linea-fuerte")} />
+    </div>
+  );
+}
+
 function ReviewItem({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="rounded-2xl border border-linea bg-white p-4 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-[0.1em] text-tenue">{label}</p>
-      <p className="mt-1.5 font-bold text-tinta">{value}</p>
+    <div className="rounded-xl border border-linea bg-white p-4 shadow-[var(--shadow-panel)] transition hover:border-casma/35">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.1em] text-casma">{label}</p>
+      <p className="mt-1.5 font-bold leading-snug text-tinta">{value}</p>
       {detail && <p className="mt-1 text-xs leading-5 text-tenue">{detail}</p>}
     </div>
   );

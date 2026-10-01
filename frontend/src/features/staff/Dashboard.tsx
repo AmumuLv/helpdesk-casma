@@ -1,12 +1,15 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, ArrowRight, BrainCircuit, Building2, CheckCircle2, Clock3, Filter, ListTodo, LoaderCircle, MapPin, PauseCircle, Search, UserRound, UsersRound, X } from "lucide-react";
+import {
+  Activity, AlertTriangle, ArrowRight, BrainCircuit, Building2, CheckCircle2, ChevronRight, Clock3,
+  ListTodo, LoaderCircle, MapPin, PauseCircle, Search, UserRound, UsersRound, X,
+} from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { Button, Card, EmptyState, ErrorBox, Input, Modal, PriorityBadge, Select, Spinner, StatusBadge, cx } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { CATEGORIES, CATEGORY_LABEL, PRIORITY_LABEL } from "../../lib/labels";
 import type { FollowUp, FollowUpState, Page, ResolutionType, Ticket, TicketCategory, TicketPriority, TicketStatus } from "../../lib/types";
-import { useFollowUpMetrics, useKpis, useMunicipalUsers, useOfficeLookup, useTechnicians, useZones } from "./hooks";
+import { useKpis, useMunicipalUsers, useOfficeLookup, useTechnicians, useZones } from "./hooks";
 import { NewTicketForm } from "./NewTicketForm";
 import { TicketDetail } from "./TicketDetail";
 
@@ -14,19 +17,19 @@ type View = TicketStatus | "ACTIVAS";
 type WorkSort = "smart" | "created_desc" | "created_asc" | "priority_desc";
 type ClosedSort = "closed_desc" | "closed_asc" | "duration_desc" | "duration_asc";
 type Period = "all" | "today" | "7d" | "30d" | "90d" | "custom";
-type ActiveFollowFilter = "" | Exclude<FollowUpState, "CERRADA" | "EN_SEGUIMIENTO">;
+type FollowFilter = "" | Exclude<FollowUpState, "CERRADA" | "EN_SEGUIMIENTO">;
 
-const TABS: { value: View; label: string; help: string }[] = [
-  { value: "ACTIVAS", label: "Todas activas", help: "Casos que todavía necesitan seguimiento del Área TI." },
-  { value: "PENDIENTE", label: "Por atender", help: "Incidencias que aún no han iniciado su atención." },
-  { value: "EN_PROCESO", label: "En atención", help: "Casos en los que el personal TI ya está trabajando." },
-  { value: "RESUELTO", label: "Cerradas", help: "Historial de casos finalizados y sus soluciones." },
+const TABS: { value: View; label: string }[] = [
+  { value: "ACTIVAS", label: "Activas" },
+  { value: "PENDIENTE", label: "Por atender" },
+  { value: "EN_PROCESO", label: "En atención" },
+  { value: "RESUELTO", label: "Cerradas" },
 ];
 
 const WORK_SORT: Record<WorkSort, string> = {
   smart: "Prioridad de atención",
   created_desc: "Más recientes",
-  created_asc: "Más antiguos",
+  created_asc: "Más antiguas",
   priority_desc: "Prioridad",
 };
 
@@ -57,6 +60,14 @@ const RESOLUTION: Record<ResolutionType, string> = {
   DERIVADO: "Derivado",
 };
 
+const FOLLOW_LABEL: Record<Exclude<FollowUpState, "CERRADA" | "EN_SEGUIMIENTO">, string> = {
+  EN_ESPERA: "En espera",
+  SIN_ACTUALIZACION: "Sin actualización",
+  REQUIERE_REVISION: "Requieren revisión",
+};
+
+/* ------------------------------------------------------------- Utilidades */
+
 function inputDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -64,19 +75,13 @@ function inputDate(d: Date) {
 function rangeFor(period: Period, from: string, to: string) {
   if (period === "all") return {} as { from?: string; to?: string };
   if (period === "custom") {
-    return {
-      from: from ? `${from}T00:00:00-05:00` : undefined,
-      to: to ? `${to}T23:59:59-05:00` : undefined,
-    };
+    return { from: from ? `${from}T00:00:00-05:00` : undefined, to: to ? `${to}T23:59:59-05:00` : undefined };
   }
   const now = new Date();
   const start = new Date(now);
   const days = period === "today" ? 1 : period === "7d" ? 7 : period === "30d" ? 30 : 90;
   start.setDate(now.getDate() - days + 1);
-  return {
-    from: `${inputDate(start)}T00:00:00-05:00`,
-    to: `${inputDate(now)}T23:59:59-05:00`,
-  };
+  return { from: `${inputDate(start)}T00:00:00-05:00`, to: `${inputDate(now)}T23:59:59-05:00` };
 }
 
 function ago(value: string) {
@@ -90,33 +95,23 @@ function ago(value: string) {
 }
 
 function when(value: string) {
-  return new Date(value).toLocaleString("es-PE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).replace(".", "");
-}
-
-function formatHours(value: number | null | undefined) {
-  if (value == null) return "Sin datos";
-  const minutes = Math.max(1, Math.round(value * 60));
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+  return new Date(value).toLocaleString("es-PE", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(".", "");
 }
 
 function actionLabel(t: Ticket) {
-  if (t.status === "RESUELTO") return "Ver / reabrir";
-  if (t.status === "EN_PROCESO") return "Continuar atención";
-  return t.assigned_to_id ? "Iniciar atención" : "Asignar y atender";
+  if (t.status === "RESUELTO") return "Ver o reabrir";
+  if (t.status === "EN_PROCESO") return "Continuar";
+  return t.assigned_to_id ? "Iniciar atención" : "Atender y asignar";
 }
+
+function technicianOf(t: Ticket) {
+  return t.status === "RESUELTO" ? (t.resolution?.resolved_by_name || t.assigned_to_name) : t.assigned_to_name;
+}
+
+/* ------------------------------------------------------------------ Página */
 
 export function Dashboard() {
   const kpis = useKpis();
-  const followMetrics = useFollowUpMetrics();
   const zones = useZones();
   const offices = useOfficeLookup();
   const techs = useTechnicians();
@@ -131,7 +126,7 @@ export function Dashboard() {
   const [mine, setMine] = useState(false);
   const [urgent, setUrgent] = useState(false);
   const [unassigned, setUnassigned] = useState(false);
-  const [followFilter, setFollowFilter] = useState<ActiveFollowFilter>("");
+  const [followFilter, setFollowFilter] = useState<FollowFilter>("");
   const [zone, setZone] = useState("");
   const [office, setOffice] = useState("");
   const [municipalUser, setMunicipalUser] = useState("");
@@ -148,11 +143,11 @@ export function Dashboard() {
   const [resolution, setResolution] = useState<"" | ResolutionType>("");
 
   const users = useMunicipalUsers(office);
-  const tab = TABS.find((x) => x.value === view) ?? TABS[0];
+  const closed = view === "RESUELTO";
   const activeZones = (zones.data ?? []).filter((z) => z.active);
   const activeOffices = (offices.data ?? []).filter((o) => o.active && (!zone || o.zone_id === zone));
   const closedRange = useMemo(() => rangeFor(period, closedFrom, closedTo), [period, closedFrom, closedTo]);
-  const advancedCount = view === "RESUELTO"
+  const advancedCount = closed
     ? [zone, office, municipalUser, technician, category, priority, resolution].filter(Boolean).length
     : [zone, office, municipalUser, technician, category, priority, createdDate, followFilter].filter(Boolean).length;
 
@@ -170,20 +165,16 @@ export function Dashboard() {
       category, priority, createdDate, workSort, period, closedFrom, closedTo, closedSort, resolution,
     }],
     queryFn: ({ pageParam }) => {
-      const p = new URLSearchParams({
-        page: String(pageParam),
-        page_size: "20",
-        sort_by: view === "RESUELTO" ? closedSort : workSort,
-      });
+      const p = new URLSearchParams({ page: String(pageParam), page_size: "20", sort_by: closed ? closedSort : workSort });
 
-      view === "ACTIVAS" ? p.set("active", "true") : p.set("status", view);
+      closed ? p.set("status", "RESUELTO") : p.set("active", "true");
       if (zone) p.set("zone_id", zone);
       if (office) p.set("office_id", office);
       if (municipalUser) p.set("user_id", municipalUser);
       if (category) p.set("category", category);
       if (query) p.set("q", query);
 
-      if (view === "RESUELTO") {
+      if (closed) {
         if (closedRange.from) p.set("resolved_from", closedRange.from);
         if (closedRange.to) p.set("resolved_to", closedRange.to);
         if (technician) p.set("technician_id", technician);
@@ -205,13 +196,12 @@ export function Dashboard() {
       return api<Page<Ticket>>(`/workboard/tickets?${p}`);
     },
     initialPageParam: 1,
-    getNextPageParam: (last) => last.page * last.page_size < last.total ? last.page + 1 : undefined,
+    getNextPageParam: (last) => (last.page * last.page_size < last.total ? last.page + 1 : undefined),
   });
 
   const tickets = list.data?.pages.flatMap((p) => p.items) ?? [];
   const total = list.data?.pages[0]?.total ?? 0;
   const k = kpis.data;
-  const m = followMetrics.data;
   const activeTotal = k ? k.pendientes + k.en_proceso : undefined;
 
   const chooseView = (next: View) => {
@@ -222,24 +212,11 @@ export function Dashboard() {
     setFollowFilter("");
   };
 
-  const clear = () => {
-    setMine(false);
-    setUrgent(false);
-    setUnassigned(false);
-    setFollowFilter("");
-    setZone("");
-    setOffice("");
-    setMunicipalUser("");
-    setTechnician("");
-    setCategory("");
-    setPriority("");
-    setCreatedDate("");
-    setWorkSort("smart");
-    setPeriod("30d");
-    setClosedFrom("");
-    setClosedTo("");
-    setClosedSort("closed_desc");
-    setResolution("");
+  const clearFilters = () => {
+    setMine(false); setUrgent(false); setUnassigned(false); setFollowFilter("");
+    setZone(""); setOffice(""); setMunicipalUser(""); setTechnician("");
+    setCategory(""); setPriority(""); setCreatedDate(""); setWorkSort("smart");
+    setPeriod("30d"); setClosedFrom(""); setClosedTo(""); setClosedSort("closed_desc"); setResolution("");
   };
 
   const closeCreate = () => {
@@ -257,174 +234,325 @@ export function Dashboard() {
   };
 
   return (
-    <div className="flex flex-col gap-5 sm:gap-6">
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Kpi label="Activos" value={activeTotal} detail={k ? `${k.pendientes} por atender · ${k.en_proceso} en atención` : ""} active={view === "ACTIVAS"} icon={<ListTodo className="size-4" />} onClick={() => chooseView("ACTIVAS")} />
-        <Kpi label="Por atender" value={k?.pendientes} detail={k ? `${k.sin_asignar} sin asignar` : ""} active={view === "PENDIENTE"} icon={<Clock3 className="size-4" />} onClick={() => chooseView("PENDIENTE")} />
-        <Kpi label="En atención" value={k?.en_proceso} detail={k ? `${k.urgentes_abiertos} urgentes activas` : ""} active={view === "EN_PROCESO"} icon={<LoaderCircle className="size-4" />} onClick={() => chooseView("EN_PROCESO")} />
-        <Kpi label="Cerradas" value={k?.resueltos} detail={k ? `${k.cerrados_mes} cerradas este mes` : ""} active={view === "RESUELTO"} icon={<CheckCircle2 className="size-4" />} onClick={() => chooseView("RESUELTO")} />
+    <div className="flex flex-col gap-4">
+      {/* ------------------------------------------------- Indicadores */}
+      <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" aria-label="Resumen de incidencias">
+        <Kpi label="Activas" value={activeTotal} helper={k ? `${k.sin_asignar} sin asignar` : ""} active={view === "ACTIVAS"} icon={<ListTodo className="size-4.5" />} tone="bg-casma-claro text-casma-oscuro" onClick={() => chooseView("ACTIVAS")} />
+        <Kpi label="Por atender" value={k?.pendientes} helper={k?.nuevos_hoy ? `${k.nuevos_hoy} nuevas hoy` : ""} active={view === "PENDIENTE"} icon={<Clock3 className="size-4.5" />} tone="bg-amber-50 text-amber-700" onClick={() => chooseView("PENDIENTE")} />
+        <Kpi label="En atención" value={k?.en_proceso} helper={k?.urgentes_abiertos ? `${k.urgentes_abiertos} urgentes` : ""} active={view === "EN_PROCESO"} icon={<LoaderCircle className="size-4.5" />} tone="bg-sky-50 text-sky-700" onClick={() => chooseView("EN_PROCESO")} />
+        <Kpi label="Cerradas" value={k?.resueltos} helper={k ? `${k.cerrados_mes} este mes` : ""} active={view === "RESUELTO"} icon={<CheckCircle2 className="size-4.5" />} tone="bg-emerald-50 text-emerald-700" onClick={() => chooseView("RESUELTO")} />
       </section>
 
-      {view !== "RESUELTO" && m && (
-        <section className="rounded-2xl border border-linea bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-casma-oscuro"><BrainCircuit className="size-4" /> Seguimiento inteligente · 30 días</p>
-              <p className="mt-1 text-sm text-tenue">Métricas operativas con contexto. No se usan como ranking ni como evaluación automática del técnico.</p>
-            </div>
-            {(m.top_office_30d || m.top_equipment_30d) && (
-              <p className="text-xs text-tenue">Patrón: {m.top_office_30d ? `oficina ${m.top_office_30d}` : ""}{m.top_office_30d && m.top_equipment_30d ? " · " : ""}{m.top_equipment_30d ? `equipo ${m.top_equipment_30d} (${m.top_equipment_incidents_30d})` : ""}</p>
-            )}
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
-            <MiniMetric label="En espera" value={String(m.waiting)} helper="Con motivo registrado" />
-            <MiniMetric label="Requieren revisión" value={String(m.requieren_revision)} helper="Sin atribuir culpa" />
-            <MiniMetric label="Sin actualización" value={String(m.sin_actualizacion)} helper="Conviene comprobar" />
-            <MiniMetric label="1.ª respuesta" value={formatHours(m.primera_respuesta_horas_30d)} helper="Promedio 30 días" />
-            <MiniMetric label="Entre avances" value={formatHours(m.entre_actualizaciones_horas_30d)} helper="Promedio entre actualizaciones" />
-            <MiniMetric label="Resolución" value={formatHours(m.resolucion_horas_30d)} helper="Promedio 30 días" />
-            <MiniMetric label="Recurrentes" value={String(m.casos_recurrentes_30d)} helper="Casos de equipos repetidos" />
-          </div>
-        </section>
-      )}
-
-      <Card className="overflow-hidden border-linea/80">
-        <header className="border-b border-linea bg-white px-4 py-5 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-casma">Bandeja de trabajo</p>
-              <h1 className="mt-1 text-2xl font-bold text-tinta">{view === "RESUELTO" ? "Historial de incidencias" : tab.label}</h1>
-              <p className="mt-1 text-sm text-tenue">{tab.help} {total > 0 && <strong className="text-tinta">{total} {total === 1 ? "caso" : "casos"}.</strong>}</p>
-            </div>
-            <div className="-mx-1 overflow-x-auto px-1 pb-1">
-              <div className="flex w-max gap-1 rounded-xl bg-papel p-1">
-                {TABS.map((x) => (
-                  <button key={x.value} onClick={() => chooseView(x.value)} className={cx("min-h-10 rounded-lg px-3.5 py-2 text-sm font-semibold transition", view === x.value ? "bg-casma-oscuro text-white shadow-sm" : "text-tenue hover:bg-white hover:text-tinta")}>{x.label}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {view === "RESUELTO" && k && (
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <HistoryMetric label="Histórico cerrado" value={k.resueltos} helper="Desde el inicio del sistema" />
-              <HistoryMetric label="Cerradas este mes" value={k.cerrados_mes} helper="Casos finalizados durante el mes actual" />
-              <HistoryMetric label="Reabiertas" value={k.reabiertos_30d} helper="Casos reabiertos en los últimos 30 días" />
-            </div>
-          )}
-
-          {view !== "RESUELTO" && (
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3.5 py-3 text-xs leading-5 text-slate-600">
-              <Activity className="mt-0.5 size-4 shrink-0 text-sky-700" />
-              <span><strong className="text-slate-800">Seguimiento orientativo:</strong> ayuda a identificar casos que conviene revisar y no representa un SLA ni una evaluación del técnico.</span>
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="relative w-full max-w-xl">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-tenue" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar código, oficina, usuario, descripción o equipo" className="bg-papel pl-9 shadow-none" />
-            </div>
-
-            {view === "RESUELTO" ? (
-              <div className="flex flex-wrap gap-2">
-                <Select value={period} onChange={(e) => setPeriod(e.target.value as Period)} className="min-w-40">{(Object.keys(PERIODS) as Period[]).map((x) => <option key={x} value={x}>{PERIODS[x]}</option>)}</Select>
-                <Select value={closedSort} onChange={(e) => setClosedSort(e.target.value as ClosedSort)} className="min-w-44">{(Object.keys(CLOSED_SORT) as ClosedSort[]).map((x) => <option key={x} value={x}>{CLOSED_SORT[x]}</option>)}</Select>
-                <FilterButton count={advancedCount} open={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} />
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <Quick label="Mis incidencias" icon={<UserRound className="size-4" />} active={mine} onClick={() => { setMine((v) => !v); setUnassigned(false); setTechnician(""); }} />
-                <Quick label="Urgentes" icon={<AlertTriangle className="size-4" />} active={urgent} onClick={() => { setUrgent((v) => !v); setPriority(""); }} />
-                <Quick label="Sin asignar" icon={<UsersRound className="size-4" />} active={unassigned} onClick={() => { setUnassigned((v) => !v); setMine(false); setTechnician(""); }} />
-                <Quick label="En espera" icon={<PauseCircle className="size-4" />} active={followFilter === "EN_ESPERA"} onClick={() => setFollowFilter((current) => current === "EN_ESPERA" ? "" : "EN_ESPERA")} />
-                <Quick label="Revisar" icon={<Activity className="size-4" />} active={followFilter === "REQUIERE_REVISION"} onClick={() => setFollowFilter((current) => current === "REQUIERE_REVISION" ? "" : "REQUIERE_REVISION")} />
-                <Select value={workSort} onChange={(e) => setWorkSort(e.target.value as WorkSort)} className="min-w-44">{(Object.keys(WORK_SORT) as WorkSort[]).map((x) => <option key={x} value={x}>{WORK_SORT[x]}</option>)}</Select>
-                <FilterButton count={advancedCount} open={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} />
-              </div>
-            )}
-          </div>
-
-          {filtersOpen && (
-            <div className="mt-4 rounded-2xl border border-linea bg-papel/55 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3"><div><p className="font-bold">Filtros avanzados</p><p className="text-xs text-tenue">Jerarquía municipal: Zona → Oficina → Usuario.</p></div><Button size="sm" variant="ghost" onClick={clear}><X className="size-4" /> Limpiar</Button></div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <Field label="Zona"><Select value={zone} onChange={(e) => { setZone(e.target.value); setOffice(""); setMunicipalUser(""); }}><option value="">Todas las zonas</option>{activeZones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</Select></Field>
-                <Field label="Oficina"><Select value={office} disabled={!zone} onChange={(e) => { setOffice(e.target.value); setMunicipalUser(""); }}><option value="">{zone ? "Todas las oficinas de la zona" : "Seleccione primero una zona"}</option>{activeOffices.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select></Field>
-                <Field label="Usuario"><Select value={municipalUser} disabled={!office} onChange={(e) => setMunicipalUser(e.target.value)}><option value="">{office ? "Todos los usuarios de la oficina" : "Seleccione primero una oficina"}</option>{(users.data ?? []).filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.full_name}{u.job_title ? ` · ${u.job_title}` : ""}</option>)}</Select></Field>
-                <Field label={view === "RESUELTO" ? "Técnico que atendió" : "Técnico responsable"}><Select value={technician} onChange={(e) => { setTechnician(e.target.value); setMine(false); setUnassigned(false); }}><option value="">Todos los técnicos</option>{(techs.data ?? []).filter((t) => t.active).map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</Select></Field>
-                <Field label="Categoría"><Select value={category} onChange={(e) => setCategory(e.target.value as "" | TicketCategory)}><option value="">Todas las categorías</option>{CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}</Select></Field>
-                <Field label="Prioridad"><Select value={priority} onChange={(e) => { setPriority(e.target.value as "" | TicketPriority); setUrgent(false); }}><option value="">Todas las prioridades</option>{(["ALTA", "MEDIA", "BAJA"] as TicketPriority[]).map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}</Select></Field>
-                {view === "RESUELTO" ? (
-                  <>
-                    <Field label="Tipo de cierre"><Select value={resolution} onChange={(e) => setResolution(e.target.value as "" | ResolutionType)}><option value="">Todos los tipos</option>{(Object.keys(RESOLUTION) as ResolutionType[]).map((r) => <option key={r} value={r}>{RESOLUTION[r]}</option>)}</Select></Field>
-                    {period === "custom" && <><Field label="Cerrada desde"><Input type="date" value={closedFrom} onChange={(e) => setClosedFrom(e.target.value)} /></Field><Field label="Cerrada hasta"><Input type="date" value={closedTo} onChange={(e) => setClosedTo(e.target.value)} /></Field></>}
-                  </>
-                ) : (
-                  <>
-                    <Field label="Seguimiento"><Select value={followFilter} onChange={(e) => setFollowFilter(e.target.value as ActiveFollowFilter)}><option value="">Todos los estados de seguimiento</option><option value="EN_ESPERA">En espera</option><option value="SIN_ACTUALIZACION">Sin actualización reciente</option><option value="REQUIERE_REVISION">Requiere revisión</option></Select></Field>
-                    <Field label="Fecha de registro"><Input type="date" value={createdDate} onChange={(e) => setCreatedDate(e.target.value)} /></Field>
-                  </>
+      {/* --------------------------------------------------- Bandeja */}
+      <Card className="overflow-hidden">
+        <header className="panel-head">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="eyebrow">Bandeja de trabajo</p>
+              <div className="mt-1.5 flex items-center gap-2.5">
+                <h1 className="text-lg font-bold tracking-[-0.02em] text-tinta">{closed ? "Historial de incidencias" : TABS.find((x) => x.value === view)?.label}</h1>
+                {total > 0 && (
+                  <span className="rounded-full bg-casma-claro px-2 py-0.5 text-[0.72rem] font-bold text-casma-oscuro">
+                    {total}
+                  </span>
                 )}
               </div>
+              <p className="mt-0.5 text-[0.8rem] text-tenue">
+                {total > 0 ? <><strong className="font-semibold text-tinta">{total}</strong> {total === 1 ? "caso" : "casos"}</> : "Sin casos en esta vista"}
+              </p>
+            </div>
+            <div className="segmented overflow-x-auto" role="tablist" aria-label="Estado de las incidencias">
+              {TABS.map((tab) => (
+                <button key={tab.value} type="button" role="tab" aria-selected={view === tab.value} onClick={() => chooseView(tab.value)}>{tab.label}</button>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        <div className="toolbar">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-tenue-2" aria-hidden />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar código, oficina, usuario, equipo o descripción" aria-label="Buscar incidencias" className="pl-8" />
+          </div>
+
+          {closed ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={period} onChange={(e) => setPeriod(e.target.value as Period)} aria-label="Periodo" className="w-auto min-w-36">
+                {(Object.keys(PERIODS) as Period[]).map((x) => <option key={x} value={x}>{PERIODS[x]}</option>)}
+              </Select>
+              <Select value={closedSort} onChange={(e) => setClosedSort(e.target.value as ClosedSort)} aria-label="Orden" className="w-auto min-w-40">
+                {(Object.keys(CLOSED_SORT) as ClosedSort[]).map((x) => <option key={x} value={x}>{CLOSED_SORT[x]}</option>)}
+              </Select>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip active={mine} icon={<UserRound className="size-3.5" />} onClick={() => { setMine((v) => !v); setUnassigned(false); setTechnician(""); }}>Mías</Chip>
+              <Chip active={unassigned} icon={<UsersRound className="size-3.5" />} onClick={() => { setUnassigned((v) => !v); setMine(false); setTechnician(""); }}>Sin asignar</Chip>
+              <Chip active={urgent} icon={<AlertTriangle className="size-3.5" />} onClick={() => { setUrgent((v) => !v); setPriority(""); }}>Urgentes</Chip>
+              <Chip active={followFilter === "EN_ESPERA"} icon={<PauseCircle className="size-3.5" />} onClick={() => setFollowFilter((c) => (c === "EN_ESPERA" ? "" : "EN_ESPERA"))}>En espera</Chip>
+              <Chip active={followFilter === "REQUIERE_REVISION"} icon={<BrainCircuit className="size-3.5" />} onClick={() => setFollowFilter((c) => (c === "REQUIERE_REVISION" ? "" : "REQUIERE_REVISION"))}>Revisar</Chip>
+              <Select value={workSort} onChange={(e) => setWorkSort(e.target.value as WorkSort)} aria-label="Orden" className="w-auto min-w-40">
+                {(Object.keys(WORK_SORT) as WorkSort[]).map((x) => <option key={x} value={x}>{WORK_SORT[x]}</option>)}
+              </Select>
             </div>
           )}
 
-          {(zone || office || municipalUser) && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-tenue"><MapPin className="size-4 text-casma" /><strong className="text-tinta">Ruta:</strong><span>{activeZones.find((z) => z.id === zone)?.name ?? "Todas las zonas"}</span>{office && <><span>→</span><span>{offices.data?.find((o) => o.id === office)?.name}</span></>}{municipalUser && <><span>→</span><span>{users.data?.find((u) => u.id === municipalUser)?.full_name}</span></>}</div>}
-        </header>
+          <Button variant={advancedCount ? "selected" : "secondary"} onClick={() => setFiltersOpen((v) => !v)} className="sm:ml-auto">
+            Filtros{advancedCount ? ` · ${advancedCount}` : ""}
+          </Button>
+        </div>
 
-        {list.isLoading ? <div className="p-6"><Spinner /></div> : list.error ? <div className="p-5"><ErrorBox message={errorMessage(list.error)} /></div> : tickets.length === 0 ? <EmptyState icon={view === "RESUELTO" ? <CheckCircle2 /> : <ListTodo />} title={view === "RESUELTO" ? "No hay incidencias cerradas con estos filtros" : "No hay incidencias que coincidan"} /> : <TicketList tickets={tickets} onOpen={setOpenId} />}
-        {list.hasNextPage && <div className="border-t border-linea bg-white p-4 text-center"><Button variant="secondary" loading={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>Cargar más</Button></div>}
+        {filtersOpen && (
+          <div className="border-b border-linea bg-papel-2/50 px-4 py-3.5 sm:px-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[0.82rem] font-bold text-tinta">Filtros avanzados <span className="font-normal text-tenue">· Jerarquía Zona → Oficina → Usuario</span></p>
+              <Button size="sm" variant="ghost" onClick={clearFilters}><X className="size-4" /> Limpiar</Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <Field label="Zona">
+                <Select value={zone} onChange={(e) => { setZone(e.target.value); setOffice(""); setMunicipalUser(""); }}>
+                  <option value="">Todas las zonas</option>
+                  {activeZones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Oficina">
+                <Select value={office} disabled={!zone} onChange={(e) => { setOffice(e.target.value); setMunicipalUser(""); }}>
+                  <option value="">{zone ? "Todas de la zona" : "Elija primero una zona"}</option>
+                  {activeOffices.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Usuario">
+                <Select value={municipalUser} disabled={!office} onChange={(e) => setMunicipalUser(e.target.value)}>
+                  <option value="">{office ? "Todos de la oficina" : "Elija primero una oficina"}</option>
+                  {(users.data ?? []).filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.full_name}{u.job_title ? ` · ${u.job_title}` : ""}</option>)}
+                </Select>
+              </Field>
+              <Field label={closed ? "Técnico que atendió" : "Técnico responsable"}>
+                <Select value={technician} onChange={(e) => { setTechnician(e.target.value); setMine(false); setUnassigned(false); }}>
+                  <option value="">Todos los técnicos</option>
+                  {(techs.data ?? []).filter((t) => t.active).map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Categoría">
+                <Select value={category} onChange={(e) => setCategory(e.target.value as "" | TicketCategory)}>
+                  <option value="">Todas</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
+                </Select>
+              </Field>
+              <Field label="Prioridad">
+                <Select value={priority} onChange={(e) => { setPriority(e.target.value as "" | TicketPriority); setUrgent(false); }}>
+                  <option value="">Todas</option>
+                  {(["ALTA", "MEDIA", "BAJA"] as TicketPriority[]).map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
+                </Select>
+              </Field>
+              {closed ? (
+                <>
+                  <Field label="Tipo de cierre">
+                    <Select value={resolution} onChange={(e) => setResolution(e.target.value as "" | ResolutionType)}>
+                      <option value="">Todos</option>
+                      {(Object.keys(RESOLUTION) as ResolutionType[]).map((r) => <option key={r} value={r}>{RESOLUTION[r]}</option>)}
+                    </Select>
+                  </Field>
+                  {period === "custom" && <>
+                    <Field label="Cerrada desde"><Input type="date" value={closedFrom} onChange={(e) => setClosedFrom(e.target.value)} /></Field>
+                    <Field label="Cerrada hasta"><Input type="date" value={closedTo} onChange={(e) => setClosedTo(e.target.value)} /></Field>
+                  </>}
+                </>
+              ) : (
+                <>
+                  <Field label="Seguimiento" hint="Señal orientativa de la IA, no un SLA.">
+                    <Select value={followFilter} onChange={(e) => setFollowFilter(e.target.value as FollowFilter)}>
+                      <option value="">Todos los estados</option>
+                      {(Object.keys(FOLLOW_LABEL) as (keyof typeof FOLLOW_LABEL)[]).map((key) => <option key={key} value={key}>{FOLLOW_LABEL[key]}</option>)}
+                    </Select>
+                  </Field>
+                  <Field label="Fecha de registro"><Input type="date" value={createdDate} onChange={(e) => setCreatedDate(e.target.value)} /></Field>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(zone || office || municipalUser) && (
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-linea bg-papel-2/30 px-4 py-2 text-[0.78rem] text-tenue sm:px-5">
+            <MapPin className="size-3.5 text-casma" aria-hidden />
+            <span>{activeZones.find((z) => z.id === zone)?.name ?? "Todas las zonas"}</span>
+            {office && <><ChevronRight className="size-3" aria-hidden /><span className="font-medium text-tinta-2">{offices.data?.find((o) => o.id === office)?.name}</span></>}
+            {municipalUser && <><ChevronRight className="size-3" aria-hidden /><span className="font-medium text-tinta-2">{users.data?.find((u) => u.id === municipalUser)?.full_name}</span></>}
+          </div>
+        )}
+
+        {list.isLoading ? <Spinner label="Cargando incidencias" /> : list.error ? <div className="p-4"><ErrorBox message={errorMessage(list.error)} /></div>
+          : tickets.length === 0 ? <EmptyState icon={closed ? <CheckCircle2 /> : <ListTodo />} title={closed ? "No hay incidencias cerradas con estos filtros" : "No hay incidencias que coincidan"} />
+            : <TicketList tickets={tickets} onOpen={setOpenId} />}
+
+        {list.hasNextPage && (
+          <div className="border-t border-linea p-3 text-center">
+            <Button variant="secondary" loading={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>Cargar más</Button>
+          </div>
+        )}
       </Card>
 
-      <Modal open={params.get("new") === "1"} onClose={closeCreate} title="Nueva incidencia" wide><NewTicketForm variant="modal" onCreated={(id) => { closeCreate(); setOpenId(id); }} /></Modal>
+      <Modal open={params.get("new") === "1"} onClose={closeCreate} title="Nueva incidencia" wide>
+        <NewTicketForm variant="modal" onCreated={(id) => { closeCreate(); setOpenId(id); }} />
+      </Modal>
       <TicketDetail ticketId={openId} onClose={closeTicket} />
     </div>
   );
 }
 
+/* ------------------------------------------------------------------- Lista */
+
 function TicketList({ tickets, onOpen }: { tickets: Ticket[]; onOpen: (id: string) => void }) {
-  return <>
-    <div className="divide-y divide-linea bg-white md:hidden">{tickets.map((t) => {
-      const technician = t.status === "RESUELTO" ? (t.resolution?.resolved_by_name || t.assigned_to_name) : t.assigned_to_name;
-      return <article key={t.id} className="p-4"><button className="block w-full text-left" onClick={() => onOpen(t.id)}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">{t.number}</p><h3 className="mt-1 font-bold text-tinta">{t.subject}</h3></div><PriorityBadge priority={t.priority} /></div><p className="mt-2 line-clamp-2 text-sm text-tenue">{t.description || "Sin descripción adicional"}</p></button><div className="mt-3 flex items-center gap-2 text-xs text-tenue"><StatusBadge status={t.status} /><span>{CATEGORY_LABEL[t.category]}</span></div><div className="mt-3 rounded-xl border border-linea bg-papel/55 p-3"><p className="flex items-center gap-1.5 text-sm font-semibold text-tinta"><Building2 className="size-4 text-casma" /> {t.office_name}</p>{t.equipment?.patrimonial_code && <p className="mt-1 text-xs text-tenue">Equipo {t.equipment.patrimonial_code}</p>}<div className="mt-3 grid gap-2"><PersonCard label={t.status === "RESUELTO" ? "Usuario que reportó" : "Usuario que reporta"} value={t.reporter_name || "No especificado"} /><PersonCard label={t.status === "RESUELTO" ? "Técnico que atendió" : "Técnico responsable"} value={technician || "Sin técnico asignado"} tone="technician" /></div>{t.status !== "RESUELTO" && <div className="mt-2"><FollowUpPill followUp={t.follow_up} /></div>}{t.status === "RESUELTO" && t.resolution?.notes && <p className="mt-3 line-clamp-2 text-xs text-tenue"><strong className="text-tinta">Solución:</strong> {t.resolution.notes}</p>}</div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-xs text-tenue">{t.status === "RESUELTO" && t.resolution?.resolved_at ? `Cerrada ${ago(t.resolution.resolved_at).toLowerCase()}` : ago(t.created_at)}</span><Button size="sm" variant={t.status === "RESUELTO" ? "secondary" : "success"} onClick={() => onOpen(t.id)}>{actionLabel(t)} <ArrowRight className="size-4" /></Button></div></article>;
-    })}</div>
-    <div className="hidden overflow-x-auto bg-white md:block"><table className="min-w-full text-left"><thead className="bg-papel/70 text-xs font-bold uppercase tracking-[0.07em] text-tenue"><tr><th className="px-5 py-4 sm:px-6">Incidencia</th><th className="px-5 py-4">Contexto</th><th className="px-5 py-4">Atención</th><th className="px-5 py-4">Acción</th></tr></thead><tbody>{tickets.map((t) => {
-      const technician = t.status === "RESUELTO" ? (t.resolution?.resolved_by_name || t.assigned_to_name) : t.assigned_to_name;
-      return <tr key={t.id} className="border-t border-linea/80 align-top hover:bg-casma-claro/25"><td className="px-5 py-4 sm:px-6"><button className="max-w-xl text-left" onClick={() => onOpen(t.id)}><p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">{t.number}</p><p className="mt-1 font-bold text-tinta">{t.subject}</p><p className="mt-1 line-clamp-2 text-sm text-tenue">{t.description || "Sin descripción adicional"}</p></button><div className="mt-2 flex gap-2"><PriorityBadge priority={t.priority} /><StatusBadge status={t.status} /></div></td><td className="px-5 py-4 text-sm"><p className="flex items-center gap-1.5 font-semibold text-tinta"><Building2 className="size-4 text-casma" /> {t.office_name}</p><p className="mt-1 text-xs text-tenue">{CATEGORY_LABEL[t.category]}{t.equipment?.patrimonial_code ? ` · Equipo ${t.equipment.patrimonial_code}` : ""}</p><div className="mt-3"><PersonCard label={t.status === "RESUELTO" ? "Usuario que reportó" : "Usuario que reporta"} value={t.reporter_name || "No especificado"} /></div></td><td className="px-5 py-4 text-sm"><PersonCard label={t.status === "RESUELTO" ? "Técnico que atendió" : "Técnico responsable"} value={technician || "Sin técnico asignado"} tone="technician" />{t.status === "RESUELTO" ? <><p className="mt-2 text-xs text-tenue">{t.resolution?.resolved_at ? `Cerrada: ${when(t.resolution.resolved_at)}` : "Fecha de cierre no registrada"}</p>{t.resolution?.notes && <p className="mt-2 line-clamp-2 max-w-sm text-xs text-tenue"><strong className="text-tinta">Solución:</strong> {t.resolution.notes}</p>}</> : <div className="mt-2"><FollowUpPill followUp={t.follow_up} /></div>}</td><td className="px-5 py-4"><Button size="sm" variant={t.status === "RESUELTO" ? "secondary" : "success"} onClick={() => onOpen(t.id)}>{actionLabel(t)} <ArrowRight className="size-4" /></Button></td></tr>;
-    })}</tbody></table></div>
-  </>;
+  return (
+    <>
+      {/* Móvil: tarjetas */}
+      <ul className="divide-y divide-linea md:hidden">
+        {tickets.map((t) => (
+          <li key={t.id} className={cx("p-4", t.status !== "RESUELTO" && t.priority === "ALTA" && "border-l-4 border-l-alerta")}>
+            <TicketHeader ticket={t} onOpen={onOpen} />
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[0.78rem] text-tenue">
+              <span className="inline-flex items-center gap-1.5"><Building2 className="size-3.5 text-casma" aria-hidden />{t.office_name}</span>
+              <span>·</span>
+              <span>{CATEGORY_LABEL[t.category]}</span>
+              {t.equipment?.patrimonial_code && <><span>·</span><span>{t.equipment.patrimonial_code}</span></>}
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-linea/70 pt-3">
+              <span className="text-[0.75rem] text-tenue">
+                {t.status === "RESUELTO" && t.resolution?.resolved_at ? `Cerrada ${ago(t.resolution.resolved_at).toLowerCase()}` : ago(t.created_at)}
+              </span>
+              <Button size="sm" variant={t.status === "RESUELTO" ? "secondary" : "primary"} onClick={() => onOpen(t.id)}>{actionLabel(t)}</Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Escritorio: tabla compacta */}
+      <div className="hidden overflow-x-auto md:block">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th className="w-[2px] p-0"><span className="sr-only">Prioridad</span></th>
+              <th className="w-[34%]">Incidencia</th>
+              <th>Oficina y usuario</th>
+              <th>Responsable</th>
+              <th>Estado</th>
+              <th className="text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tickets.map((t) => {
+              const tech = technicianOf(t);
+              return (
+                <tr key={t.id}>
+                  <td className="p-0">
+                    <span
+                      className={cx("block h-full min-h-11 w-[3px]", t.status === "RESUELTO" ? "prioridad-baja" : t.priority === "ALTA" ? "prioridad-alta" : t.priority === "MEDIA" ? "prioridad-media" : "prioridad-baja")}
+                      title={t.status === "RESUELTO" ? "Cerrada" : `Prioridad ${PRIORITY_LABEL[t.priority].toLowerCase()}`}
+                    />
+                  </td>
+                  <td>
+                    <button type="button" onClick={() => onOpen(t.id)} className="group block w-full text-left">
+                      <span className="text-[0.7rem] font-bold uppercase tracking-[0.06em] text-casma">{t.number}</span>
+                      <span className="mt-0.5 block truncate font-semibold text-tinta transition group-hover:text-casma-oscuro">{t.subject}</span>
+                      <span className="mt-0.5 line-clamp-1 block text-[0.78rem] text-tenue">{t.description || "Sin descripción adicional"}</span>
+                    </button>
+                  </td>
+                  <td>
+                    <p className="truncate text-[0.83rem] font-semibold text-tinta">{t.office_name}</p>
+                    <p className="mt-0.5 truncate text-[0.76rem] text-tenue">
+                      {t.status === "RESUELTO" ? "Reportó" : "Reporta"}: {t.reporter_name ?? "sin especificar"}
+                    </p>
+                    {t.equipment?.patrimonial_code && <p className="mt-0.5 truncate text-[0.76rem] text-tenue-2">Equipo {t.equipment.patrimonial_code}</p>}
+                  </td>
+                  <td>
+                    <p className="truncate text-[0.83rem] font-semibold text-tinta-2">{tech ?? "Sin asignar"}</p>
+                    {t.status === "RESUELTO" && t.resolution?.notes
+                      ? <p className="mt-0.5 line-clamp-2 max-w-xs text-[0.76rem] text-tenue">{t.resolution.notes}</p>
+                      : <div className="mt-1"><FollowUpPill followUp={t.follow_up} /></div>}
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap gap-1.5"><StatusBadge status={t.status} /><PriorityBadge priority={t.priority} /></div>
+                    {t.status === "RESUELTO" && t.resolution?.resolved_at && <p className="mt-1 text-[0.72rem] text-tenue-2">{when(t.resolution.resolved_at)}</p>}
+                  </td>
+                  <td className="text-right">
+                    <Button size="sm" variant={t.status === "RESUELTO" ? "secondary" : "primary"} onClick={() => onOpen(t.id)}>
+                      {actionLabel(t)} <ArrowRight className="size-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function TicketHeader({ ticket: t, onOpen }: { ticket: Ticket; onOpen: (id: string) => void }) {
+  return (
+    <button type="button" onClick={() => onOpen(t.id)} className="block w-full text-left">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-[0.7rem] font-bold uppercase tracking-[0.06em] text-tenue-2">{t.number}</span>
+          <span className="mt-0.5 block text-[0.92rem] font-bold leading-snug text-tinta">{t.subject}</span>
+          <span className="mt-0.5 line-clamp-2 block text-[0.8rem] leading-5 text-tenue">{t.description || "Sin descripción adicional"}</span>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <StatusBadge status={t.status} />
+          <PriorityBadge priority={t.priority} />
+        </div>
+      </div>
+    </button>
+  );
 }
 
 function FollowUpPill({ followUp }: { followUp: FollowUp }) {
-  const tone = followUp.state === "EN_SEGUIMIENTO" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : followUp.state === "EN_ESPERA" ? "border-violet-200 bg-violet-50 text-violet-800" : followUp.state === "SIN_ACTUALIZACION" ? "border-amber-200 bg-amber-50 text-amber-800" : followUp.state === "REQUIERE_REVISION" ? "border-orange-200 bg-orange-50 text-orange-800" : "border-slate-200 bg-slate-50 text-slate-700";
-  return <div className={cx("inline-flex max-w-full items-center gap-2 rounded-lg border px-2.5 py-2", tone)} title={followUp.detail}>{followUp.state === "EN_ESPERA" ? <PauseCircle className="size-4 shrink-0" /> : <Activity className="size-4 shrink-0" />}<div className="min-w-0"><p className="text-xs font-bold">{followUp.label}</p><p className="truncate text-[11px] opacity-80">{followUp.state === "EN_ESPERA" && followUp.wait_reason_label ? followUp.wait_reason_label : `Última actividad: ${ago(followUp.last_activity_at).toLowerCase()}`}</p></div></div>;
+  if (followUp.state === "EN_SEGUIMIENTO" || followUp.state === "CERRADA") {
+    return <span className="text-[0.75rem] text-tenue-2">Última actividad: {ago(followUp.last_activity_at).toLowerCase()}</span>;
+  }
+  const tone =
+    followUp.state === "EN_ESPERA" ? "border-violet-200 bg-violet-50 text-violet-800"
+      : followUp.state === "SIN_ACTUALIZACION" ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-orange-200 bg-orange-50 text-orange-800";
+  return (
+    <span className={cx("inline-flex max-w-full items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[0.7rem] font-semibold", tone)} title={followUp.detail}>
+      <Activity className="size-3 shrink-0" aria-hidden />
+      <span className="truncate">{followUp.state === "EN_ESPERA" && followUp.wait_reason_label ? followUp.wait_reason_label : followUp.label}</span>
+    </span>
+  );
 }
 
-function PersonCard({ label, value, tone = "user" }: { label: string; value: string; tone?: "user" | "technician" }) {
-  return <div className={cx("rounded-xl border px-3 py-2.5", tone === "technician" ? "border-casma/20 bg-casma-claro/65" : "border-slate-200 bg-white")}><p className={cx("flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em]", tone === "technician" ? "text-casma-oscuro" : "text-slate-500")}>{tone === "technician" ? <UsersRound className="size-3.5" /> : <UserRound className="size-3.5" />}{label}</p><p className="mt-1 font-bold text-tinta">{value}</p></div>;
+/* ------------------------------------------------------------- Controles */
+
+function Kpi({ label, value, helper, active, icon, tone, onClick }: { label: string; value?: number; helper: string; active: boolean; icon: ReactNode; tone: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} data-active={active} aria-pressed={active} className="kpi group">
+      <span className="flex items-start justify-between gap-2">
+        <span className="stat-label">{label}</span>
+        <span className={cx("grid size-8 shrink-0 place-items-center rounded-lg transition", active ? "bg-white/20 text-white" : cx(tone, "group-hover:scale-105"))}>{icon}</span>
+      </span>
+      <span className="stat-value block">{value ?? "–"}</span>
+      <span className="stat-helper block">{helper || "Actualizando…"}</span>
+    </button>
+  );
 }
 
-function HistoryMetric({ label, value, helper }: { label: string; value: number; helper: string }) {
-  return <div className="rounded-xl border border-linea bg-papel/55 px-4 py-3"><p className="text-xs font-bold uppercase tracking-[0.08em] text-tenue">{label}</p><p className="mt-1 text-2xl font-bold text-tinta">{value}</p><p className="mt-1 text-xs text-tenue">{helper}</p></div>;
+function Chip({ active, icon, onClick, children }: { active: boolean; icon: ReactNode; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} data-active={active} className="chip">
+      {icon}{children}
+    </button>
+  );
 }
 
-function MiniMetric({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return <div className="rounded-xl border border-linea bg-papel/45 px-3 py-3"><p className="text-[11px] font-bold uppercase tracking-[0.06em] text-tenue">{label}</p><p className="mt-1 text-lg font-bold text-tinta">{value}</p><p className="mt-1 text-[11px] leading-4 text-tenue">{helper}</p></div>;
-}
-
-function Kpi({ label, value, detail, active, icon, onClick }: { label: string; value?: number; detail: string; active: boolean; icon: ReactNode; onClick: () => void }) {
-  return <button onClick={onClick} className={cx("rounded-2xl border bg-white p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:border-amber-300 sm:p-5", active ? "border-amber-400 bg-amber-50/60 ring-2 ring-amber-200/50" : "border-transparent")}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-tenue">{label}</p><p className="mt-2 text-3xl font-bold text-tinta">{value ?? "–"}</p></div><span className="grid size-10 place-items-center rounded-xl bg-casma-claro text-casma-oscuro">{icon}</span></div><p className="mt-4 text-xs text-tenue sm:text-sm">{detail || "Información en actualización"}</p></button>;
-}
-
-function Quick({ label, icon, active, onClick }: { label: string; icon: ReactNode; active: boolean; onClick: () => void }) {
-  return <button onClick={onClick} className={cx("inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold", active ? "border-casma/30 bg-casma-claro text-casma-oscuro" : "border-linea bg-white text-tenue hover:text-tinta")}>{icon}{label}</button>;
-}
-
-function FilterButton({ count, open, onClick }: { count: number; open: boolean; onClick: () => void }) {
-  return <Button variant="secondary" onClick={onClick}><Filter className="size-4" /> Filtros{count ? ` (${count})` : ""}{open ? " · Ocultar" : ""}</Button>;
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="flex flex-col gap-1.5 text-xs font-bold text-tenue">{label}{children}</label>;
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="label">{label}</span>
+      {children}
+      {hint && <span className="hint">{hint}</span>}
+    </label>
+  );
 }

@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ban, Check, MonitorSmartphone, X } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "../../components/Toasts";
-import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Input, Select, Spinner } from "../../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorBox, Field, Input, Select, Spinner } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { DEVICE_KIND_LABEL, EQUIPMENT_LABEL, fmtAgo, fmtDateTime } from "../../lib/labels";
 import type { Device, DeviceKind, DeviceStatus } from "../../lib/types";
@@ -36,20 +36,14 @@ export function DevicesPage() {
 
   return (
     <div>
-      <PageHeader title="Dispositivos" description="Cada computadora o celular que usa la cuenta de una oficina debe ser autorizado. Pida al usuario que le dicte el código de su pantalla." />
-      <div className="-mx-1 mb-4 overflow-x-auto px-1 pb-1">
-        <div className="flex w-max gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-linea sm:w-fit" role="tablist" aria-label="Estado de dispositivos">
+      <PageHeader
+        title="Dispositivos"
+        description="Cada computadora o celular que usa la cuenta de una oficina debe estar autorizado. Pida al usuario que le dicte el código que aparece en su pantalla."
+      />
+      <div className="mb-4 overflow-x-auto">
+        <div className="segmented" role="tablist" aria-label="Estado de dispositivos">
           {TABS.map((t) => (
-            <button
-              key={t.value}
-              role="tab"
-              aria-selected={tab === t.value}
-              onClick={() => setTab(t.value)}
-              className={cx(
-                "min-h-10 shrink-0 rounded-lg px-3.5 py-2 text-sm font-bold transition sm:px-4",
-                tab === t.value ? "bg-casma-oscuro text-white shadow-sm" : "text-tenue hover:bg-casma-claro/60 hover:text-casma-oscuro",
-              )}
-            >
+            <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} onClick={() => setTab(t.value)}>
               {t.label}
             </button>
           ))}
@@ -58,7 +52,7 @@ export function DevicesPage() {
       {devices.isLoading ? <Spinner /> : devices.error ? <ErrorBox message={errorMessage(devices.error)} /> : !devices.data?.length ? (
         <Card><EmptyState icon={<MonitorSmartphone />} title="No hay dispositivos en esta lista" /></Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {devices.data.map((d) => <DeviceCard key={d.id} device={d} />)}
         </div>
       )}
@@ -86,25 +80,25 @@ function DeviceCard({ device: d }: { device: Device }) {
   });
 
   return (
-    <Card className="flex flex-col gap-4 p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="flex flex-col gap-3.5 p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-lg font-bold text-tinta">{d.office_name}</p>
-          <p className="mt-0.5 text-sm leading-5 text-tenue">{describeAgent(d.user_agent)}, IP {d.last_ip ?? d.first_ip ?? "?"}</p>
-          <p className="mt-0.5 text-sm leading-5 text-tenue" title={fmtDateTime(d.created_at)}>Solicitado {fmtAgo(d.created_at)}, visto {fmtAgo(d.last_seen_at)}</p>
+          <p className="text-[0.95rem] font-bold text-tinta">{d.office_name}</p>
+          <p className="mt-0.5 text-[0.78rem] leading-5 text-tenue">{describeAgent(d.user_agent)}, IP {d.last_ip ?? d.first_ip ?? "?"}</p>
+          <p className="text-[0.75rem] leading-5 text-tenue-2" title={fmtDateTime(d.created_at)}>Solicitado {fmtAgo(d.created_at)} · visto {fmtAgo(d.last_seen_at)}</p>
         </div>
-        <span className="w-fit shrink-0 whitespace-nowrap rounded-xl border-2 border-dashed border-casma bg-casma-claro px-3 py-1.5 text-xl font-bold tracking-wider text-casma-oscuro sm:text-2xl">{d.pair_code}</span>
+        <span className="shrink-0 whitespace-nowrap rounded-lg border-2 border-dashed border-casma/50 bg-casma-claro px-2.5 py-1 text-base font-bold tracking-[0.12em] text-casma-oscuro">{d.pair_code}</span>
       </div>
 
       {d.status === "PENDIENTE" ? (
-        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); action.mutate("approve"); }}>
+        <form className="flex flex-col gap-3 border-t border-linea pt-3.5" onSubmit={(e) => { e.preventDefault(); action.mutate("approve"); }}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Tipo">
               {(id) => <Select id={id} value={kind} onChange={(e) => setKind(e.target.value as DeviceKind)}>{Object.entries(DEVICE_KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}
             </Field>
             <Field label="Nombre">{(id) => <Input id={id} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="PC de José" minLength={2} maxLength={80} required />}</Field>
           </div>
-          <Field label="Vincular con equipo patrimonial" hint="Así la IA sabe qué máquina reporta.">
+          <Field label="Vincular con equipo patrimonial" hint="Así el análisis de riesgo sabe qué máquina está reportando.">
             {(id) => (
               <Select id={id} value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)}>
                 <option value="">Sin vincular (celular u otro)</option>
@@ -112,18 +106,18 @@ function DeviceCard({ device: d }: { device: Device }) {
               </Select>
             )}
           </Field>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button type="submit" variant="success" loading={action.isPending && action.variables === "approve"}><Check className="size-4" /> Autorizar</Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="submit" variant="primary" loading={action.isPending && action.variables === "approve"}><Check className="size-4" /> Autorizar</Button>
             <Button type="button" variant="danger" loading={action.isPending && action.variables === "reject"} onClick={() => action.mutate("reject")}><X className="size-4" /> Rechazar</Button>
           </div>
         </form>
       ) : (
-        <div className="flex flex-wrap items-center gap-2 border-t border-linea/70 pt-3">
-          <Badge className="border-linea bg-papel text-tinta">{DEVICE_KIND_LABEL[d.kind]}</Badge>
-          {d.label && <Badge className="border-linea bg-white text-tinta">{d.label}</Badge>}
-          {d.equipment_code && <Badge className="border-casma/30 bg-casma-claro text-casma-oscuro">{d.equipment_code}</Badge>}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-linea pt-3">
+          <Badge className="border-linea bg-papel-2 text-tinta-2">{DEVICE_KIND_LABEL[d.kind]}</Badge>
+          {d.label && <Badge className="border-linea bg-white text-tinta-2">{d.label}</Badge>}
+          {d.equipment_code && <Badge className="border-casma/25 bg-casma-claro text-casma-oscuro">{d.equipment_code}</Badge>}
           {d.status === "APROBADO" && (
-            <Button size="sm" variant="danger" className="sm:ml-auto" loading={action.isPending}
+            <Button size="sm" variant="ghost" className="ml-auto text-alerta hover:bg-alerta-claro" loading={action.isPending}
               onClick={() => confirm(`¿Quitar el acceso a «${d.label ?? d.pair_code}»?`) && action.mutate("revoke")}><Ban className="size-4" /> Revocar</Button>
           )}
         </div>

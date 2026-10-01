@@ -164,29 +164,34 @@ export function EquipmentPage() {
       {list.isLoading ? <Spinner /> : list.error ? <ErrorBox message={errorMessage(list.error)} /> : !visibleEquipment.length ? (
         <Card><EmptyState icon={<Monitor />} title="No se encontraron equipos con estos filtros" /></Card>
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm">
-            <thead className="border-b border-linea bg-papel text-tenue">
-              <tr><th className="p-3">ID TI</th><th className="p-3">Código patrimonial</th><th className="p-3">Equipo</th><th className="p-3">Jerarquía</th><th className="p-3">Responsable</th><th className="p-3">IP / MAC</th><th className="p-3">Estado</th><th className="p-3" /></tr>
-            </thead>
-            <tbody className="divide-y divide-linea">
-              {visibleEquipment.map((e) => (
-                <tr key={e.id} className="cursor-pointer hover:bg-papel" onClick={() => setSelected(e.id)}>
-                  <td className="p-3 font-bold text-casma">{e.inventory_id ?? "–"}</td>
-                  <td className="p-3 font-bold">{e.patrimonial_code}</td>
-                  <td className="p-3">{EQUIPMENT_LABEL[e.type]}<p className="text-tenue">{e.device_label || [e.brand, e.model].filter(Boolean).join(" ") || "–"}</p></td>
-                  <td className="p-3">
-                    <p className="font-bold">{e.zone_name ?? "Sin zona"}</p>
-                    <p className="text-tenue">{e.office_name ?? "Sin oficina"}{e.area && e.area !== e.office_name ? ` › ${e.area}` : ""}</p>
-                  </td>
-                  <td className="p-3"><p className="font-bold">{e.responsible_name ?? "–"}</p><p className="text-tenue">{e.responsible_type}</p></td>
-                  <td className="p-3">{e.ip_address ?? "–"}<p className="text-tenue">{e.mac_address ?? "–"}</p></td>
-                  <td className="p-3"><EquipmentStatusBadge status={e.status} />{e.criticality === 3 && <Badge className="ml-1 border-alerta/40 text-alerta">Crítico</Badge>}</td>
-                  <td className="p-3 text-right"><Button size="sm" variant="ghost">Ver</Button></td>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="data-table responsive-table">
+              <thead>
+                <tr>
+                  <th>ID TI</th><th>Patrimonial</th><th>Equipo</th><th>Jerarquía</th>
+                  <th>Responsable</th><th>IP / MAC</th><th>Estado</th><th data-colspan className="text-right">Acción</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleEquipment.map((e) => (
+                  <tr key={e.id} className="cursor-pointer" onClick={() => setSelected(e.id)}>
+                    <td data-label="ID TI" className="font-bold text-casma">{e.inventory_id ?? "–"}</td>
+                    <td data-label="Patrimonial" className="font-bold">{e.patrimonial_code}</td>
+                    <td data-label="Equipo">{EQUIPMENT_LABEL[e.type]}<p className="text-[0.78rem] text-tenue">{e.device_label || [e.brand, e.model].filter(Boolean).join(" ") || "–"}</p></td>
+                    <td data-label="Jerarquía">
+                      <p className="font-semibold text-tinta">{e.zone_name ?? "Sin zona"}</p>
+                      <p className="text-[0.78rem] text-tenue">{e.office_name ?? "Sin oficina"}{e.area && e.area !== e.office_name ? ` › ${e.area}` : ""}</p>
+                    </td>
+                    <td data-label="Responsable"><p className="font-semibold text-tinta">{e.responsible_name ?? "–"}</p><p className="text-[0.76rem] text-tenue">{e.responsible_type}</p></td>
+                    <td data-label="Red">{e.ip_address ?? "–"}<p className="text-[0.76rem] text-tenue">{e.mac_address ?? "–"}</p></td>
+                    <td data-label="Estado"><EquipmentStatusBadge status={e.status} />{e.criticality === 3 && <Badge className="ml-1 border-red-200 bg-red-50 text-alerta">Crítico</Badge>}</td>
+                    <td data-colspan className="text-right"><Button size="sm" variant="secondary">Ver</Button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
       <EquipmentDetail id={selected} onClose={() => setSelected(null)} onEdit={(e) => { setSelected(null); setEditing(e); }} />
@@ -346,17 +351,17 @@ function EquipmentImportModal({ open, onClose }: { open: boolean; onClose: () =>
           <h3 className="mb-2 font-bold">Jerarquía válida Zona / Oficina</h3>
           <p className="mb-3 text-sm text-tenue">Use estas combinaciones en el Excel. Las oficinas sin zona asignada no pueden recibir una importación de Margesí.</p>
           {refs.isLoading ? <Spinner label="Cargando oficinas" /> : refs.error ? <ErrorBox message={errorMessage(refs.error)} /> : (
-            <div className="max-h-64 overflow-auto rounded-xl border border-linea">
-              <table className="w-full min-w-[620px] text-left text-sm">
-                <thead className="sticky top-0 bg-papel"><tr><th className="p-2">Zona</th><th className="p-2">Código</th><th className="p-2">Oficina</th><th className="p-2">Jefe / responsable</th><th className="p-2">Importación</th></tr></thead>
-                <tbody className="divide-y divide-linea">
+            <div className="max-h-64 overflow-auto rounded-lg border border-linea">
+              <table className="data-table responsive-table">
+                <thead className="sticky top-0"><tr><th>Zona</th><th>Código</th><th>Oficina</th><th>Responsable</th><th>Importación</th></tr></thead>
+                <tbody>
                   {refs.data?.map((ref) => (
                     <tr key={ref.office_code}>
-                      <td className="p-2"><p className="font-bold">{ref.zone_name ?? "Sin zona"}</p><p className="font-mono text-xs text-tenue">{ref.zone_id}</p></td>
-                      <td className="p-2 font-bold">{ref.office_code}</td>
-                      <td className="p-2">{ref.office_name}</td>
-                      <td className="p-2">{ref.head_name ?? "–"}</td>
-                      <td className="p-2">{ref.import_enabled ? <Badge className="border-hecho/30 bg-hecho-claro text-hecho">Habilitada</Badge> : <Badge className="border-alerta/30 bg-alerta-claro text-alerta">Configurar zona</Badge>}</td>
+                      <td data-label="Zona"><p className="font-semibold text-tinta">{ref.zone_name ?? "Sin zona"}</p><p className="font-mono text-[0.72rem] text-tenue-2">{ref.zone_id}</p></td>
+                      <td data-label="Código" className="font-bold">{ref.office_code}</td>
+                      <td data-label="Oficina">{ref.office_name}</td>
+                      <td data-label="Responsable">{ref.head_name ?? "–"}</td>
+                      <td data-label="Importación">{ref.import_enabled ? <Badge className="border-emerald-200 bg-emerald-50 text-emerald-800">Habilitada</Badge> : <Badge className="border-amber-200 bg-amber-50 text-amber-800">Configurar zona</Badge>}</td>
                     </tr>
                   ))}
                 </tbody>

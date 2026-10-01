@@ -4,28 +4,64 @@
 @import "@fontsource/atkinson-hyperlegible-next/600.css";
 @import "@fontsource/atkinson-hyperlegible-next/700.css";
 
+/* =========================================================================
+   Sistema de diseño · Mesa de Ayuda TI · Municipalidad Provincial de Casma
+
+   Dirección visual: azul profundo + acentos vibrantes (cian / iris).
+   La barra lateral es el bloque oscuro de referencia y el resto de la
+   aplicación usa neutros ligeramente fríos para acompañar al azul.
+
+   NOTA SOBRE LOS NOMBRES: los tokens conservan el nombre histórico
+   `casma` aunque su valor sea ahora azul. Es deliberado: así los ~200
+   usos existentes de bg-casma / text-casma-oscuro en todo el panel de TI
+   heredan la paleta nueva sin editar cada componente. Si en el futuro se
+   cambia el color de marca basta con tocar el bloque @theme de abajo.
+   ========================================================================= */
+
 @theme {
   --font-sans: "Atkinson Hyperlegible Next", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
-  /* Neutros */
-  --color-tinta: #0f172a;
-  --color-tinta-2: #1e293b;
-  --color-papel: #eceee9;
-  --color-linea: #d6dad3;
-  --color-tenue: #64748b;
+  /* Superficies · neutros fríos, para convivir con la barra azul */
+  --color-tinta: #0a1020;
+  --color-tinta-2: #22304a;
+  --color-tenue: #566584;
+  --color-tenue-2: #8494ac;
+  --color-linea: #e3e9f2;
+  --color-linea-fuerte: #c9d4e4;
+  --color-papel: #f4f7fc;
+  --color-papel-2: #eaeff8;
 
-  /* Identidad Municipalidad Provincial de Casma */
-  --color-casma: #15803d;
-  --color-casma-oscuro: #166534;
-  --color-casma-claro: #f0fdf4;
-  --color-sol: #eab308;
-  --color-sol-claro: #fef9c3;
+  /* Marca · azul profundo */
+  --color-casma: #2f6bff;
+  --color-casma-oscuro: #1b47d6;
+  --color-casma-claro: #eaf0ff;
 
-  /* Estados */
-  --color-alerta: #b91c1c;
+  /* Barra lateral · degradado azul noche */
+  --color-barra: #0a1226;
+  --color-barra-2: #122048;
+  --color-barra-linea: #1e2c58;
+
+  /* Acentos vibrantes · uso puntual para destacar, no para superficies */
+  --color-vivo: #06b6d4;
+  --color-vivo-claro: #e0f7fb;
+  --color-iris: #7c3aed;
+  --color-iris-claro: #f2ebff;
+
+  /* Semánticos · señales funcionales, se mantienen estables */
+  --color-sol: #ea9a06;
+  --color-sol-claro: #fff7e6;
+  --color-alerta: #dc2626;
   --color-alerta-claro: #fef2f2;
-  --color-hecho: #047857;
-  --color-hecho-claro: #ecfdf5;
+  --color-hecho: #0891b2;
+  --color-hecho-claro: #ecfeff;
+
+  /* Radios y elevación */
+  --radius-panel: 0.9rem;
+  --shadow-panel: 0 1px 2px rgb(10 16 32 / 0.05);
+  --shadow-pop: 0 18px 40px -12px rgb(10 16 32 / 0.28), 0 4px 10px -4px rgb(10 16 32 / 0.1);
+  --shadow-barra: 0 24px 48px -24px rgb(10 18 38 / 0.55);
+  --glow-marca: 0 10px 28px -10px rgb(47 107 255 / 0.55);
+  --glow-vivo: 0 10px 28px -12px rgb(6 182 212 / 0.6);
 }
 
 @layer base {
@@ -38,18 +74,17 @@
   body {
     @apply bg-papel text-tinta font-sans antialiased;
     font-variant-numeric: tabular-nums;
-    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at 0% 0%, rgb(21 128 61 / 0.035), transparent 28rem),
-      radial-gradient(circle at 100% 0%, rgb(245 158 11 / 0.03), transparent 24rem),
-      linear-gradient(to bottom, #f0f1ed 0, var(--color-papel) 30rem);
+      radial-gradient(1100px 420px at 12% -8%, rgb(47 107 255 / 0.09), transparent 60%),
+      radial-gradient(900px 380px at 92% -6%, rgb(6 182 212 / 0.08), transparent 62%),
+      linear-gradient(180deg, #ffffff 0, var(--color-papel) 24rem);
     min-height: 100dvh;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: -0.02em;
+    letter-spacing: -0.021em;
     text-wrap: balance;
   }
 
@@ -74,34 +109,34 @@
   }
 
   ::selection {
-    background: rgb(21 128 61 / 0.22);
+    background: rgb(47 107 255 / 0.22);
     color: var(--color-tinta);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-casma-oscuro);
-    outline-offset: 3px;
+    outline: 2px solid var(--color-casma);
+    outline-offset: 2px;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #b9c3b8 transparent;
+    scrollbar-color: #c3cede transparent;
   }
 
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
   }
 
   *::-webkit-scrollbar-thumb {
-    background: #b9c3b8;
+    background: #c3cede;
     border: 2px solid transparent;
     border-radius: 999px;
     background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: #8d9b8c;
+    background: #a5b3c8;
     border: 2px solid transparent;
     background-clip: content-box;
   }
@@ -118,412 +153,398 @@
 }
 
 @layer components {
+  /* ---------- Superficies ---------- */
+
+  /* Panel base: el contenedor de casi todo el sistema. */
+  .panel {
+    @apply rounded-[var(--radius-panel)] border border-linea bg-white;
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* Cabecera de panel: título a la izquierda, acciones a la derecha. */
+  .panel-head {
+    @apply flex flex-col gap-3 border-b border-linea bg-gradient-to-b from-white to-papel-2/40 px-4 py-3.5 sm:px-5;
+  }
+
+  .panel-title {
+    @apply text-[0.95rem] font-bold leading-tight text-tinta;
+  }
+
+  .panel-sub {
+    @apply text-[0.8rem] leading-5 text-tenue;
+  }
+
+  .panel-body {
+    @apply px-4 py-4 sm:px-5;
+  }
+
+  /* ---------- Barra lateral azul noche ---------- */
+
+  /* Degradado de la barra: el ancla visual de la aplicación. */
+  .barra {
+    background:
+      radial-gradient(520px 260px at 0% 0%, rgb(6 182 212 / 0.16), transparent 62%),
+      radial-gradient(420px 300px at 100% 100%, rgb(47 107 255 / 0.2), transparent 60%),
+      linear-gradient(178deg, var(--color-barra) 0%, var(--color-barra-2) 100%);
+    box-shadow: var(--shadow-barra);
+  }
+
+  /* Filete superior que marca el logo. */
+  .barra-marca {
+    background: linear-gradient(90deg, var(--color-vivo), var(--color-casma) 55%, var(--color-iris));
+  }
+
+  /* ---------- Menú lateral ---------- */
+
+  .nav-item {
+    @apply relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.85rem] font-semibold transition-colors;
+  }
+
+  /* La barra de acento a la izquierda marca la sección activa. */
+  .nav-item::before {
+    content: "";
+    @apply absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-transparent transition;
+  }
+
+  .nav-item:hover {
+    @apply bg-white/[0.06] text-white;
+  }
+
+  /* React Router marca el enlace activo con aria-current="page", así que el
+     estilo activo no depende de propios datos calculados en React. */
+  .nav-item[aria-current="page"] {
+    @apply bg-white/[0.09] text-white;
+  }
+
+  .nav-item[aria-current="page"]::before {
+    background: linear-gradient(180deg, var(--color-vivo), var(--color-casma));
+    box-shadow: 0 0 12px rgb(6 182 212 / 0.8);
+  }
+
+  /* Estado de la barra cuando está plegada a solo iconos. */
+  .barra[data-collapsed="true"] .nav-item {
+    @apply justify-center px-0;
+  }
+
+  /* ---------- Barra de herramientas ---------- */
+
+  /* Fila de filtros: una sola línea, controles compactos, se envuelve sola. */
+  .toolbar {
+    @apply flex flex-col gap-2 border-b border-linea bg-papel-2/60 px-4 py-2.5 sm:px-5 md:flex-row md:items-center;
+  }
+
+  /* ---------- Segmented control (pestañas dentro de una página) ---------- */
+
+  .segmented {
+    @apply inline-flex items-center gap-0.5 rounded-lg border border-linea bg-papel-2/70 p-0.5;
+  }
+
+  .segmented > button {
+    @apply min-h-9 whitespace-nowrap rounded-[0.4rem] px-3 py-1.5 text-[0.82rem] font-semibold text-tenue transition;
+  }
+
+  .segmented > button:hover {
+    @apply bg-white text-tinta;
+  }
+
+  .segmented > button[aria-selected="true"],
+  .segmented > button[data-active="true"] {
+    @apply bg-casma text-white;
+    box-shadow: var(--glow-marca);
+  }
+
+  /* ---------- Chips / filtros rápidos ---------- */
+
+  .chip {
+    @apply inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-linea bg-white px-2.5 py-1.5 text-[0.82rem] font-semibold text-tenue transition;
+  }
+
+  .chip:hover {
+    @apply border-linea-fuerte bg-papel text-tinta;
+  }
+
+  .chip[data-active="true"] {
+    @apply border-transparent bg-casma text-white;
+    box-shadow: var(--glow-marca);
+  }
+
+  /* ---------- Métricas ---------- */
+
+  .stat {
+    @apply rounded-[var(--radius-panel)] border border-linea bg-white px-3.5 py-3;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .stat-label {
+    @apply text-[0.68rem] font-bold uppercase tracking-[0.07em] text-tenue-2;
+  }
+
+  .stat-value {
+    @apply mt-1 text-2xl font-bold leading-none tracking-[-0.02em] text-tinta;
+  }
+
+  .stat-helper {
+    @apply mt-1.5 text-[0.72rem] leading-4 text-tenue;
+  }
+
+  /* Tarjeta de indicador de la bandeja: admite estado activo con degradado. */
+  .kpi {
+    @apply relative overflow-hidden rounded-[var(--radius-panel)] border border-linea bg-white px-4 py-3.5 text-left transition-all;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .kpi:hover {
+    @apply border-linea-fuerte;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px -10px rgb(10 16 32 / 0.18);
+  }
+
+  .kpi[data-active="true"] {
+    @apply border-transparent text-white;
+    background:
+      radial-gradient(300px 140px at 100% 0%, rgb(6 182 212 / 0.55), transparent 65%),
+      linear-gradient(135deg, var(--color-casma) 0%, var(--color-casma-oscuro) 100%);
+    box-shadow: var(--glow-marca);
+  }
+
+  .kpi[data-active="true"] .stat-label,
+  .kpi[data-active="true"] .stat-helper {
+    @apply text-white/80;
+  }
+
+  .kpi[data-active="true"] .stat-value {
+    @apply text-white;
+  }
+
+  /* Franja vertical de color que identifica la prioridad de una incidencia. */
+  .prioridad-alta {
+    background: linear-gradient(180deg, #f87171, var(--color-alerta));
+  }
+
+  .prioridad-media {
+    background: linear-gradient(180deg, #fbbf24, var(--color-sol));
+  }
+
+  .prioridad-baja {
+    background: linear-gradient(180deg, #c3cede, var(--color-tenue-2));
+  }
+
+  /* ---------- Árbol de espacios (Zona › Oficina › Usuario) ---------- */
+
+  .tree-item {
+    @apply flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.85rem] text-tinta-2 transition;
+  }
+
+  .tree-item:hover {
+    @apply bg-papel-2;
+  }
+
+  .tree-item[data-selected="true"] {
+    @apply bg-casma-claro font-bold text-casma-oscuro;
+  }
+
+  .tree-group {
+    @apply px-2.5 pb-1 pt-3 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-tenue-2;
+  }
+
+  /* ---------- Tablas ---------- */
+
+  .data-table {
+    @apply w-full min-w-full text-left text-sm;
+  }
+
+  .data-table thead th {
+    @apply border-b border-linea bg-papel-2/80 px-4 py-2.5 text-[0.68rem] font-bold uppercase tracking-[0.07em] text-tenue-2;
+  }
+
+  .data-table tbody td {
+    @apply border-b border-linea/70 px-4 py-3 align-middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .data-table tbody tr {
+    @apply transition-colors;
+  }
+
+  .data-table tbody tr:hover {
+    @apply bg-casma-claro/45;
+  }
+
+  /* ---------- Formularios ---------- */
+
+  .label {
+    @apply text-[0.8rem] font-semibold text-tinta-2;
+  }
+
+  .hint {
+    @apply text-[0.75rem] leading-4 text-tenue;
+  }
+
+  /* Tarjeta-botón del portal de oficina: la acción principal de esa pantalla. */
   .tecla {
-    @apply relative flex w-full items-center gap-4 rounded-2xl border border-linea bg-white px-5 py-5 text-left text-tinta sm:gap-5;
-    box-shadow: 0 8px 24px rgb(15 23 42 / 0.055);
-    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
+    @apply flex w-full flex-col items-start gap-1 rounded-xl border border-linea bg-white p-4 text-left text-tinta transition;
+    box-shadow: var(--shadow-panel);
   }
 
   .tecla:hover {
-    border-color: rgb(21 128 61 / 0.32);
-    background: linear-gradient(135deg, #ffffff, rgb(240 253 244 / 0.75));
-    box-shadow: 0 14px 30px rgb(15 23 42 / 0.085);
-    transform: translateY(-1px);
+    @apply border-casma/45 bg-casma-claro/50;
   }
 
-  .tecla:active {
-    transform: translateY(0);
-    box-shadow: 0 6px 16px rgb(15 23 42 / 0.06);
+  .tecla .tecla-titulo {
+    @apply text-[0.95rem] font-bold leading-tight;
   }
 
-  .municipal-accent {
-    @apply flex items-center gap-2;
+  .tecla .tecla-ayuda {
+    @apply text-[0.78rem] leading-5 text-tenue;
   }
 
-  .municipal-accent::before,
-  .municipal-accent::after {
+  /* ---------- Botonera superior de página ---------- */
+
+  .page-title {
+    @apply text-[1.35rem] font-bold leading-tight tracking-[-0.025em] text-tinta sm:text-2xl;
+  }
+
+  .page-sub {
+    @apply mt-1 text-sm leading-6 text-tenue;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-1.5 text-[0.68rem] font-bold uppercase tracking-[0.1em] text-casma;
+  }
+
+  /* Punto de acento que precede al eyebrow. */
+  .eyebrow::before {
     content: "";
-    display: block;
-    height: 0.375rem;
-    border-radius: 999px;
+    @apply size-1.5 shrink-0 rounded-full;
+    background: linear-gradient(135deg, var(--color-vivo), var(--color-casma));
   }
 
-  .municipal-accent::before {
-    width: 2.5rem;
-    background: var(--color-casma);
+  /* ---------- Aviso informativo (uso moderado y deliberado) ---------- */
+
+  .notice {
+    @apply flex items-start gap-2.5 rounded-lg border border-linea bg-papel-2/70 px-3.5 py-2.5 text-[0.78rem] leading-5 text-tenue;
   }
 
-  .municipal-accent::after {
-    width: 1rem;
-    background: var(--color-sol);
+  .notice-strong {
+    @apply font-semibold text-tinta-2;
   }
 
-  .mobile-safe-bottom {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  }
-}
+  /* ---------- Panel desplegable ---------- */
 
-/* Barra de acciones del panel de notificaciones: compacta y orientada a iconos. */
-#notifications-menu > div:nth-child(2):has(> button) {
-  min-height: 2.75rem;
-  gap: 0.375rem;
-  padding: 0.375rem 0.5rem;
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button {
-  display: inline-flex;
-  width: 2.125rem;
-  min-height: 2.125rem !important;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.65rem;
-  background: #ffffff;
-  font-size: 0;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button:last-child:hover {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button svg {
-  width: 1rem;
-  height: 1rem;
-  margin: 0;
-}
-
-/* El menú rápido de configuración se siente como un panel de herramientas TI. */
-#settings-menu {
-  border-color: #e2e8f0;
-  box-shadow: 0 24px 60px rgb(15 23 42 / 0.18);
-}
-
-#settings-menu > div:first-child {
-  margin-bottom: 0.25rem;
-  border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 0.75rem;
-}
-
-/* Controles de estado: en móvil usan una cuadrícula 2x2 en lugar de scroll horizontal. */
-@media (max-width: 639px) {
-  [role="tablist"] {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100% !important;
+  .popover {
+    @apply overflow-hidden rounded-xl border border-linea bg-white;
+    box-shadow: var(--shadow-pop);
   }
 
-  [role="tablist"] > button {
-    width: 100%;
-    min-height: 2.75rem;
+  /* ---------- Datos en línea ---------- */
+
+  .kv {
+    @apply min-w-0;
   }
 
-  [aria-label="Resumen de incidencias"] {
-    grid-template-columns: minmax(0, 1fr) !important;
+  .kv dt {
+    @apply text-[0.68rem] font-bold uppercase tracking-[0.06em] text-tenue-2;
+  }
+
+  .kv dd {
+    @apply mt-0.5 truncate text-[0.85rem] font-semibold text-tinta;
   }
 }
 
-/*
- * Adaptación móvil de tablas administrativas que todavía conservan una tabla
- * completa en escritorio. En pantallas pequeñas cada fila se convierte en una
- * tarjeta legible para evitar el scroll horizontal de más de 1000 px.
- */
+@layer utilities {
+  .animate-rise {
+    animation: rise 220ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Contenedor de la lista de notificaciones: acciones en la misma línea. */
+  .notif-bar {
+    @apply flex shrink-0 items-center gap-1 border-b border-linea bg-papel-2/60 px-2.5 py-1.5;
+  }
+
+  .notif-bar button {
+    @apply grid size-8 place-items-center rounded-lg border border-linea bg-white text-tenue transition;
+  }
+
+  .notif-bar button:hover {
+    @apply border-linea-fuerte bg-papel text-tinta;
+  }
+}
+
+/* ---------- Adaptación móvil de tablas densas ---------- */
 @media (max-width: 767px) {
-  table.min-w-\[1080px\] {
+  .responsive-table {
     display: block;
     min-width: 100% !important;
     width: 100%;
   }
 
-  table.min-w-\[1080px\] thead {
+  .responsive-table thead {
     display: none;
   }
 
-  table.min-w-\[1080px\] tbody {
+  .responsive-table tbody {
     display: grid;
-    gap: 0.75rem;
-    padding: 0.75rem;
+    gap: 0.6rem;
+    padding: 0.6rem;
   }
 
-  table.min-w-\[1080px\] tbody > tr {
+  .responsive-table tbody > tr {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.25rem 0.75rem;
+    gap: 0.15rem 0.75rem;
     overflow: hidden;
     border: 1px solid var(--color-linea);
-    border-radius: 1rem;
-    background: white;
-    box-shadow: 0 8px 24px rgb(15 23 42 / 0.045);
+    border-radius: 0.75rem;
+    background: #fff;
   }
 
-  table.min-w-\[1080px\] tbody > tr:hover {
-    background: white;
+  .responsive-table tbody > tr:hover {
+    background: #fff;
   }
 
-  table.min-w-\[1080px\] td {
+  .responsive-table td {
     min-width: 0;
     overflow-wrap: anywhere;
-    padding: 0.7rem 0.85rem !important;
+    padding: 0.5rem 0.7rem !important;
     border: 0 !important;
   }
 
-  table.min-w-\[1080px\] td::before {
+  .responsive-table td::before {
     display: block;
-    margin-bottom: 0.2rem;
-    color: var(--color-tenue);
-    font-size: 0.75rem;
+    margin-bottom: 0.1rem;
+    color: var(--color-tenue-2);
+    font-size: 0.65rem;
     font-weight: 700;
-    letter-spacing: 0.055em;
+    letter-spacing: 0.05em;
     line-height: 1rem;
     text-transform: uppercase;
   }
 
-  table.min-w-\[1080px\] td:nth-child(1)::before { content: "ID TI"; }
-  table.min-w-\[1080px\] td:nth-child(2)::before { content: "Patrimonial"; }
-  table.min-w-\[1080px\] td:nth-child(3)::before { content: "Equipo"; }
-  table.min-w-\[1080px\] td:nth-child(4)::before { content: "Ubicación"; }
-  table.min-w-\[1080px\] td:nth-child(5)::before { content: "Responsable"; }
-  table.min-w-\[1080px\] td:nth-child(6)::before { content: "Red"; }
-  table.min-w-\[1080px\] td:nth-child(7)::before { content: "Estado"; }
-
-  table.min-w-\[1080px\] td:nth-child(1),
-  table.min-w-\[1080px\] td:nth-child(2),
-  table.min-w-\[1080px\] td:nth-child(3),
-  table.min-w-\[1080px\] td:nth-child(4),
-  table.min-w-\[1080px\] td:nth-child(5),
-  table.min-w-\[1080px\] td:nth-child(6),
-  table.min-w-\[1080px\] td:nth-child(7) {
-    grid-column: span 1;
+  .responsive-table td[data-label]::before {
+    content: attr(data-label);
   }
 
-  table.min-w-\[1080px\] td:nth-child(8) {
+  .responsive-table td[data-colspan] {
     grid-column: 1 / -1;
-    padding-top: 0.35rem !important;
-    border-top: 1px solid var(--color-linea) !important;
-    text-align: left !important;
   }
-
-  table.min-w-\[1080px\] td:nth-child(8)::before {
-    display: none;
-  }
-
-  table.min-w-\[1080px\] td:nth-child(8) button {
-    width: 100%;
-  }
-
-  table.min-w-\[620px\] {
-    display: block;
-    min-width: 100% !important;
-    width: 100%;
-  }
-
-  table.min-w-\[620px\] thead {
-    display: none;
-  }
-
-  table.min-w-\[620px\] tbody {
-    display: grid;
-    gap: 0.65rem;
-    padding: 0.65rem;
-  }
-
-  table.min-w-\[620px\] tbody > tr {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    border: 1px solid var(--color-linea);
-    border-radius: 0.875rem;
-    background: white;
-  }
-
-  table.min-w-\[620px\] td {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    padding: 0.65rem 0.75rem !important;
-  }
-
-  table.min-w-\[620px\] td::before {
-    display: block;
-    margin-bottom: 0.15rem;
-    color: var(--color-tenue);
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-
-  table.min-w-\[620px\] td:nth-child(1)::before { content: "Zona"; }
-  table.min-w-\[620px\] td:nth-child(2)::before { content: "Código"; }
-  table.min-w-\[620px\] td:nth-child(3)::before { content: "Oficina"; }
-  table.min-w-\[620px\] td:nth-child(4)::before { content: "Responsable"; }
-  table.min-w-\[620px\] td:nth-child(5)::before { content: "Importación"; }
 }
 
-/* 320–479 px: priorizar lectura sobre densidad; una sola columna por tarjeta. */
 @media (max-width: 479px) {
-  table.min-w-\[1080px\] tbody > tr,
-  table.min-w-\[620px\] tbody > tr {
+  .responsive-table tbody > tr {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  table.min-w-\[1080px\] td:nth-child(1),
-  table.min-w-\[1080px\] td:nth-child(2),
-  table.min-w-\[1080px\] td:nth-child(3),
-  table.min-w-\[1080px\] td:nth-child(4),
-  table.min-w-\[1080px\] td:nth-child(5),
-  table.min-w-\[1080px\] td:nth-child(6),
-  table.min-w-\[1080px\] td:nth-child(7),
-  table.min-w-\[1080px\] td:nth-child(8) {
-    grid-column: 1 / -1;
-  }
-}
-
-/* Ajuste final: las acciones de notificaciones comparten la misma línea de las pestañas. */
-#notifications-menu [role="tablist"] {
-  padding-right: 4.75rem;
-}
-
-#notifications-menu > div:nth-child(2):has(> button) {
-  position: absolute;
-  z-index: 3;
-  top: 5.2rem;
-  right: 0.65rem;
-  width: auto;
-  min-height: 0;
-  gap: 0.3rem;
-  border: 0;
-  background: transparent;
-  padding: 0;
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button {
-  width: 2rem;
-  min-height: 2rem !important;
-  height: 2rem;
-  border-color: #e2e8f0;
-  border-radius: 0.7rem;
-  background: #fff;
-  color: #64748b;
-  box-shadow: 0 2px 6px rgb(15 23 42 / 0.06);
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button:hover {
-  transform: translateY(-1px);
-}
-
-#notifications-menu > div:nth-child(2):has(> button) > button:last-child:hover {
-  border-color: #fecaca;
-  background: #fff1f2;
-  color: #b91c1c;
-}
-
-/* Engranaje del encabezado: más claro, elegante y reconocible. */
-[aria-controls="settings-menu"] {
-  position: relative;
-  border-radius: 0.7rem;
-  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-[aria-controls="settings-menu"] svg {
-  transition: transform 220ms ease;
-}
-
-[aria-controls="settings-menu"]:hover {
-  background: #f8fafc;
-  color: #0f172a;
-  box-shadow: inset 0 0 0 1px #e2e8f0;
-}
-
-[aria-controls="settings-menu"]:hover svg {
-  transform: rotate(28deg);
-}
-
-[aria-controls="settings-menu"][aria-expanded="true"] {
-  background: #111827;
-  color: #f59e0b;
-  box-shadow: 0 6px 16px rgb(15 23 42 / 0.18);
-}
-
-[aria-controls="settings-menu"][aria-expanded="true"] svg {
-  transform: rotate(45deg);
-}
-
-#settings-menu {
-  width: min(21rem, calc(100vw - 1.25rem));
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 1.15rem;
-  background: #fff;
-  padding: 0.45rem;
-  box-shadow: 0 26px 70px rgb(15 23 42 / 0.20);
-}
-
-#settings-menu > div:first-child {
-  margin: 0;
-  border-bottom: 1px solid #f1f5f9;
-  border-radius: 0.85rem 0.85rem 0 0;
-  background: linear-gradient(135deg, #f8fafc, #ffffff);
-  padding: 0.75rem 0.85rem 0.8rem;
-}
-
-#settings-menu > div:first-child p:first-child {
-  font-size: 0.92rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-#settings-menu > div:first-child p:last-child {
-  margin-top: 0.15rem;
-  color: #64748b;
-}
-
-#settings-menu > button {
-  min-height: 3rem;
-  margin-top: 0.2rem;
-  border: 1px solid transparent;
-  border-radius: 0.85rem;
-  padding-inline: 0.65rem;
-}
-
-#settings-menu > button:hover {
-  border-color: #e2e8f0;
-  background: #f8fafc;
-}
-
-#settings-menu > button svg {
-  width: 2rem;
-  height: 2rem;
-  flex: 0 0 auto;
-  border-radius: 0.65rem;
-  background: #f1f5f9;
-  padding: 0.45rem;
-  color: #475569;
-}
-
-#settings-menu > button:last-child svg {
-  background: #f0fdf4;
-  color: #166534;
-}
-
-@media (max-width: 420px) {
-  #notifications-menu [role="tablist"] {
-    padding-right: 3.9rem;
-  }
-
-  #notifications-menu > div:nth-child(2):has(> button) {
-    right: 0.45rem;
-  }
-
-  #notifications-menu > div:nth-child(2):has(> button) > button {
-    width: 1.85rem;
-    height: 1.85rem;
-    min-height: 1.85rem !important;
   }
 }

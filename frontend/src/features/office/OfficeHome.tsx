@@ -17,43 +17,41 @@ export function OfficeHome() {
   const pendingConfirm = data.open_tickets.filter((t) => t.status === "RESUELTO" && t.confirmed_by_user === null);
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       {data.alerts.map((a) => (
-        <div key={a.title} role="status" className="flex gap-4 rounded-2xl border-2 border-sol bg-sol-claro p-5">
-          <Megaphone className="size-8 shrink-0 text-[#7a5200]" aria-hidden />
+        <div key={a.title} role="status" className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <Megaphone className="size-6 shrink-0 text-amber-700" aria-hidden />
           <div>
-            <p className="text-xl font-bold">{a.title}</p>
-            <p>{a.message}</p>
+            <p className="text-lg font-bold text-amber-950">{a.title}</p>
+            <p className="text-base leading-6 text-amber-900">{a.message}</p>
           </div>
         </div>
       ))}
 
       {pendingConfirm.map((t) => (
-        <Link key={t.id} to={`/oficina/reporte/${t.id}`} className="flex items-center gap-4 rounded-2xl border-2 border-hecho bg-hecho-claro p-5">
+        <Link key={t.id} to={`/oficina/reporte/${t.id}`} className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 transition hover:border-emerald-400">
           <div className="flex-1">
-            <p className="text-xl font-bold">Soporte TI terminó: «{t.subject}»</p>
-            <p>Toque aquí para decirnos si ya funciona.</p>
+            <p className="text-lg font-bold text-emerald-950">Soporte TI terminó: «{t.subject}»</p>
+            <p className="text-base text-emerald-900">Toque aquí para decirnos si ya funciona.</p>
           </div>
-          <ChevronRight className="size-8 shrink-0" aria-hidden />
+          <ChevronRight className="size-6 shrink-0 text-emerald-700" aria-hidden />
         </Link>
       ))}
 
-      <section className="flex flex-col gap-5">
+      <section className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold sm:text-4xl">¿Qué problema tiene?</h1>
-          <p className="mt-1 text-tenue">Toque el botón que se parezca a su problema.</p>
+          <h1 className="text-2xl font-bold sm:text-3xl">¿Qué problema tiene?</h1>
+          <p className="mt-1 text-base text-tenue">Toque el botón que se parezca a su problema.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ISSUE_ORDER.map((key) => {
             const issue = ISSUES[key];
             const Icon = issue.icon;
             return (
-              <Link key={key} to={`/oficina/reportar/${key}`} className="tecla min-h-28">
-                <span className={`grid size-16 shrink-0 place-items-center rounded-2xl ${issue.tone}`}><Icon className="size-9" aria-hidden /></span>
-                <span>
-                  <span className="block text-xl font-bold leading-tight">{issue.title}</span>
-                  <span className="mt-1 block text-base text-tenue">{issue.hint}</span>
-                </span>
+              <Link key={key} to={`/oficina/reportar/${key}`} className="tecla">
+                <span className={`grid size-12 shrink-0 place-items-center rounded-xl ${issue.tone}`}><Icon className="size-6" aria-hidden /></span>
+                <span className="tecla-titulo">{issue.title}</span>
+                <span className="tecla-ayuda">{issue.hint}</span>
               </Link>
             );
           })}
@@ -61,21 +59,21 @@ export function OfficeHome() {
       </section>
 
       {data.open_tickets.length > 0 && (
-        <section className="flex flex-col gap-4">
-          <h2 className="text-2xl font-bold">Sus reportes</h2>
-          <ul className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3">
+          <h2 className="text-xl font-bold">Sus reportes</h2>
+          <ul className="flex flex-col gap-2">
             {data.open_tickets.map((t) => (
               <li key={t.id}>
-                <Link to={`/oficina/reporte/${t.id}`} className="flex items-center gap-4 rounded-2xl border border-linea bg-white p-4 hover:border-casma">
+                <Link to={`/oficina/reporte/${t.id}`} className="flex items-center gap-4 rounded-xl border border-linea bg-white p-4 transition hover:border-casma/40 hover:bg-casma-claro/30">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={t.status} />
-                      <span className="text-base text-tenue">{fmtAgo(t.created_at)}</span>
+                      <span className="text-sm text-tenue">{fmtAgo(t.created_at)}</span>
                     </div>
-                    <p className="mt-1 truncate text-xl font-bold">{t.subject}</p>
+                    <p className="mt-1 truncate text-lg font-bold">{t.subject}</p>
                     {t.assigned_to_name && t.status !== "RESUELTO" && <p className="text-base text-tenue">Lo atiende: {t.assigned_to_name}</p>}
                   </div>
-                  <ChevronRight className="size-7 shrink-0 text-tenue" aria-hidden />
+                  <ChevronRight className="size-6 shrink-0 text-tenue" aria-hidden />
                 </Link>
               </li>
             ))}

@@ -14,12 +14,10 @@ import { AuditPage } from "./features/staff/AuditPage";
 import { Dashboard } from "./features/staff/Dashboard";
 import { DevicesPage } from "./features/staff/DevicesPage";
 import { EquipmentPage } from "./features/staff/EquipmentPage";
-import { MyTicketsPage } from "./features/staff/MyTicketsPage";
-import { OfficesPage } from "./features/staff/OfficesPage";
-import { OrganizationPage } from "./features/staff/OrganizationPage";
 import { OrganizationProfilePage } from "./features/staff/OrganizationProfilePage";
 import { ProfilePage } from "./features/staff/ProfilePage";
 import { SettingsPage } from "./features/staff/SettingsPage";
+import { SpacesPage } from "./features/staff/SpacesPage";
 import { StaffLayout } from "./features/staff/StaffLayout";
 import { StaffPage } from "./features/staff/StaffPage";
 
@@ -76,20 +74,22 @@ export const router = createBrowserRouter([
         element: <StaffLayout />,
         children: [
           { path: "/soporte", element: <Dashboard /> },
-          { path: "/soporte/mis-incidencias", element: <MyTicketsPage /> },
           { path: "/soporte/equipos", element: <EquipmentPage /> },
           { path: "/soporte/ia", element: <AIInsightsPage /> },
+          { path: "/soporte/espacios", element: <SpacesPage /> },
           { path: "/soporte/perfil", element: <ProfilePage /> },
           { path: "/soporte/configuracion", element: <SettingsPage /> },
-          { path: "/soporte/organizacion", element: <OrganizationPage /> },
           { path: "/soporte/organizacion/zona/:id", element: <OrganizationProfilePage kind="zona" /> },
           { path: "/soporte/organizacion/oficina/:id", element: <OrganizationProfilePage kind="oficina" /> },
           { path: "/soporte/organizacion/usuario/:id", element: <OrganizationProfilePage kind="usuario" /> },
+          // Rutas antiguas: ahora la estructura vive en una sola pantalla.
+          { path: "/soporte/mis-incidencias", element: <Navigate to="/soporte?mine=1" replace /> },
+          { path: "/soporte/organizacion", element: <Navigate to="/soporte/espacios" replace /> },
           {
             element: <RequireStaff admin />,
             children: [
               { path: "/soporte/dispositivos", element: <DevicesPage /> },
-              { path: "/soporte/oficinas", element: <OfficesPage /> },
+              { path: "/soporte/oficinas", element: <Navigate to="/soporte/espacios" replace /> },
               { path: "/soporte/personal", element: <StaffPage /> },
               { path: "/soporte/auditoria", element: <AuditPage /> },
             ],

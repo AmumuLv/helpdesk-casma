@@ -55,7 +55,7 @@ export function StaffLogin() {
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-casma-oscuro px-4 py-10">
       <div className="pointer-events-none absolute -left-24 top-10 size-80 rounded-full bg-white/[0.05]" aria-hidden />
       <div className="pointer-events-none absolute -right-20 bottom-0 size-72 rounded-full bg-sol/[0.08]" aria-hidden />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.3)] sm:rounded-3xl sm:p-8">
+      <div className="relative w-full max-w-md rounded-xl border border-white/10 bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.3)] sm:rounded-xl sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-sol text-tinta shadow-sm"><KeyRound className="size-6" /></span>
           <div className="min-w-0">
@@ -75,7 +75,7 @@ export function StaffLogin() {
         ) : (
           <form onSubmit={submitCode} className="flex flex-col gap-4">
             {stage.kind === "setup" && (
-              <div className="flex flex-col gap-3 rounded-2xl border border-casma/15 bg-casma-claro p-4">
+              <div className="flex flex-col gap-3 rounded-xl border border-casma/15 bg-casma-claro p-4">
                 <p className="flex items-center gap-2 font-bold text-casma-oscuro"><ShieldCheck className="size-5" /> Configure su app autenticadora</p>
                 <p className="text-sm leading-5 text-tenue">Escanee el código con Google Authenticator, Microsoft Authenticator o una app compatible.</p>
                 {stage.qr && <img src={stage.qr} alt="Código QR para la verificación en dos pasos" className="mx-auto size-48 rounded-lg border border-linea bg-white p-2" />}

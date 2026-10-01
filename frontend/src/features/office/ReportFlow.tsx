@@ -53,7 +53,7 @@ function IssuePicker({ equipment, onPick }: { equipment: EquipmentBrief | null; 
   return (
     <section className="flex flex-col gap-5">
       {equipment && (
-        <p className="rounded-2xl bg-casma-claro p-4 text-xl">Equipo: <strong>{equipment.name}</strong> ({equipment.patrimonial_code})</p>
+        <p className="rounded-xl bg-casma-claro p-4 text-xl">Equipo: <strong>{equipment.name}</strong> ({equipment.patrimonial_code})</p>
       )}
       <h1 className="text-3xl font-bold">¿Qué problema tiene?</h1>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -61,7 +61,7 @@ function IssuePicker({ equipment, onPick }: { equipment: EquipmentBrief | null; 
           const Icon = ISSUES[key].icon;
           return (
             <button key={key} onClick={() => onPick(key)} className="tecla min-h-24">
-              <span className={`grid size-14 shrink-0 place-items-center rounded-2xl ${ISSUES[key].tone}`}><Icon className="size-8" aria-hidden /></span>
+              <span className={`grid size-14 shrink-0 place-items-center rounded-xl ${ISSUES[key].tone}`}><Icon className="size-8" aria-hidden /></span>
               <span className="text-xl font-bold leading-tight">{ISSUES[key].title}</span>
             </button>
           );
@@ -125,7 +125,7 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
   return (
     <form onSubmit={(e) => { e.preventDefault(); setQueuedOffline(false); send.mutate(); }} className="flex flex-col gap-8">
       {queuedOffline && (
-        <div role="status" className="flex gap-3 rounded-2xl border-2 border-sol bg-sol-claro p-4">
+        <div role="status" className="flex gap-3 rounded-xl border-2 border-sol bg-sol-claro p-4">
           <WifiOff className="size-7 shrink-0" aria-hidden />
           <div>
             <p className="font-bold">Reporte guardado en este dispositivo</p>
@@ -134,7 +134,7 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
         </div>
       )}
       <div className="flex items-center gap-4">
-        <span className={`grid size-16 shrink-0 place-items-center rounded-2xl ${info.tone}`}><Icon className="size-9" aria-hidden /></span>
+        <span className={`grid size-16 shrink-0 place-items-center rounded-xl ${info.tone}`}><Icon className="size-9" aria-hidden /></span>
         <div>
           <h1 className="text-3xl font-bold leading-tight">{info.title}</h1>
           {onChangeIssue && <button type="button" onClick={onChangeIssue} className="text-lg text-casma underline">Cambiar problema</button>}
@@ -145,7 +145,7 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-3 text-2xl font-bold">{wantsPrinter ? "¿Qué impresora?" : "¿Qué equipo?"}</legend>
           {[...candidates, { id: OTHER, name: "No sé / otro equipo", patrimonial_code: "", type: "OTRO", hostname: null } as EquipmentBrief].map((eq) => (
-            <label key={eq.id} className={cx("flex cursor-pointer items-center gap-4 rounded-2xl border-2 bg-white p-4", equipmentId === eq.id ? "border-casma bg-casma-claro" : "border-linea")}>
+            <label key={eq.id} className={cx("flex cursor-pointer items-center gap-4 rounded-xl border-2 bg-white p-4", equipmentId === eq.id ? "border-casma bg-casma-claro" : "border-linea")}>
               <input type="radio" name="equipment" className="size-7 accent-casma" checked={equipmentId === eq.id} onChange={() => setEquipmentId(eq.id)} />
               <span className="flex-1">
                 <span className="block text-xl font-bold">{eq.id === thisEquipment?.id ? `Esta computadora (${eq.name})` : eq.name}</span>
@@ -156,7 +156,7 @@ function ReportForm({ issue, onChangeIssue, equipmentList, fixedEquipment, thisE
           ))}
         </fieldset>
       )}
-      {fixedEquipment && <p className="rounded-2xl bg-casma-claro p-4 text-xl">Equipo: <strong>{fixedEquipment.name}</strong> ({fixedEquipment.patrimonial_code})</p>}
+      {fixedEquipment && <p className="rounded-xl bg-casma-claro p-4 text-xl">Equipo: <strong>{fixedEquipment.name}</strong> ({fixedEquipment.patrimonial_code})</p>}
 
       <section className="flex flex-col gap-3">
         <label htmlFor="desc" className="text-2xl font-bold">

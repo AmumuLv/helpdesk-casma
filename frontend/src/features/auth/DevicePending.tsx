@@ -26,7 +26,7 @@ export function DevicePending() {
         <h1 className="text-3xl font-bold">Falta un paso</h1>
         <p className="text-xl">Soporte TI debe autorizar este equipo antes de usarlo. Llame y dicte este código:</p>
       </div>
-      <p className="rounded-3xl border-4 border-dashed border-casma bg-white whitespace-nowrap py-8 text-5xl font-bold tracking-widest text-tinta sm:text-6xl" aria-label={`Código ${me.office.pair_code?.split("").join(" ")}`}>
+      <p className="rounded-xl border-4 border-dashed border-casma bg-white whitespace-nowrap py-8 text-5xl font-bold tracking-widest text-tinta sm:text-6xl" aria-label={`Código ${me.office.pair_code?.split("").join(" ")}`}>
         {me.office.pair_code}
       </p>
       <p className="flex items-center justify-center gap-2 text-tenue"><Phone className="size-5" /> Esta pantalla se actualizará sola cuando lo autoricen.</p>

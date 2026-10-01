@@ -16,20 +16,26 @@ export function StaffPage() {
 
   return (
     <div>
-      <PageHeader title="Personal de soporte" description="Cuentas individuales con contraseña robusta y verificación en dos pasos obligatoria."
-        actions={<Button onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo integrante</Button>} />
+      <PageHeader
+        title="Personal TI"
+        description="Cuentas del área de soporte. Cada usuario tiene su propia clave y debe activar la verificación en dos pasos."
+        actions={<Button variant="primary" onClick={() => setEditing("new")}><Plus className="size-4" /> Nuevo integrante</Button>}
+      />
       {staff.isLoading ? <Spinner /> : staff.error ? <ErrorBox message={errorMessage(staff.error)} /> : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {staff.data?.map((s) => <StaffCard key={s.id} member={s} onEdit={() => setEditing(s)} onSecret={setSecret} />)}
         </div>
       )}
       {editing && <StaffModal member={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSecret={setSecret} />}
       <Modal open={!!secret} onClose={() => setSecret(null)} title="Contraseña temporal">
         {secret && (
-          <div className="flex flex-col gap-4">
-            <p className="leading-6">Entréguela en persona a <strong>{secret.username}</strong>. Solo se muestra esta vez; deberá cambiarla y configurar su app autenticadora al ingresar.</p>
-            <p className="select-all break-all rounded-xl border border-linea bg-papel p-4 text-center text-xl font-bold">{secret.password}</p>
-            <Button onClick={() => navigator.clipboard.writeText(secret.password)} variant="secondary">Copiar</Button>
+          <div className="flex flex-col gap-3.5">
+            <p className="text-[0.85rem] leading-6 text-tinta-2">Entréguela en persona a <strong>{secret.username}</strong>. Solo se muestra una vez: deberá cambiarla y configurar su app autenticadora al ingresar.</p>
+            <p className="select-all break-all rounded-lg border border-linea bg-papel-2 p-3.5 text-center text-lg font-bold tracking-wider">{secret.password}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setSecret(null)}>Cerrar</Button>
+              <Button onClick={() => navigator.clipboard.writeText(secret.password)} variant="primary">Copiar contraseña</Button>
+            </div>
           </div>
         )}
       </Modal>
@@ -53,25 +59,30 @@ function StaffCard({ member: s, onEdit, onSecret }: { member: StaffMember; onEdi
   const self = me?.id === s.id;
 
   return (
-    <Card className={cx("flex flex-col gap-3 p-4 sm:p-5", !s.active && "opacity-60")}>
+    <Card className={cx("flex flex-col gap-3 p-4", !s.active && "opacity-60")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-lg font-bold text-tinta">{s.full_name}</p>
-          <p className="truncate text-sm text-tenue">{s.username}{s.phone && `, ${s.phone}`}</p>
+          <p className="truncate text-[0.95rem] font-bold text-tinta">{s.full_name}</p>
+          <p className="truncate text-[0.78rem] text-tenue">{s.username}{s.phone ? ` · ${s.phone}` : ""}</p>
         </div>
-        <Badge className={s.role === "ADMIN" ? "border-casma-oscuro bg-casma-oscuro text-white" : "border-linea bg-papel text-tinta"}>{s.role === "ADMIN" ? "Admin" : "Técnico"}</Badge>
+        <Badge className={s.role === "ADMIN" ? "border-casma/30 bg-casma-claro text-casma-oscuro" : "border-linea bg-papel-2 text-tenue"}>{s.role === "ADMIN" ? "Administrador" : "Técnico"}</Badge>
       </div>
+
       <div className="flex flex-wrap gap-1.5">
-        {s.specialties.map((c) => <Badge key={c} className="border-casma/30 bg-casma-claro text-casma-oscuro">{CATEGORY_LABEL[c]}</Badge>)}
-        {!s.specialties.length && <span className="text-sm text-tenue">Sin especialidades</span>}
+        {s.specialties.map((c) => <Badge key={c} className="border-linea bg-papel-2 text-tinta-2">{CATEGORY_LABEL[c]}</Badge>)}
+        {!s.specialties.length && <span className="text-[0.78rem] text-tenue">Sin especialidades registradas</span>}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span className="flex items-center gap-1"><ShieldCheck className={cx("size-4", s.totp_enabled ? "text-hecho" : "text-amber-700")} />{s.totp_enabled ? "2FA activo" : "2FA pendiente"}</span>
-        {s.locked && <span className="flex items-center gap-1 font-bold text-alerta"><Lock className="size-4" /> Bloqueado</span>}
-        <span>{s.open_tickets} casos abiertos</span>
-        <span className="text-tenue">{s.last_login_at ? `Ingresó ${fmtAgo(s.last_login_at)}` : "Nunca ingresó"}</span>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78rem] text-tenue">
+        <span className={cx("inline-flex items-center gap-1 font-semibold", s.totp_enabled ? "text-emerald-700" : "text-amber-700")}>
+          <ShieldCheck className="size-3.5" aria-hidden />{s.totp_enabled ? "2FA activo" : "2FA pendiente"}
+        </span>
+        {s.locked && <span className="inline-flex items-center gap-1 font-bold text-alerta"><Lock className="size-3.5" aria-hidden /> Bloqueado</span>}
+        <span><strong className="font-bold text-tinta">{s.open_tickets}</strong> casos abiertos</span>
+        <span className="text-tenue-2">{s.last_login_at ? `Ingresó ${fmtAgo(s.last_login_at)}` : "Nunca ingresó"}</span>
       </div>
-      <div className="mt-auto grid grid-cols-1 gap-2 border-t border-linea pt-3 sm:flex sm:flex-wrap">
+
+      <div className="mt-auto flex flex-wrap gap-1.5 border-t border-linea pt-3">
         <Button size="sm" variant="secondary" onClick={onEdit}>Editar</Button>
         {!self && <>
           <Button size="sm" variant="ghost" loading={action.isPending && action.variables === "reset-password"}

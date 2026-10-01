@@ -21,7 +21,7 @@ export const useFollowUpMetrics = (enabled = false) => useQuery({
   enabled,
 });
 export const useInsights = (enabled = true) => useQuery({ queryKey: ["insights"], queryFn: () => api<Insights>("/ai/insights"), staleTime: 120_000, enabled });
-export const useOffices = () => useQuery({ queryKey: ["offices", "admin"], queryFn: () => api<Office[]>("/admin/offices") });
+export const useOffices = (enabled = true) => useQuery({ queryKey: ["offices", "admin"], queryFn: () => api<Office[]>("/admin/offices"), enabled });
 export const useZones = () =>
   useQuery({ queryKey: ["organization", "zones"], queryFn: () => api<Zone[]>("/organization/zones"), staleTime: 300_000 });
 

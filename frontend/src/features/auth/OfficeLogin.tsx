@@ -37,7 +37,7 @@ export function OfficeLogin() {
         <div className="pointer-events-none absolute -right-16 -top-20 size-72 rounded-full bg-white/[0.06]" aria-hidden />
         <div className="pointer-events-none absolute -left-24 bottom-0 size-56 rounded-full bg-sol/[0.08]" aria-hidden />
         <div className="relative mx-auto flex max-w-md items-center gap-4">
-          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-sol text-tinta shadow-[0_10px_24px_rgba(15,23,42,0.22)]"><Headset className="size-7" aria-hidden /></span>
+          <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-sol text-tinta shadow-[0_10px_24px_rgba(15,23,42,0.22)]"><Headset className="size-7" aria-hidden /></span>
           <div className="min-w-0">
             <p className="text-base font-semibold text-white/80 sm:text-lg">Municipalidad Provincial de Casma</p>
             <h1 className="mt-0.5 text-3xl font-bold tracking-[-0.03em]">Soporte TI</h1>
@@ -45,7 +45,7 @@ export function OfficeLogin() {
         </div>
       </div>
       <div className="relative -mt-11 flex-1 px-4 pb-10">
-        <form onSubmit={submit} className="mx-auto flex max-w-md flex-col gap-6 rounded-2xl border border-linea bg-white p-5 text-lg shadow-[0_18px_50px_rgba(15,23,42,0.12)] sm:rounded-3xl sm:p-8">
+        <form onSubmit={submit} className="mx-auto flex max-w-md flex-col gap-6 rounded-xl border border-linea bg-white p-5 text-lg shadow-[0_18px_50px_rgba(15,23,42,0.12)] sm:rounded-xl sm:p-8">
           <div>
             <div className="mb-2 flex items-center gap-2" aria-hidden>
               <span className="h-1.5 w-9 rounded-full bg-casma" />

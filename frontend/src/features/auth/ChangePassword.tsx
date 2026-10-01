@@ -36,7 +36,7 @@ export function ChangePassword() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-tinta px-4">
-      <form onSubmit={submit} className="flex w-full max-w-md flex-col gap-4 rounded-3xl bg-white p-6 sm:p-8">
+      <form onSubmit={submit} className="flex w-full max-w-md flex-col gap-4 rounded-xl bg-white p-6 sm:p-8">
         <h1 className="text-2xl font-bold">Cambie su contraseña</h1>
         <p className="text-tenue">Mínimo 12 caracteres con mayúsculas, minúsculas, números y símbolos.</p>
         <Field label="Contraseña actual">{(id) => <Input id={id} type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required />}</Field>
